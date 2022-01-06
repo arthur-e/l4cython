@@ -32,9 +32,9 @@ cdef:
     float NPP[SPARSE_N]
 
 PFT[:] = np.fromfile('%s/SMAP_L4C_PFT_map_9km.int8' % ANC_DATA_DIR, np.int8)
-SMRZ_MIN[:] = np.fromfile(
+SMRZ_MIN[:] = 100 * np.fromfile(
     '%s/Natv91_daily_smrz_M09_min.flt32' % ANC_DATA_DIR, np.float32)
-SMRZ_MAX[:] = np.fromfile(
+SMRZ_MAX[:] = 100 * np.fromfile(
     '%s/Natv91_daily_smrz_M09_max.flt32' % ANC_DATA_DIR, np.float32)
 SOC0[:] = np.fromfile(
     '%s/tcf_natv91_C0_M09land_2015089.flt32' % ANC_DATA_DIR, np.float32)
@@ -81,34 +81,45 @@ def main(int num_steps = 2177):
         float smsf[SPARSE_N]
         float smrz[SPARSE_N]
         float tsoil[SPARSE_N]
-    rh = np.zeroes((SPARSE_N,))
-    date_start = datetime.datetime.strftime(ORIGIN, '%Y%m%d')
+    rh = np.zeros((SPARSE_N,))
+    date_start = datetime.datetime.strptime(ORIGIN, '%Y%m%d')
     for step in range(num_steps):
-        date = date_start + datetime.timedelta(step)
-        smsf[:] = np.fromfile(
-            '%s/L4_SM_gph_Vv6032_smsf_M09land_%s.flt32' % (L4SM_DATA_DIR, date))
-        smrz[:] = np.fromfile(
-            '%s/L4_SM_gph_Vv6032_smrz_M09land_%s.flt32' % (L4SM_DATA_DIR, date))
+        date = date_start + datetime.timedelta(days = step)
+        date = date.strftime('%Y%m%d')
+        smsf[:] = 100 * np.fromfile(
+            '%s/L4_SM_gph_Vv6032_smsf_M09land_%s.flt32' % (L4SM_DATA_DIR, date),
+            dtype = np.float32)
+        smrz[:] = 100 * np.fromfile(
+            '%s/L4_SM_gph_Vv6032_smrz_M09land_%s.flt32' % (L4SM_DATA_DIR, date),
+            dtype = np.float32)
         break
 
 
-cdef float[:] rescale_smrz(float[:] smrz_array):
-    cdef:
-        Py_ssize_t i
-        float[SPARSE_N] smrz_out
-        float smrz0, smrz_min, srmz_max, smrz_norm
-    for i in range(0, SPARSE_N):
-        # Convert to percentage units
-        smrz0 = 100 * smrz_array[i]
-        smrz_min = 100 * SMRZ_MIN[i]
-        smrz_max = 100 * SMRZ_MAX[i]
-        # Clip input SMRZ to the lower, upper bounds
-        if smrz0 < smrz_min:
-            smrz0 = smrz_min
-        elif smrz0 > smrz_max:
-            smrz0 = smrz_max
-        smrz_norm = 1 + (100 * ((smrz0 - smrz_min) / (smrz_max - smrz_min)))
-        # Log-transform normalized data and rescale to range between
-        #   5.0 and 100 ()% saturation)
-        smrz_out[i] = 5 + (95 * (np.log(smrz_norm) / np.log(101)))
-    return smrz_out
+cdef float rescale_smrz(float smrz0, float smrz_min, float smrz_max):
+    '''
+    Rescales root-zone soil-moisture (SMRZ); original SMRZ is in percent
+    saturation units. NOTE: Although Jones et al. (2017) write "SMRZ_wp is
+    the plant wilting point moisture level determined by ancillary soil
+    texture data provided by L4SM..." in actuality it is just `smrz_min`.
+
+    Parameters
+    ----------
+    smrz0 : numpy.ndarray
+        Original SMRZ value, in percent (%) saturation units
+    smrz_min : numpy.ndarray or float
+        Long-term minimum SMRZ (percent saturation)
+    smrz_max : numpy.ndarray or float
+        Long-term maximum SMRZ (percent saturation)
+    '''
+    cdef float smrz_norm
+    # NOTE: Values assumed to be in percentage units [0, 100]
+    smrz0 = smrz0
+    # Clip input SMRZ to the lower, upper bounds
+    if smrz0 < smrz_min:
+        smrz0 = smrz_min
+    elif smrz0 > smrz_max:
+        smrz0 = smrz_max
+    smrz_norm = 1 + (100 * ((smrz0 - smrz_min) / (smrz_max - smrz_min)))
+    # Log-transform normalized data and rescale to range between
+    #   5.0 and 100 ()% saturation)
+    return 5 + (95 * (np.log(smrz_norm) / np.log(101)))
