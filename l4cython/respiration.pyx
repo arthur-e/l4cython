@@ -3,8 +3,6 @@
 # SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based
 #   on Version 6 state and parameters
 
-# TODO: Currently, RH is too high. Something is wrong.
-
 # TODO: Re-write using typed memoryviews?
 
 import cython
@@ -16,7 +14,7 @@ DEF SPARSE_N = 1664040
 DEF ANC_DATA_DIR = '/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data'
 DEF L4SM_DATA_DIR = '/anx_lagr4/SMAP/L4SM/Vv6032'
 DEF OUTPUT_DIR = '/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20220106'
-DEF ORIGIN = '20150331' # First day, in YYYYMMDD reversedat
+DEF ORIGIN = '20150331' # First day, in YYYYMMDD
 
 # Additional Tsoil parameter (fixed for all PFTs)
 cdef float TSOIL1 = 66.02 # deg K
@@ -67,7 +65,7 @@ params.decay_rate[:] = [0, 0.020, 0.022, 0.031, 0.028, 0.013, 0.022, 0.019, 0.03
 @cython.boundscheck(False)
 def main(int num_steps = 2177):
     '''
-    Forward run of the L4C soil decompositiona nd heterotrophic respiration
+    Forward run of the L4C soil decomposition and heterotrophic respiration
     algorithm. Starts on March 31, 2015 and continues for the specified
     number of time steps.
 
