@@ -3,6 +3,8 @@
 # Learn more about .gitignore:
 #     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 
+virtualenv.sh
+
 # Cython compilation files
 *.c
 *.cpython*
@@ -17,6 +19,7 @@ dist/
 
 # Compiled Python bytecode
 *.py[cod]
+*.egg-info
 
 # Log files
 *.log
