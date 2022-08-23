@@ -6,6 +6,7 @@
 import cython
 import datetime
 import numpy as np
+from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 
 DEF M01_NESTED_IN_M09 = 9 * 9
 # Number of grid cells in sparse ("land") arrays
@@ -24,23 +25,36 @@ cdef float TSOIL2 = 227.13 # deg K
 cdef float KSTRUCT = 0.4 # Muliplier *against* base decay rate
 cdef float KRECAL = 0.0093
 
-# The PFT map
-cdef unsigned char PFT[SPARSE_M01_N]
-cdef:
-    unsigned int SOC0[SPARSE_M01_N] # 16 bits
-    unsigned int SOC1[SPARSE_M01_N]
-    unsigned int SOC2[SPARSE_M01_N]
-    float NPP[SPARSE_M01_N]
+# Allocate memory for, and populate, the PFT map
+cdef unsigned char* PFT
+PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+for i, data in enumerate(np.fromfile('%s/SMAP_L4C_PFT_map_M01land.uint8' % ANC_DATA_DIR, np.uint8)):
+    PFT[i] = data
 
-PFT[:] = np.fromfile('%s/SMAP_L4C_PFT_map_M01land.uint8' % ANC_DATA_DIR, np.uint8)
-SOC0[:] = np.fromfile(
-    '%s/tcf_NRv91_C0_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)
-SOC1[:] = np.fromfile(
-    '%s/tcf_NRv91_C1_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)
-SOC2[:] = np.fromfile(
-    '%s/tcf_NRv91_C2_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)
-NPP[:] = np.fromfile(
-    '%s/tcf_NRv91_npp_sum_M01land.flt32' % SOC_DATA_DIR, np.float32) / 365
+# Allocate memory for SOC and litterfall (NPP) files
+cdef:
+    unsigned int* SOC0
+    unsigned int* SOC1
+    unsigned int* SOC2
+    float* NPP
+SOC0 = <unsigned int*> PyMem_Malloc(sizeof(unsigned int) * SPARSE_M01_N)
+SOC1 = <unsigned int*> PyMem_Malloc(sizeof(unsigned int) * SPARSE_M01_N)
+SOC1 = <unsigned int*> PyMem_Malloc(sizeof(unsigned int) * SPARSE_M01_N)
+NPP = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+
+# Read in SOC and NPP data
+for i, data in enumerate(np.fromfile(
+        '%s/tcf_NRv91_C0_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
+    SOC0[i] = data
+for i, data in enumerate(np.fromfile(
+        '%s/tcf_NRv91_C1_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
+    SOC1[i] = data
+for i, data in enumerate(np.fromfile(
+        '%s/tcf_NRv91_C2_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
+    SOC2[i] = data
+for i, data in enumerate(np.fromfile(
+        '%s/tcf_NRv91_npp_sum_M01land.flt32' % SOC_DATA_DIR, np.float32) / 365):
+    NPP[i] = data
 
 cdef struct BPLUT:
     float smsf0[9] # wetness [0-100%]
