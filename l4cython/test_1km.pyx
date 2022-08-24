@@ -27,13 +27,15 @@ cdef float KRECAL = 0.0093
 
 # Allocate memory for, and populate, the PFT map
 cdef unsigned char* PFT
-cdef int _i = 0
-PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M09_N)
-for data in np.fromfile('%s/SMAP_L4C_PFT_map_M09land.uint8' % ANC_DATA_DIR, np.uint8):
-    PFT[_i] = data
-    _i = _i + 1
+PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+for i, data in enumerate(np.fromfile('%s/SMAP_L4C_PFT_map_M01land.uint8' % ANC_DATA_DIR, np.uint8)):
+    PFT[i] = data
 
 # Allocate memory for SOC and litterfall (NPP) files
+# NOTE: While we should be using PyMem_Free later, these variables will
+#   be in use for the life of the program, so we let them free up only when
+#   the program exits; for some reason, a segfault is encountered when
+#   using: PyMem_Free(SOC1)
 cdef:
     unsigned int* SOC0
     unsigned int* SOC1
@@ -45,18 +47,18 @@ SOC2 = <unsigned int*> PyMem_Malloc(sizeof(unsigned int) * SPARSE_M01_N)
 NPP = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
 # Read in SOC and NPP data; this has to be done by element, it seems
-# for i, data in enumerate(np.fromfile(
-#         '%s/tcf_NRv91_C0_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
-#     SOC0[i] = data
-# for i, data in enumerate(np.fromfile(
-#         '%s/tcf_NRv91_C1_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
-#     SOC1[i] = data
-# for i, data in enumerate(np.fromfile(
-#         '%s/tcf_NRv91_C2_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
-#     SOC2[i] = data
-# for i, data in enumerate(np.fromfile(
-#         '%s/tcf_NRv91_npp_sum_M01land.flt32' % SOC_DATA_DIR, np.float32) / 365):
-#     NPP[i] = data
+for i, data in enumerate(np.fromfile(
+        '%s/tcf_NRv91_C0_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
+    SOC0[i] = data
+for i, data in enumerate(np.fromfile(
+        '%s/tcf_NRv91_C1_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
+    SOC1[i] = data
+for i, data in enumerate(np.fromfile(
+        '%s/tcf_NRv91_C2_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
+    SOC2[i] = data
+for i, data in enumerate(np.fromfile(
+        '%s/tcf_NRv91_npp_sum_M01land.flt32' % SOC_DATA_DIR, np.float32) / 365):
+    NPP[i] = data
 
 cdef struct BPLUT:
     float smsf0[9] # wetness [0-100%]
@@ -81,4 +83,130 @@ params.decay_rate[:] = [0, 0.020, 0.022, 0.031, 0.028, 0.013, 0.022, 0.019, 0.03
 
 @cython.boundscheck(False)
 def main(int num_steps = 2177):
-    pass
+    '''
+    Forward run of the L4C soil decomposition and heterotrophic respiration
+    algorithm. Starts on March 31, 2015 and continues for the specified
+    number of time steps.
+
+    Parameters
+    ----------
+    num_steps : int
+        Number of (daily) time steps to compute forward
+    '''
+    cdef:
+        Py_ssize_t i
+        float rh0[SPARSE_M01_N]
+        float rh1[SPARSE_M01_N]
+        float rh2[SPARSE_M01_N]
+        float w_mult[SPARSE_M01_N]
+        float t_mult[SPARSE_M01_N]
+        float k_mult[SPARSE_M01_N]
+    # We leave rh_total as a NumPy array because it is one we want to
+    #   write to disk
+    rh_total = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
+    date_start = datetime.datetime.strptime(ORIGIN, '%Y%m%d')
+    for step in range(num_steps):
+        date = date_start + datetime.timedelta(days = step)
+        date = date.strftime('%Y%m%d')
+        # Convert to percentage units
+        smsf = 100 * np.fromfile(
+            '%s/L4_SM_gph_Vv6032_smsf_M09land_%s.flt32' % (L4SM_DATA_DIR, date),
+            dtype = np.float32)
+        tsoil = np.fromfile(
+            '%s/L4_SM_gph_Vv6032_tsoil_M09land_%s.flt32' % (L4SM_DATA_DIR, date),
+            dtype = np.float32)
+        # Iterate over each 9-km pixel
+        for i in range(0, SPARSE_M09_N):
+            # Iterate over each nested 1-km pixel
+            for j in range(0, M01_NESTED_IN_M09):
+                # Hence, (i) indexes the 9-km pixel and (i+j) the 1-km pixel
+                pft = int(PFT[i+j])
+                if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+                    continue
+                w_mult[i+j] = linear_constraint(
+                    smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
+                t_mult[i+j] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
+                k_mult[i+j] = w_mult[i+j] * t_mult[i+j]
+                rh0[i+j] = k_mult[i+j] * SOC0[i+j] * params.decay_rate[pft]
+                rh1[i+j] = k_mult[i+j] * SOC1[i+j] * params.decay_rate[pft] * KSTRUCT
+                rh2[i+j] = k_mult[i+j] * SOC2[i+j] * params.decay_rate[pft] * KRECAL
+                # "the adjustment...to account for material transferred into the
+                #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
+                rh1[i+j] = rh1[i+j] * (1 - params.f_structural[pft])
+                rh_total[i+j] = rh0[i+j] + rh1[i+j] + rh2[i+j]
+        break # TODO FIXME
+
+
+cdef float arrhenius(
+        float tsoil, float beta0, float beta1, float beta2):
+    '''
+    The Arrhenius equation for response of enzymes to (soil) temperature,
+    constrained to lie on the closed interval [0, 1].
+
+    Parameters
+    ----------
+    tsoil : float
+        Array of soil temperature in degrees K
+    beta0 : float
+        Coefficient for soil temperature (deg K)
+    beta1 : float
+        Coefficient for ... (deg K)
+    beta2 : float
+        Coefficient for ... (deg K)
+    '''
+    cdef float a, b, y0
+    a = (1.0 / beta1)
+    b = 1 / (tsoil - beta2)
+    # This is the simple answer, but it takes on values >1
+    y0 = np.exp(beta0 * (a - b))
+    # Constrain the output to the interval [0, 1]
+    if y0 > 1:
+        return 1
+    elif y0 < 0:
+        return 0
+    else:
+        return y0
+
+
+cdef float linear_constraint(
+        float x, float xmin, float xmax, int reversed):
+    '''
+    Returns a linear ramp function, for deriving a value on [0, 1] from
+    an input value `x`:
+
+        if x >= xmax:
+            return 1
+        if x <= xmin:
+            return 0
+        return (x - xmin) / (xmax - xmin)
+
+    Parameters
+    ----------
+    x: float
+    xmin : float
+        Lower bound of the linear ramp function
+    xmax : float
+        Upper bound of the linear ramp function
+    reversed : int
+        Type of ramp function: 1 for "reversed," i.e., function decreases
+        as x increases
+
+    Returns
+    -------
+    float
+    '''
+    assert reversed == 0 or reversed == 1
+    if reversed == 1:
+        if x >= xmax:
+            return 0
+        elif x < xmin:
+            return 1
+        else:
+            return 1 - ((x - xmin) / (xmax - xmin))
+    # For normal case
+    if x >= xmax:
+        return 1
+    elif x < xmin:
+        return 0
+    else:
+        return (x - xmin) / (xmax - xmin)
