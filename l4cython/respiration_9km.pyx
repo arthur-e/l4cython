@@ -6,14 +6,10 @@
 import cython
 import datetime
 import numpy as np
-from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 
-DEF M01_NESTED_IN_M09 = 9 * 9
 # Number of grid cells in sparse ("land") arrays
-DEF SPARSE_M09_N = 1664040
-DEF SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
+DEF SPARSE_N = 1664040
 DEF ANC_DATA_DIR = '/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data'
-DEF SOC_DATA_DIR = '/anx_lagr4/SMAP/L4C_code/tcf/output/NRv91'
 DEF L4SM_DATA_DIR = '/anx_lagr4/SMAP/L4SM/Vv6032'
 DEF OUTPUT_DIR = '/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20220106'
 DEF ORIGIN = '20150331' # First day, in YYYYMMDD
@@ -25,36 +21,23 @@ cdef float TSOIL2 = 227.13 # deg K
 cdef float KSTRUCT = 0.4 # Muliplier *against* base decay rate
 cdef float KRECAL = 0.0093
 
-# Allocate memory for, and populate, the PFT map
-cdef unsigned char* PFT
-PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
-for i, data in enumerate(np.fromfile('%s/SMAP_L4C_PFT_map_M01land.uint8' % ANC_DATA_DIR, np.uint8)):
-    PFT[i] = data
-
-# Allocate memory for SOC and litterfall (NPP) files
+# The PFT map
+cdef unsigned char PFT[SPARSE_N]
 cdef:
-    unsigned int* SOC0
-    unsigned int* SOC1
-    unsigned int* SOC2
-    float* NPP
-SOC0 = <unsigned int*> PyMem_Malloc(sizeof(unsigned int) * SPARSE_M01_N)
-SOC1 = <unsigned int*> PyMem_Malloc(sizeof(unsigned int) * SPARSE_M01_N)
-SOC1 = <unsigned int*> PyMem_Malloc(sizeof(unsigned int) * SPARSE_M01_N)
-NPP = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    float SOC0[SPARSE_N]
+    float SOC1[SPARSE_N]
+    float SOC2[SPARSE_N]
+    float NPP[SPARSE_N]
 
-# Read in SOC and NPP data
-for i, data in enumerate(np.fromfile(
-        '%s/tcf_NRv91_C0_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
-    SOC0[i] = data
-for i, data in enumerate(np.fromfile(
-        '%s/tcf_NRv91_C1_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
-    SOC1[i] = data
-for i, data in enumerate(np.fromfile(
-        '%s/tcf_NRv91_C2_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
-    SOC2[i] = data
-for i, data in enumerate(np.fromfile(
-        '%s/tcf_NRv91_npp_sum_M01land.flt32' % SOC_DATA_DIR, np.float32) / 365):
-    NPP[i] = data
+PFT[:] = np.fromfile('%s/SMAP_L4C_PFT_map_M09land.uint8' % ANC_DATA_DIR, np.uint8)
+SOC0[:] = np.fromfile(
+    '%s/tcf_natv91_C0_M09land_2015089.flt32' % ANC_DATA_DIR, np.float32)
+SOC1[:] = np.fromfile(
+    '%s/tcf_natv91_C1_M09land_2015089.flt32' % ANC_DATA_DIR, np.float32)
+SOC2[:] = np.fromfile(
+    '%s/tcf_natv91_C2_M09land_2015089.flt32' % ANC_DATA_DIR, np.float32)
+NPP[:] = np.fromfile(
+    '%s/tcf_natv91_npp_sum_M09land.flt32' % ANC_DATA_DIR, np.float32) / 365
 
 cdef struct BPLUT:
     float smsf0[9] # wetness [0-100%]
@@ -91,15 +74,15 @@ def main(int num_steps = 2177):
     '''
     cdef:
         Py_ssize_t i
-        float rh0[SPARSE_M01_N]
-        float rh1[SPARSE_M01_N]
-        float rh2[SPARSE_M01_N]
-        float w_mult[SPARSE_M01_N]
-        float t_mult[SPARSE_M01_N]
-        float k_mult[SPARSE_M01_N]
+        float rh0[SPARSE_N]
+        float rh1[SPARSE_N]
+        float rh2[SPARSE_N]
+        float w_mult[SPARSE_N]
+        float t_mult[SPARSE_N]
+        float k_mult[SPARSE_N]
     # We leave rh_total as a NumPy array because it is one we want to
     #   write to disk
-    rh_total = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
+    rh_total = np.full((SPARSE_N,), np.nan, dtype = np.float32)
     date_start = datetime.datetime.strptime(ORIGIN, '%Y%m%d')
     for step in range(num_steps):
         date = date_start + datetime.timedelta(days = step)
@@ -111,32 +94,27 @@ def main(int num_steps = 2177):
         tsoil = np.fromfile(
             '%s/L4_SM_gph_Vv6032_tsoil_M09land_%s.flt32' % (L4SM_DATA_DIR, date),
             dtype = np.float32)
-        # Iterate over each 9-km pixel
-        for i in range(0, SPARSE_M09_N):
-            # Iterate over each nested 1-km pixel
-            for j in range(0, M01_NESTED_IN_M09):
-                # Hence, (i) indexes the 9-km pixel and (i+j) the 1-km pixel
-                pft = int(PFT[i+j])
-                if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
-                    continue
-                w_mult[i+j] = linear_constraint(
-                    smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
-                t_mult[i+j] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
-                k_mult[i+j] = w_mult[i+j] * t_mult[i+j]
-                rh0[i+j] = k_mult[i+j] * SOC0[i+j] * params.decay_rate[pft]
-                rh1[i+j] = k_mult[i+j] * SOC1[i+j] * params.decay_rate[pft] * KSTRUCT
-                rh2[i+j] = k_mult[i+j] * SOC2[i+j] * params.decay_rate[pft] * KRECAL
-                # "the adjustment...to account for material transferred into the
-                #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
-                rh1[i+j] = rh1[i+j] * (1 - params.f_structural[pft])
-                rh_total[i+j] = rh0[i+j] + rh1[i+j] + rh2[i+j]
-                # Calculate change in SOC pools; NPP[i] is daily litterfall;
-                #   case the result to an integer
-                SOC0[i+j] = <int>((NPP[i+j] * params.f_metabolic[pft]) - rh0[i+j])
-                SOC1[i+j] = <int>((NPP[i+j] * (1 - params.f_metabolic[pft])) - rh1[i+j])
-                SOC2[i+j] = <int>((params.f_structural[pft] * rh1[i+j]) - rh2[i+j])
+        for i in range(0, SPARSE_N):
+            pft = int(PFT[i])
+            if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+                continue
+            w_mult[i] = linear_constraint(
+                smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
+            t_mult[i] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
+            k_mult[i] = w_mult[i] * t_mult[i]
+            rh0[i] = k_mult[i] * SOC0[i] * params.decay_rate[pft]
+            rh1[i] = k_mult[i] * SOC1[i] * params.decay_rate[pft] * KSTRUCT
+            rh2[i] = k_mult[i] * SOC2[i] * params.decay_rate[pft] * KRECAL
+            # "the adjustment...to account for material transferred into the
+            #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
+            rh1[i] = rh1[i] * (1 - params.f_structural[pft])
+            rh_total[i] = rh0[i] + rh1[i] + rh2[i]
+            # Calculate change in SOC pools; NPP[i] is daily litterfall
+            SOC0[i] = (NPP[i] * params.f_metabolic[pft]) - rh0[i]
+            SOC1[i] = (NPP[i] * (1 - params.f_metabolic[pft])) - rh1[i]
+            SOC2[i] = (params.f_structural[pft] * rh1[i]) - rh2[i]
         np.array(rh_total).astype(np.float32).tofile(
-            '%s/L4Cython_RH_%s_M01land.flt32' % (OUTPUT_DIR, date))
+            '%s/L4Cython_RH_%s_M09land.flt32' % (OUTPUT_DIR, date))
         break # TODO FIXME
 
 

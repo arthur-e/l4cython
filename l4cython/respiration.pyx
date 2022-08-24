@@ -6,10 +6,14 @@
 import cython
 import datetime
 import numpy as np
+from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 
+DEF M01_NESTED_IN_M09 = 9 * 9
 # Number of grid cells in sparse ("land") arrays
-DEF SPARSE_N = 1664040
+DEF SPARSE_M09_N = 1664040
+DEF SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
 DEF ANC_DATA_DIR = '/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data'
+DEF SOC_DATA_DIR = '/anx_lagr4/SMAP/L4C_code/tcf/output/NRv91'
 DEF L4SM_DATA_DIR = '/anx_lagr4/SMAP/L4SM/Vv6032'
 DEF OUTPUT_DIR = '/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20220106'
 DEF ORIGIN = '20150331' # First day, in YYYYMMDD
@@ -21,23 +25,22 @@ cdef float TSOIL2 = 227.13 # deg K
 cdef float KSTRUCT = 0.4 # Muliplier *against* base decay rate
 cdef float KRECAL = 0.0093
 
-# The PFT map
-cdef unsigned char PFT[SPARSE_N]
+# Allocate memory for, and populate, the PFT map
+cdef unsigned char* PFT
+# Allocate memory for SOC and litterfall (NPP) files
+# NOTE: While we should be using PyMem_Free later, these variables will
+#   be in use for the life of the program, so we let them free up only when
+#   the program exits; for some reason, a segfault is encountered when
+#   using: PyMem_Free(SOC1)
 cdef:
-    float SOC0[SPARSE_N]
-    float SOC1[SPARSE_N]
-    float SOC2[SPARSE_N]
-    float NPP[SPARSE_N]
-
-PFT[:] = np.fromfile('%s/SMAP_L4C_PFT_map_M09land.uint8' % ANC_DATA_DIR, np.uint8)
-SOC0[:] = np.fromfile(
-    '%s/tcf_natv91_C0_M09land_2015089.flt32' % ANC_DATA_DIR, np.float32)
-SOC1[:] = np.fromfile(
-    '%s/tcf_natv91_C1_M09land_2015089.flt32' % ANC_DATA_DIR, np.float32)
-SOC2[:] = np.fromfile(
-    '%s/tcf_natv91_C2_M09land_2015089.flt32' % ANC_DATA_DIR, np.float32)
-NPP[:] = np.fromfile(
-    '%s/tcf_natv91_npp_sum_M09land.flt32' % ANC_DATA_DIR, np.float32) / 365
+    float* SOC0
+    float* SOC1
+    float* SOC2
+    float* NPP
+SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+NPP = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
 cdef struct BPLUT:
     float smsf0[9] # wetness [0-100%]
@@ -72,17 +75,41 @@ def main(int num_steps = 2177):
     num_steps : int
         Number of (daily) time steps to compute forward
     '''
+    PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+    for idx, data in enumerate(np.fromfile('%s/SMAP_L4C_PFT_map_M01land.uint8' % ANC_DATA_DIR, np.uint8)):
+        PFT[idx] = data
+    # Read in SOC and NPP data; this has to be done by element, it seems
+    for idx, data in enumerate(np.fromfile(
+            '%s/tcf_NRv91_C0_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32)):
+        SOC0[idx] = data
+    for idx, data in enumerate(np.fromfile(
+            '%s/tcf_NRv91_C1_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32)):
+        SOC1[idx] = data
+    for idx, data in enumerate(np.fromfile(
+            '%s/tcf_NRv91_C2_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32)):
+        SOC2[idx] = data
+    for idx, data in enumerate(np.fromfile(
+            '%s/tcf_NRv91_npp_sum_M01land.flt32' % SOC_DATA_DIR, np.float32) / 365):
+        NPP[idx] = data
     cdef:
         Py_ssize_t i
-        float rh0[SPARSE_N]
-        float rh1[SPARSE_N]
-        float rh2[SPARSE_N]
-        float w_mult[SPARSE_N]
-        float t_mult[SPARSE_N]
-        float k_mult[SPARSE_N]
-    # We leave rh_total as a NumPy array because it is one we want to
-    #   write to disk
-    rh_total = np.full((SPARSE_N,), np.nan, dtype = np.float32)
+        Py_ssize_t j
+        Py_ssize_t k
+        float* rh0
+        float* rh1
+        float* rh2
+        float* rh_total
+        float* w_mult
+        float* t_mult
+        float* k_mult
+        float out_rh_total[SPARSE_M01_N]
+    rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     date_start = datetime.datetime.strptime(ORIGIN, '%Y%m%d')
     for step in range(num_steps):
         date = date_start + datetime.timedelta(days = step)
@@ -94,28 +121,32 @@ def main(int num_steps = 2177):
         tsoil = np.fromfile(
             '%s/L4_SM_gph_Vv6032_tsoil_M09land_%s.flt32' % (L4SM_DATA_DIR, date),
             dtype = np.float32)
-        for i in range(0, SPARSE_N):
-            pft = int(PFT[i])
-            if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
-                continue
-            w_mult[i] = linear_constraint(
-                smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
-            t_mult[i] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
-            k_mult[i] = w_mult[i] * t_mult[i]
-            rh0[i] = k_mult[i] * SOC0[i] * params.decay_rate[pft]
-            rh1[i] = k_mult[i] * SOC1[i] * params.decay_rate[pft] * KSTRUCT
-            rh2[i] = k_mult[i] * SOC2[i] * params.decay_rate[pft] * KRECAL
-            # "the adjustment...to account for material transferred into the
-            #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
-            rh1[i] = rh1[i] * (1 - params.f_structural[pft])
-            rh_total[i] = rh0[i] + rh1[i] + rh2[i]
-            # Calculate change in SOC pools; NPP[i] is daily litterfall
-            SOC0[i] = (NPP[i] * params.f_metabolic[pft]) - rh0[i]
-            SOC1[i] = (NPP[i] * (1 - params.f_metabolic[pft])) - rh1[i]
-            SOC2[i] = (params.f_structural[pft] * rh1[i]) - rh2[i]
-        np.array(rh_total).astype(np.float32).tofile(
-            '%s/L4Cython_RH_%s_M09land.flt32' % (OUTPUT_DIR, date))
-        break # TODO FIXME
+        # Iterate over each 9-km pixel
+        for i in range(0, SPARSE_M09_N):
+            # Iterate over each nested 1-km pixel
+            for j in range(0, M01_NESTED_IN_M09):
+                # Hence, (i) indexes the 9-km pixel and k the 1-km pixel
+                k = (M01_NESTED_IN_M09 * i) + j + i
+                pft = int(PFT[k])
+                if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+                    continue
+                w_mult[k] = linear_constraint(
+                    smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
+                t_mult[k] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
+                k_mult[k] = w_mult[k] * t_mult[k]
+                rh0[k] = k_mult[k] * SOC0[k] * params.decay_rate[pft]
+                rh1[k] = k_mult[k] * SOC1[k] * params.decay_rate[pft] * KSTRUCT
+                rh2[k] = k_mult[k] * SOC2[k] * params.decay_rate[pft] * KRECAL
+                # "the adjustment...to account for material transferred into the
+                #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
+                rh1[k] = rh1[k] * (1 - params.f_structural[pft])
+                rh_total[k] = rh0[k] + rh1[k] + rh2[k]
+                # Calculate change in SOC pools; NPP[i] is daily litterfall
+                SOC0[k] = (NPP[k] * params.f_metabolic[pft]) - rh0[k]
+                SOC1[k] = (NPP[k] * (1 - params.f_metabolic[pft])) - rh1[k]
+                SOC2[k] = (params.f_structural[pft] * rh1[k]) - rh2[k]
+        # TODO FIXME Implicit break
+        return (SOC0, SOC1, SOC2, rh_total)
 
 
 cdef float arrhenius(
