@@ -25,6 +25,11 @@ cdef float TSOIL2 = 227.13 # deg K
 cdef float KSTRUCT = 0.4 # Muliplier *against* base decay rate
 cdef float KRECAL = 0.0093
 
+# We leave rh_total as a NumPy array because it is one we want to
+#   write to disk; this has to be a global variable so it will
+#   receive heap allocation
+OUT_RH_TOTAL = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
+
 # Allocate memory for, and populate, the PFT map
 cdef unsigned char* PFT
 # Allocate memory for SOC and litterfall (NPP) files
@@ -64,6 +69,7 @@ params.decay_rate[:] = [0, 0.020, 0.022, 0.031, 0.028, 0.013, 0.022, 0.019, 0.03
 
 
 @cython.boundscheck(False)
+@cython.wraparound(False)
 def main(int num_steps = 2177):
     '''
     Forward run of the L4C soil decomposition and heterotrophic respiration
@@ -146,7 +152,11 @@ def main(int num_steps = 2177):
                 SOC1[k] = (NPP[k] * (1 - params.f_metabolic[pft])) - rh1[k]
                 SOC2[k] = (params.f_structural[pft] * rh1[k]) - rh2[k]
         # TODO FIXME Implicit break
-        return (SOC0, SOC1, SOC2, rh_total)
+        OUT_RH_TOTAL = to_numpy(w_mult, SPARSE_M01_N)
+        OUT_RH_TOTAL.tofile('%s/L4Cython_Wmult_%s_M01land.flt32' % (OUTPUT_DIR, date))
+        OUT_RH_TOTAL = to_numpy(t_mult, SPARSE_M01_N)
+        OUT_RH_TOTAL.tofile('%s/L4Cython_Tmult_%s_M01land.flt32' % (OUTPUT_DIR, date))
+        break
 
 
 cdef float arrhenius(
@@ -222,3 +232,13 @@ cdef float linear_constraint(
         return 0
     else:
         return (x - xmin) / (xmax - xmin)
+
+
+cdef to_numpy(float *ptr, int n):
+    '''
+    '''
+    cdef int i
+    arr = np.full((n,), np.nan, dtype = np.float32)
+    for i in range(n):
+        arr[i] = ptr[i]
+    return arr

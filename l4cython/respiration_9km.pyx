@@ -61,6 +61,7 @@ params.decay_rate[:] = [0, 0.020, 0.022, 0.031, 0.028, 0.013, 0.022, 0.019, 0.03
 
 
 @cython.boundscheck(False)
+@cython.wraparound(False)
 def main(int num_steps = 2177):
     '''
     Forward run of the L4C soil decomposition and heterotrophic respiration
