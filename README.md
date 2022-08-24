@@ -5,13 +5,39 @@ L4C-Cython
 - [ ] Routine to read-in BPLUT
 
 
-Building
--------------------
+Building and Troubleshooting
+----------------------------
 
 ```sh
 cd l4cython
 python setup.py build_ext --inplace
 ```
+
+The debugger `gdb` can be installed from source (needs Python 2 support, which isn't the default):
+
+```
+sudo apt install libgmp10 libgmp-dev python2.7-dev
+./configure --with-python=/usr/bin/python2 --with-libgmp-prefix="/usr/lib/x86_64-linux-gnu"
+make
+sudo make install
+```
+
+`setup.py` needs to be amended:
+
+```py
+respiration = Extension(
+    name = 'respiration',
+    sources = ['test_1km.pyx'],
+    define_macros = [ # Avoids warning "Using deprecated NumPy API"
+        ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')
+    ], # https://stackoverflow.com/questions/52749662/using-deprecated-numpy-api
+    extra_compile_args = ['-g']
+)
+
+setup(ext_modules = cythonize(respiration, gdb_debug = True))
+```
+
+[Then see this resource for tips on debugging.](https://github.com/cython/cython/wiki/DebuggingTechniques)
 
 
 Resources

@@ -27,38 +27,20 @@ cdef float KRECAL = 0.0093
 
 # Allocate memory for, and populate, the PFT map
 cdef unsigned char* PFT
-PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
-for i, data in enumerate(np.fromfile('%s/SMAP_L4C_PFT_map_M01land.uint8' % ANC_DATA_DIR, np.uint8)):
-    PFT[i] = data
-
 # Allocate memory for SOC and litterfall (NPP) files
 # NOTE: While we should be using PyMem_Free later, these variables will
 #   be in use for the life of the program, so we let them free up only when
 #   the program exits; for some reason, a segfault is encountered when
 #   using: PyMem_Free(SOC1)
 cdef:
-    unsigned int* SOC0
-    unsigned int* SOC1
-    unsigned int* SOC2
+    float* SOC0
+    float* SOC1
+    float* SOC2
     float* NPP
-SOC0 = <unsigned int*> PyMem_Malloc(sizeof(unsigned int) * SPARSE_M01_N)
-SOC1 = <unsigned int*> PyMem_Malloc(sizeof(unsigned int) * SPARSE_M01_N)
-SOC2 = <unsigned int*> PyMem_Malloc(sizeof(unsigned int) * SPARSE_M01_N)
+SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 NPP = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-
-# Read in SOC and NPP data; this has to be done by element, it seems
-for i, data in enumerate(np.fromfile(
-        '%s/tcf_NRv91_C0_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
-    SOC0[i] = data
-for i, data in enumerate(np.fromfile(
-        '%s/tcf_NRv91_C1_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
-    SOC1[i] = data
-for i, data in enumerate(np.fromfile(
-        '%s/tcf_NRv91_C2_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32).astype(np.uint16)):
-    SOC2[i] = data
-for i, data in enumerate(np.fromfile(
-        '%s/tcf_NRv91_npp_sum_M01land.flt32' % SOC_DATA_DIR, np.float32) / 365):
-    NPP[i] = data
 
 cdef struct BPLUT:
     float smsf0[9] # wetness [0-100%]
@@ -93,17 +75,34 @@ def main(int num_steps = 2177):
     num_steps : int
         Number of (daily) time steps to compute forward
     '''
+    PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+    for idx, data in enumerate(np.fromfile('%s/SMAP_L4C_PFT_map_M01land.uint8' % ANC_DATA_DIR, np.uint8)):
+        PFT[idx] = data
+    # Read in SOC and NPP data; this has to be done by element, it seems
+    for idx, data in enumerate(np.fromfile(
+            '%s/tcf_NRv91_C0_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32)):
+        SOC0[idx] = data
+    for idx, data in enumerate(np.fromfile(
+            '%s/tcf_NRv91_C1_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32)):
+        SOC1[idx] = data
+    for idx, data in enumerate(np.fromfile(
+            '%s/tcf_NRv91_C2_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32)):
+        SOC2[idx] = data
+    for idx, data in enumerate(np.fromfile(
+            '%s/tcf_NRv91_npp_sum_M01land.flt32' % SOC_DATA_DIR, np.float32) / 365):
+        NPP[idx] = data
     cdef:
         Py_ssize_t i
         float rh0[SPARSE_M01_N]
         float rh1[SPARSE_M01_N]
         float rh2[SPARSE_M01_N]
+        float rh_total[SPARSE_M01_N]
         float w_mult[SPARSE_M01_N]
         float t_mult[SPARSE_M01_N]
         float k_mult[SPARSE_M01_N]
     # We leave rh_total as a NumPy array because it is one we want to
     #   write to disk
-    rh_total = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
+    # rh_total = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
     date_start = datetime.datetime.strptime(ORIGIN, '%Y%m%d')
     for step in range(num_steps):
         date = date_start + datetime.timedelta(days = step)
@@ -134,6 +133,10 @@ def main(int num_steps = 2177):
                 #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
                 rh1[i+j] = rh1[i+j] * (1 - params.f_structural[pft])
                 rh_total[i+j] = rh0[i+j] + rh1[i+j] + rh2[i+j]
+                # Calculate change in SOC pools; NPP[i] is daily litterfall
+                SOC0[i+j] = (NPP[i+j] * params.f_metabolic[pft]) - rh0[i+j]
+                # SOC1[i+j] = <int>((NPP[i+j] * (1 - params.f_metabolic[pft])) - rh1[i+j])
+                # SOC2[i+j] = <int>((params.f_structural[pft] * rh1[i+j]) - rh2[i+j])
         break # TODO FIXME
 
 

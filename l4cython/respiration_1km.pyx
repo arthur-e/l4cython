@@ -132,9 +132,9 @@ def main(int num_steps = 2177):
                 rh_total[i+j] = rh0[i+j] + rh1[i+j] + rh2[i+j]
                 # Calculate change in SOC pools; NPP[i] is daily litterfall;
                 #   case the result to an integer
-                SOC0[i+j] = <int>((NPP[i+j] * params.f_metabolic[pft]) - rh0[i])
-                SOC1[i+j] = <int>((NPP[i+j] * (1 - params.f_metabolic[pft])) - rh1[i])
-                SOC2[i+j] = <int>((params.f_structural[pft] * rh1[i]) - rh2[i])
+                SOC0[i+j] = <int>((NPP[i+j] * params.f_metabolic[pft]) - rh0[i+j])
+                SOC1[i+j] = <int>((NPP[i+j] * (1 - params.f_metabolic[pft])) - rh1[i+j])
+                SOC2[i+j] = <int>((params.f_structural[pft] * rh1[i+j]) - rh2[i+j])
         np.array(rh_total).astype(np.float32).tofile(
             '%s/L4Cython_RH_%s_M01land.flt32' % (OUTPUT_DIR, date))
         break # TODO FIXME
