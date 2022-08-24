@@ -93,16 +93,23 @@ def main(int num_steps = 2177):
         NPP[idx] = data
     cdef:
         Py_ssize_t i
-        float rh0[SPARSE_M01_N]
-        float rh1[SPARSE_M01_N]
-        float rh2[SPARSE_M01_N]
-        float rh_total[SPARSE_M01_N]
-        float w_mult[SPARSE_M01_N]
-        float t_mult[SPARSE_M01_N]
-        float k_mult[SPARSE_M01_N]
-    # We leave rh_total as a NumPy array because it is one we want to
-    #   write to disk
-    # rh_total = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
+        Py_ssize_t j
+        Py_ssize_t k
+        float* rh0
+        float* rh1
+        float* rh2
+        float* rh_total
+        float* w_mult
+        float* t_mult
+        float* k_mult
+        float out_rh_total[SPARSE_M01_N]
+    rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     date_start = datetime.datetime.strptime(ORIGIN, '%Y%m%d')
     for step in range(num_steps):
         date = date_start + datetime.timedelta(days = step)
@@ -118,25 +125,28 @@ def main(int num_steps = 2177):
         for i in range(0, SPARSE_M09_N):
             # Iterate over each nested 1-km pixel
             for j in range(0, M01_NESTED_IN_M09):
-                # Hence, (i) indexes the 9-km pixel and (i+j) the 1-km pixel
-                pft = int(PFT[i+j])
+                # Hence, (i) indexes the 9-km pixel and k the 1-km pixel
+                k = (M01_NESTED_IN_M09 * i) + j + i
+                pft = int(PFT[k])
                 if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
                     continue
-                w_mult[i+j] = linear_constraint(
+                w_mult[k] = linear_constraint(
                     smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
-                t_mult[i+j] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
-                k_mult[i+j] = w_mult[i+j] * t_mult[i+j]
-                rh0[i+j] = k_mult[i+j] * SOC0[i+j] * params.decay_rate[pft]
-                rh1[i+j] = k_mult[i+j] * SOC1[i+j] * params.decay_rate[pft] * KSTRUCT
-                rh2[i+j] = k_mult[i+j] * SOC2[i+j] * params.decay_rate[pft] * KRECAL
+                t_mult[k] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
+                k_mult[k] = w_mult[k] * t_mult[k]
+                rh0[k] = k_mult[k] * SOC0[k] * params.decay_rate[pft]
+                rh1[k] = k_mult[k] * SOC1[k] * params.decay_rate[pft] * KSTRUCT
+                rh2[k] = k_mult[k] * SOC2[k] * params.decay_rate[pft] * KRECAL
                 # "the adjustment...to account for material transferred into the
                 #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
-                rh1[i+j] = rh1[i+j] * (1 - params.f_structural[pft])
-                rh_total[i+j] = rh0[i+j] + rh1[i+j] + rh2[i+j]
+                rh1[k] = rh1[k] * (1 - params.f_structural[pft])
+                rh_total[k] = rh0[k] + rh1[k] + rh2[k]
                 # Calculate change in SOC pools; NPP[i] is daily litterfall
-                SOC0[i+j] = (NPP[i+j] * params.f_metabolic[pft]) - rh0[i+j]
-                # SOC1[i+j] = <int>((NPP[i+j] * (1 - params.f_metabolic[pft])) - rh1[i+j])
-                # SOC2[i+j] = <int>((params.f_structural[pft] * rh1[i+j]) - rh2[i+j])
+                SOC0[k] = (NPP[k] * params.f_metabolic[pft]) - rh0[k]
+                SOC1[k] = (NPP[k] * (1 - params.f_metabolic[pft])) - rh1[k]
+                SOC2[k] = (params.f_structural[pft] * rh1[k]) - rh2[k]
+        # out_rh_total = to_numpy(rh_total, SPARSE_M01_N)
+        # out_rh_total.tofile('%s/L4Cython_RH_%s_M01land.flt32' % (OUTPUT_DIR, date))
         break # TODO FIXME
 
 
@@ -213,3 +223,13 @@ cdef float linear_constraint(
         return 0
     else:
         return (x - xmin) / (xmax - xmin)
+
+
+cdef to_numpy(float *ptr, int n):
+    '''
+    '''
+    cdef int i
+    arr = np.full((n,), np.nan, dtype = np.float32)
+    for i in range(n):
+        arr[i] = ptr[i]
+    return arr
