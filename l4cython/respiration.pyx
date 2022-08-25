@@ -28,7 +28,7 @@ cdef float KRECAL = 0.0093
 # We leave rh_total as a NumPy array because it is one we want to
 #   write to disk; this has to be a global variable so it will
 #   receive heap allocation
-OUT_RH_TOTAL = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
+OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
 
 # Allocate memory for, and populate, the PFT map
 cdef unsigned char* PFT
@@ -108,7 +108,6 @@ def main(int num_steps = 2177):
         float* w_mult
         float* t_mult
         float* k_mult
-        float out_rh_total[SPARSE_M01_N]
     rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
@@ -152,10 +151,10 @@ def main(int num_steps = 2177):
                 SOC1[k] = (NPP[k] * (1 - params.f_metabolic[pft])) - rh1[k]
                 SOC2[k] = (params.f_structural[pft] * rh1[k]) - rh2[k]
         # TODO FIXME Implicit break
-        OUT_RH_TOTAL = to_numpy(w_mult, SPARSE_M01_N)
-        OUT_RH_TOTAL.tofile('%s/L4Cython_Wmult_%s_M01land.flt32' % (OUTPUT_DIR, date))
-        OUT_RH_TOTAL = to_numpy(t_mult, SPARSE_M01_N)
-        OUT_RH_TOTAL.tofile('%s/L4Cython_Tmult_%s_M01land.flt32' % (OUTPUT_DIR, date))
+        OUT_M01 = to_numpy(w_mult, SPARSE_M01_N)
+        OUT_M01.tofile('%s/L4Cython_Wmult_%s_M01land.flt32' % (OUTPUT_DIR, date))
+        OUT_M01 = to_numpy(t_mult, SPARSE_M01_N)
+        OUT_M01.tofile('%s/L4Cython_Tmult_%s_M01land.flt32' % (OUTPUT_DIR, date))
         break
 
 
