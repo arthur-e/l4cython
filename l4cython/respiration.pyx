@@ -131,7 +131,7 @@ def main(int num_steps = 2177):
             # Iterate over each nested 1-km pixel
             for j in range(0, M01_NESTED_IN_M09):
                 # Hence, (i) indexes the 9-km pixel and k the 1-km pixel
-                k = (M01_NESTED_IN_M09 * i) + j + i
+                k = (M01_NESTED_IN_M09 * i) + j
                 pft = int(PFT[k])
                 if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
                     continue
