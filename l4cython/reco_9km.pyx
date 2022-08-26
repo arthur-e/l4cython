@@ -6,6 +6,7 @@
 import cython
 import datetime
 import numpy as np
+from respiration cimport BPLUT, linear_constraint, rh_calc
 
 # Number of grid cells in sparse ("land") arrays
 DEF SPARSE_N = 1664040
@@ -38,15 +39,6 @@ SOC2[:] = np.fromfile(
     '%s/tcf_natv91_C2_M09land_2015089.flt32' % ANC_DATA_DIR, np.float32)
 NPP[:] = np.fromfile(
     '%s/tcf_natv91_npp_sum_M09land.flt32' % ANC_DATA_DIR, np.float32) / 365
-
-cdef struct BPLUT:
-    float smsf0[9] # wetness [0-100%]
-    float smsf1[9] # wetness [0-100%]
-    float tsoil[9] # deg K
-    float cue[9]
-    float f_metabolic[9]
-    float f_structural[9]
-    float decay_rate[9]
 
 # NOTE: Must have an (arbitrary) value in 0th position to avoid overflow of
 #   indexing (as PFT=0 is not used and C starts counting at 0)
@@ -102,18 +94,14 @@ def main(int num_steps = 2177):
             w_mult[i] = linear_constraint(
                 smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
             t_mult[i] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
-            k_mult[i] = w_mult[i] * t_mult[i]
-            rh0[i] = k_mult[i] * SOC0[i] * params.decay_rate[pft]
-            rh1[i] = k_mult[i] * SOC1[i] * params.decay_rate[pft] * KSTRUCT
-            rh2[i] = k_mult[i] * SOC2[i] * params.decay_rate[pft] * KRECAL
-            # "the adjustment...to account for material transferred into the
-            #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
-            rh1[i] = rh1[i] * (1 - params.f_structural[pft])
-            rh_total[i] = rh0[i] + rh1[i] + rh2[i]
+            rh = rh_calc(
+                params, pft, w_mult[i] * t_mult[i], SOC0[i], SOC1[i], SOC2[i],
+                KSTRUCT, KRECAL)
+            rh_total[i] = rh.rh0 + rh.rh1 + rh.rh2
             # Calculate change in SOC pools; NPP[i] is daily litterfall
-            SOC0[i] = (NPP[i] * params.f_metabolic[pft]) - rh0[i]
-            SOC1[i] = (NPP[i] * (1 - params.f_metabolic[pft])) - rh1[i]
-            SOC2[i] = (params.f_structural[pft] * rh1[i]) - rh2[i]
+            SOC0[i] = (NPP[i] * params.f_metabolic[pft]) - rh.rh0
+            SOC1[i] = (NPP[i] * (1 - params.f_metabolic[pft])) - rh.rh1
+            SOC2[i] = (params.f_structural[pft] * rh.rh1) - rh.rh2
         np.array(rh_total).astype(np.float32).tofile(
             '%s/L4Cython_RH_%s_M09land.flt32' % (OUTPUT_DIR, date))
         break # TODO FIXME
@@ -148,47 +136,3 @@ cdef float arrhenius(
         return 0
     else:
         return y0
-
-
-cdef float linear_constraint(
-        float x, float xmin, float xmax, int reversed):
-    '''
-    Returns a linear ramp function, for deriving a value on [0, 1] from
-    an input value `x`:
-
-        if x >= xmax:
-            return 1
-        if x <= xmin:
-            return 0
-        return (x - xmin) / (xmax - xmin)
-
-    Parameters
-    ----------
-    x: float
-    xmin : float
-        Lower bound of the linear ramp function
-    xmax : float
-        Upper bound of the linear ramp function
-    reversed : int
-        Type of ramp function: 1 for "reversed," i.e., function decreases
-        as x increases
-
-    Returns
-    -------
-    float
-    '''
-    assert reversed == 0 or reversed == 1
-    if reversed == 1:
-        if x >= xmax:
-            return 0
-        elif x < xmin:
-            return 1
-        else:
-            return 1 - ((x - xmin) / (xmax - xmin))
-    # For normal case
-    if x >= xmax:
-        return 1
-    elif x < xmin:
-        return 0
-    else:
-        return (x - xmin) / (xmax - xmin)
