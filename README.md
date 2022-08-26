@@ -80,3 +80,18 @@ Fortunately, the performance hit is small; for 9-km data:
 # timeit mean time using heap allocation
 2.70 sec per loop
 ```
+
+
+Concurrency
+-------------------
+
+OpenMP can be used for concurrency only if the contents of the inner-most loop (e.g., where `prange()` is used) contains only C code.
+
+```
+respration = Extension(
+    ...
+    extra_compile_args = ['-fopenmp'],
+    extra_link_args = ['-fopenmp'])
+```
+
+[See this article for more information.](https://cython.readthedocs.io/en/latest/src/userguide/numpy_tutorial.html#using-multiple-threads)

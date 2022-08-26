@@ -8,29 +8,6 @@ cdef struct BPLUT:
     float decay_rate[9]
 
 
-# Represents the RH flux from three SOC pools
-cdef struct rh_flux:
-    float rh0
-    float rh1
-    float rh2
-
-
-cdef inline rh_flux rh_calc(
-        BPLUT params, int pft, float k_mult, float soc0, float soc1, float soc2,
-        float kstruct, float krecal):
-    '''
-    Pass
-    '''
-    cdef rh_flux rh
-    rh.rh0 = k_mult * soc0 * params.decay_rate[pft]
-    rh.rh1 = k_mult * soc1 * params.decay_rate[pft] * kstruct
-    rh.rh2 = k_mult * soc2 * params.decay_rate[pft] * krecal
-    # "the adjustment...to account for material transferred into the
-    #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
-    rh.rh1 = rh.rh1 * (1 - params.f_structural[pft])
-    return rh
-
-
 cdef inline float linear_constraint(
         float x, float xmin, float xmax, int reversed):
     '''

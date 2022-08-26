@@ -3,10 +3,13 @@
 # SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based
 #   on Version 6 state and parameters
 
+# TODO:
+# - [ ] Convert arrhenius() to a C function
+
 import cython
 import datetime
 import numpy as np
-from respiration cimport BPLUT, linear_constraint, rh_calc
+from respiration cimport BPLUT, linear_constraint
 
 # Number of grid cells in sparse ("land") arrays
 DEF SPARSE_N = 1664040
@@ -72,7 +75,7 @@ def main(int num_steps = 2177):
         float rh2[SPARSE_N]
         float w_mult[SPARSE_N]
         float t_mult[SPARSE_N]
-        float k_mult[SPARSE_N]
+        float k_mult
     # We leave rh_total as a NumPy array because it is one we want to
     #   write to disk
     rh_total = np.full((SPARSE_N,), np.nan, dtype = np.float32)
@@ -94,16 +97,20 @@ def main(int num_steps = 2177):
             w_mult[i] = linear_constraint(
                 smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
             t_mult[i] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
-            rh = rh_calc(
-                params, pft, w_mult[i] * t_mult[i], SOC0[i], SOC1[i], SOC2[i],
-                KSTRUCT, KRECAL)
-            rh_total[i] = rh.rh0 + rh.rh1 + rh.rh2
+            k_mult = w_mult[i] * t_mult[i]
+            rh0[i] = k_mult * SOC0[i] * params.decay_rate[pft]
+            rh1[i] = k_mult * SOC1[i] * params.decay_rate[pft] * KSTRUCT
+            rh2[i] = k_mult * SOC2[i] * params.decay_rate[pft] * KRECAL
+            # "the adjustment...to account for material transferred into the
+            #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
+            rh1[i] = rh1[i] * (1 - params.f_structural[pft])
+            rh_total[i] = rh0[i] + rh1[i] + rh2[i]
             # Calculate change in SOC pools; NPP[i] is daily litterfall
-            SOC0[i] = (NPP[i] * params.f_metabolic[pft]) - rh.rh0
-            SOC1[i] = (NPP[i] * (1 - params.f_metabolic[pft])) - rh.rh1
-            SOC2[i] = (params.f_structural[pft] * rh.rh1) - rh.rh2
-        np.array(rh_total).astype(np.float32).tofile(
-            '%s/L4Cython_RH_%s_M09land.flt32' % (OUTPUT_DIR, date))
+            SOC0[i] = (NPP[i] * params.f_metabolic[pft]) - rh0[i]
+            SOC1[i] = (NPP[i] * (1 - params.f_metabolic[pft])) - rh1[i]
+            SOC2[i] = (params.f_structural[pft] * rh1[i]) - rh2[i]
+        # np.array(rh_total).astype(np.float32).tofile(
+        #     '%s/L4Cython_RH_%s_M09land.flt32' % (OUTPUT_DIR, date))
         break # TODO FIXME
 
 
