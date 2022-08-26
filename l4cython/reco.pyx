@@ -7,6 +7,7 @@ import cython
 import datetime
 import numpy as np
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
+from respiration cimport BPLUT, arrhenius, linear_constraint
 
 DEF M01_NESTED_IN_M09 = 9 * 9
 # Number of grid cells in sparse ("land") arrays
@@ -46,15 +47,6 @@ SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 NPP = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-
-cdef struct BPLUT:
-    float smsf0[9] # wetness [0-100%]
-    float smsf1[9] # wetness [0-100%]
-    float tsoil[9] # deg K
-    float cue[9]
-    float f_metabolic[9]
-    float f_structural[9]
-    float decay_rate[9]
 
 # NOTE: Must have an (arbitrary) value in 0th position to avoid overflow of
 #   indexing (as PFT=0 is not used and C starts counting at 0)
@@ -107,14 +99,13 @@ def main(int num_steps = 2177):
         float* rh_total
         float* w_mult
         float* t_mult
-        float* k_mult
+        float k_mult
     rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-    k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     date_start = datetime.datetime.strptime(ORIGIN, '%Y%m%d')
     for step in range(num_steps):
         date = date_start + datetime.timedelta(days = step)
@@ -138,10 +129,10 @@ def main(int num_steps = 2177):
                 w_mult[k] = linear_constraint(
                     smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
                 t_mult[k] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
-                k_mult[k] = w_mult[k] * t_mult[k]
-                rh0[k] = k_mult[k] * SOC0[k] * params.decay_rate[pft]
-                rh1[k] = k_mult[k] * SOC1[k] * params.decay_rate[pft] * KSTRUCT
-                rh2[k] = k_mult[k] * SOC2[k] * params.decay_rate[pft] * KRECAL
+                k_mult = w_mult[k] * t_mult[k]
+                rh0[k] = k_mult * SOC0[k] * params.decay_rate[pft]
+                rh1[k] = k_mult * SOC1[k] * params.decay_rate[pft] * KSTRUCT
+                rh2[k] = k_mult * SOC2[k] * params.decay_rate[pft] * KRECAL
                 # "the adjustment...to account for material transferred into the
                 #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
                 rh1[k] = rh1[k] * (1 - params.f_structural[pft])
@@ -151,90 +142,25 @@ def main(int num_steps = 2177):
                 SOC1[k] = (NPP[k] * (1 - params.f_metabolic[pft])) - rh1[k]
                 SOC2[k] = (params.f_structural[pft] * rh1[k]) - rh2[k]
         # TODO FIXME Implicit break
-        OUT_M01 = to_numpy(w_mult, SPARSE_M01_N)
-        OUT_M01.tofile('%s/L4Cython_Wmult_%s_M01land.flt32' % (OUTPUT_DIR, date))
-        OUT_M01 = to_numpy(t_mult, SPARSE_M01_N)
-        OUT_M01.tofile('%s/L4Cython_Tmult_%s_M01land.flt32' % (OUTPUT_DIR, date))
+        OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
+        OUT_M01.tofile('%s/L4Cython_RH_%s_M01land.flt32' % (OUTPUT_DIR, date))
         break
-
-
-cdef float arrhenius(
-        float tsoil, float beta0, float beta1, float beta2):
-    '''
-    The Arrhenius equation for response of enzymes to (soil) temperature,
-    constrained to lie on the closed interval [0, 1].
-
-    Parameters
-    ----------
-    tsoil : float
-        Array of soil temperature in degrees K
-    beta0 : float
-        Coefficient for soil temperature (deg K)
-    beta1 : float
-        Coefficient for ... (deg K)
-    beta2 : float
-        Coefficient for ... (deg K)
-    '''
-    cdef float a, b, y0
-    a = (1.0 / beta1)
-    b = 1 / (tsoil - beta2)
-    # This is the simple answer, but it takes on values >1
-    y0 = np.exp(beta0 * (a - b))
-    # Constrain the output to the interval [0, 1]
-    if y0 > 1:
-        return 1
-    elif y0 < 0:
-        return 0
-    else:
-        return y0
-
-
-cdef float linear_constraint(
-        float x, float xmin, float xmax, int reversed):
-    '''
-    Returns a linear ramp function, for deriving a value on [0, 1] from
-    an input value `x`:
-
-        if x >= xmax:
-            return 1
-        if x <= xmin:
-            return 0
-        return (x - xmin) / (xmax - xmin)
-
-    Parameters
-    ----------
-    x: float
-    xmin : float
-        Lower bound of the linear ramp function
-    xmax : float
-        Upper bound of the linear ramp function
-    reversed : int
-        Type of ramp function: 1 for "reversed," i.e., function decreases
-        as x increases
-
-    Returns
-    -------
-    float
-    '''
-    assert reversed == 0 or reversed == 1
-    if reversed == 1:
-        if x >= xmax:
-            return 0
-        elif x < xmin:
-            return 1
-        else:
-            return 1 - ((x - xmin) / (xmax - xmin))
-    # For normal case
-    if x >= xmax:
-        return 1
-    elif x < xmin:
-        return 0
-    else:
-        return (x - xmin) / (xmax - xmin)
 
 
 cdef to_numpy(float *ptr, int n):
     '''
+    Converts a typed memoryview to a NumPy array.
+
+    Parameters
+    ----------
+    ptr : float*
+        A pointer to the typed memoryview
+    n : int
+        The number of array elements
+
+    Returns
+    -------
+    numpy.ndarray
     '''
     cdef int i
     arr = np.full((n,), np.nan, dtype = np.float32)

@@ -3,13 +3,10 @@
 # SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based
 #   on Version 6 state and parameters
 
-# TODO:
-# - [ ] Convert arrhenius() to a C function
-
 import cython
 import datetime
 import numpy as np
-from respiration cimport BPLUT, linear_constraint
+from respiration cimport BPLUT, arrhenius, linear_constraint
 
 # Number of grid cells in sparse ("land") arrays
 DEF SPARSE_N = 1664040
@@ -109,37 +106,6 @@ def main(int num_steps = 2177):
             SOC0[i] = (NPP[i] * params.f_metabolic[pft]) - rh0[i]
             SOC1[i] = (NPP[i] * (1 - params.f_metabolic[pft])) - rh1[i]
             SOC2[i] = (params.f_structural[pft] * rh1[i]) - rh2[i]
-        # np.array(rh_total).astype(np.float32).tofile(
-        #     '%s/L4Cython_RH_%s_M09land.flt32' % (OUTPUT_DIR, date))
+        np.array(rh_total).astype(np.float32).tofile(
+            '%s/L4Cython_RH_%s_M09land.flt32' % (OUTPUT_DIR, date))
         break # TODO FIXME
-
-
-cdef float arrhenius(
-        float tsoil, float beta0, float beta1, float beta2):
-    '''
-    The Arrhenius equation for response of enzymes to (soil) temperature,
-    constrained to lie on the closed interval [0, 1].
-
-    Parameters
-    ----------
-    tsoil : float
-        Array of soil temperature in degrees K
-    beta0 : float
-        Coefficient for soil temperature (deg K)
-    beta1 : float
-        Coefficient for ... (deg K)
-    beta2 : float
-        Coefficient for ... (deg K)
-    '''
-    cdef float a, b, y0
-    a = (1.0 / beta1)
-    b = 1 / (tsoil - beta2)
-    # This is the simple answer, but it takes on values >1
-    y0 = np.exp(beta0 * (a - b))
-    # Constrain the output to the interval [0, 1]
-    if y0 > 1:
-        return 1
-    elif y0 < 0:
-        return 0
-    else:
-        return y0
