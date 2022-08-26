@@ -31,10 +31,11 @@ respiration = Extension(
     define_macros = [ # Avoids warning "Using deprecated NumPy API"
         ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')
     ], # https://stackoverflow.com/questions/52749662/using-deprecated-numpy-api
-    extra_compile_args = ['-g']
+    extra_compile_args = ['-g'],
+    extra_link_args = ['-g']
 )
 
-setup(ext_modules = cythonize(respiration, gdb_debug = True))
+setup(ext_modules = cythonize(respiration))
 ```
 
 [Then see this resource for tips on debugging.](https://github.com/cython/cython/wiki/DebuggingTechniques)
