@@ -9,7 +9,7 @@ cdef struct BPLUT:
     float cue[9]
     float f_metabolic[9]
     float f_structural[9]
-    float decay_rate[9]
+    float decay_rate[3][9]
 
 
 cdef inline float arrhenius(
