@@ -1,23 +1,22 @@
 # cython: language_level=3
 
-# SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based
-#   on Version 6 state and parameters
+'''
+SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
+Version 6 state and parameters. The `main()` routine is optimized for model
+execution but it may take several seconds to load the state data.
+'''
 
 import cython
 import datetime
+import json
 import numpy as np
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
-from respiration cimport BPLUT, arrhenius, linear_constraint
+from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy
 
 DEF M01_NESTED_IN_M09 = 9 * 9
 # Number of grid cells in sparse ("land") arrays
 DEF SPARSE_M09_N = 1664040
 DEF SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
-DEF ANC_DATA_DIR = '/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data'
-DEF SOC_DATA_DIR = '/anx_lagr4/SMAP/L4C_code/tcf/output/NRv91'
-DEF L4SM_DATA_DIR = '/anx_lagr4/SMAP/L4SM/Vv6032'
-DEF OUTPUT_DIR = '/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20220106'
-DEF ORIGIN = '20150331' # First day, in YYYYMMDD
 
 # Additional Tsoil parameter (fixed for all PFTs)
 cdef float TSOIL1 = 66.02 # deg K
@@ -31,18 +30,18 @@ cdef float KRECAL = 0.0093
 #   receive heap allocation
 OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
 
-# Allocate memory for, and populate, the PFT map
-cdef unsigned char* PFT
-# Allocate memory for SOC and litterfall (NPP) files
+# Allocate memory for PFT, SOC and litterfall (NPP) files
 # NOTE: While we should be using PyMem_Free later, these variables will
 #   be in use for the life of the program, so we let them free up only when
 #   the program exits; for some reason, a segfault is encountered when
 #   using: PyMem_Free(SOC1)
 cdef:
+    unsigned char* PFT
     float* SOC0
     float* SOC1
     float* SOC2
     float* NPP
+PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
 SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
@@ -65,7 +64,7 @@ for p in range(1, 9):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def main(int num_steps = 2177):
+def main(config_file = None, int num_steps = 2177):
     '''
     Forward run of the L4C soil decomposition and heterotrophic respiration
     algorithm. Starts on March 31, 2015 and continues for the specified
@@ -76,22 +75,6 @@ def main(int num_steps = 2177):
     num_steps : int
         Number of (daily) time steps to compute forward
     '''
-    PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
-    for idx, data in enumerate(np.fromfile('%s/SMAP_L4C_PFT_map_M01land.uint8' % ANC_DATA_DIR, np.uint8)):
-        PFT[idx] = data
-    # Read in SOC and NPP data; this has to be done by element, it seems
-    for idx, data in enumerate(np.fromfile(
-            '%s/tcf_NRv91_C0_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32)):
-        SOC0[idx] = data
-    for idx, data in enumerate(np.fromfile(
-            '%s/tcf_NRv91_C1_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32)):
-        SOC1[idx] = data
-    for idx, data in enumerate(np.fromfile(
-            '%s/tcf_NRv91_C2_M01land_0002089.flt32' % SOC_DATA_DIR, np.float32)):
-        SOC2[idx] = data
-    for idx, data in enumerate(np.fromfile(
-            '%s/tcf_NRv91_npp_sum_M01land.flt32' % SOC_DATA_DIR, np.float32) / 365):
-        NPP[idx] = data
     cdef:
         Py_ssize_t i
         Py_ssize_t j
@@ -109,17 +92,21 @@ def main(int num_steps = 2177):
     rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-    date_start = datetime.datetime.strptime(ORIGIN, '%Y%m%d')
+    # Read in configuration file, then load state data
+    if config_file is None:
+        config_file = '../data/L4Cython_RECO_M01_config.json'
+    with open(config_file) as file:
+        config = json.load(file)
+    load_state(config)
+    date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
     for step in range(num_steps):
         date = date_start + datetime.timedelta(days = step)
         date = date.strftime('%Y%m%d')
         # Convert to percentage units
         smsf = 100 * np.fromfile(
-            '%s/L4_SM_gph_Vv6032_smsf_M09land_%s.flt32' % (L4SM_DATA_DIR, date),
-            dtype = np.float32)
+            config['data']['drivers']['smsf'] % date, dtype = np.float32)
         tsoil = np.fromfile(
-            '%s/L4_SM_gph_Vv6032_tsoil_M09land_%s.flt32' % (L4SM_DATA_DIR, date),
-            dtype = np.float32)
+            config['data']['drivers']['tsoil'] % date, dtype = np.float32)
         # Iterate over each 9-km pixel
         for i in range(0, SPARSE_M09_N):
             # Iterate over each nested 1-km pixel
@@ -133,9 +120,9 @@ def main(int num_steps = 2177):
                     smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
                 t_mult[k] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
                 k_mult = w_mult[k] * t_mult[k]
-                rh0[k] = k_mult * SOC0[k] * params.decay_rate[pft]
-                rh1[k] = k_mult * SOC1[k] * params.decay_rate[pft] * KSTRUCT
-                rh2[k] = k_mult * SOC2[k] * params.decay_rate[pft] * KRECAL
+                rh0[k] = k_mult * SOC0[k] * params.decay_rate[0][pft]
+                rh1[k] = k_mult * SOC1[k] * params.decay_rate[1][pft] * KSTRUCT
+                rh2[k] = k_mult * SOC2[k] * params.decay_rate[2][pft] * KRECAL
                 # "the adjustment...to account for material transferred into the
                 #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
                 rh1[k] = rh1[k] * (1 - params.f_structural[pft])
@@ -146,27 +133,33 @@ def main(int num_steps = 2177):
                 SOC2[k] = (params.f_structural[pft] * rh1[k]) - rh2[k]
         # TODO FIXME Implicit break
         OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
-        OUT_M01.tofile('%s/L4Cython_RH_%s_M01land.flt32' % (OUTPUT_DIR, date))
+        OUT_M01.tofile(
+            '%s/L4Cython_RH_%s_M01land.flt32' % (config['model']['output_dir'], date))
         break
 
 
-cdef to_numpy(float *ptr, int n):
+def load_state(config):
     '''
-    Converts a typed memoryview to a NumPy array.
+    Populates global state variables with data.
 
     Parameters
     ----------
-    ptr : float*
-        A pointer to the typed memoryview
-    n : int
-        The number of array elements
-
-    Returns
-    -------
-    numpy.ndarray
+    config : dict
+        The configuration data dictionary
     '''
-    cdef int i
-    arr = np.full((n,), np.nan, dtype = np.float32)
-    for i in range(n):
-        arr[i] = ptr[i]
-    return arr
+    # Read in SOC and NPP data; this has to be done by element, it seems
+    for idx, data in enumerate(
+            np.fromfile(config['data']['PFT_map'], np.uint8)):
+        PFT[idx] = data
+    for idx, data in enumerate(
+            np.fromfile(config['data']['SOC'][0], np.float32)):
+        SOC0[idx] = data
+    for idx, data in enumerate(
+            np.fromfile(config['data']['SOC'][1], np.float32)):
+        SOC1[idx] = data
+    for idx, data in enumerate(
+            np.fromfile(config['data']['SOC'][2], np.float32)):
+        SOC2[idx] = data
+    for idx, data in enumerate(
+            np.fromfile(config['data']['NPP_annual_sum'], np.float32) / 365):
+        NPP[idx] = data

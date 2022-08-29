@@ -9,7 +9,7 @@ MACROS = [ # Avoids warning "Using deprecated NumPy API"
 
 reco = Extension(
     name = 'reco',
-    sources = ['reco_9km.pyx'],
+    sources = ['reco.pyx'],
     define_macros = MACROS
 )
 

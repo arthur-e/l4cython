@@ -1,3 +1,5 @@
+import numpy as np
+
 cdef extern from "math.h":
     double exp(double x)
 
@@ -85,3 +87,25 @@ cdef inline float linear_constraint(
         return 0
     else:
         return (x - xmin) / (xmax - xmin)
+
+
+cdef inline to_numpy(float *ptr, int n):
+    '''
+    Converts a typed memoryview to a NumPy array.
+
+    Parameters
+    ----------
+    ptr : float*
+        A pointer to the typed memoryview
+    n : int
+        The number of array elements
+
+    Returns
+    -------
+    numpy.ndarray
+    '''
+    cdef int i
+    arr = np.full((n,), np.nan, dtype = np.float32)
+    for i in range(n):
+        arr[i] = ptr[i]
+    return arr
