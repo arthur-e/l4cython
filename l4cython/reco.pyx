@@ -25,9 +25,8 @@ cdef float TSOIL2 = 227.13 # deg K
 cdef float KSTRUCT = 0.4 # Muliplier *against* base decay rate
 cdef float KRECAL = 0.0093
 
-# We leave rh_total as a NumPy array because it is one we want to
-#   write to disk; this has to be a global variable so it will
-#   receive heap allocation
+# Python arrays that want heap allocations must be global; this one is reused
+#   for any array that needs to be written to disk (using NumPy)
 OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
 
 # Allocate memory for PFT, SOC and litterfall (NPP) files

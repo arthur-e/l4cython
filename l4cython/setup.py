@@ -8,9 +8,11 @@ MACROS = [ # Avoids warning "Using deprecated NumPy API"
 ] # https://stackoverflow.com/questions/52749662/using-deprecated-numpy-api
 
 reco = Extension(
-    name = 'reco',
-    sources = ['reco.pyx'],
-    define_macros = MACROS
+    name = 'reco', sources = ['reco.pyx'], define_macros = MACROS
 )
 
-setup(ext_modules = cythonize(reco))
+spinup = Extension(
+    name = 'spinup', sources = ['spinup_9km.pyx'], define_macros = MACROS
+)
+
+setup(ext_modules = cythonize([reco, spinup]))
