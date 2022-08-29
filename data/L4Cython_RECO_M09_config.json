@@ -1,0 +1,24 @@
+{
+  "BPLUT": "/anx_lagr3/arthur.endsley/SMAP_L4C/calibration/v6_Y2021/SMAP_BPLUT_Vv60XX_rev_20210908.csv",
+
+  "origin_date": "2015-03-31",
+
+  "data": {
+    "PFT_map": "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4C_PFT_map_M09land.uint8",
+    "SOC": [
+      "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_natv91_C0_M09land_2015089.flt32",
+      "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_natv91_C1_M09land_2015089.flt32",
+      "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_natv91_C2_M09land_2015089.flt32"
+    ],
+    "NPP_annual_sum": "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_natv91_npp_sum_M09land.flt32",
+    "drivers": {
+      "smsf": "/anx_lagr4/SMAP/L4SM/Vv6032/L4_SM_gph_Vv6032_smsf_M09land_%s.flt32",
+      "tsoil": "/anx_lagr4/SMAP/L4SM/Vv6032/L4_SM_gph_Vv6032_tsoil_M09land_%s.flt32"
+    }
+  },
+
+  "model": {
+    "output_dir": "/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20220106"
+  }
+
+}

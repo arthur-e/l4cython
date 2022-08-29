@@ -1,19 +1,18 @@
 # cython: language_level=3
 
-# SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based
-#   on Version 6 state and parameters
+'''
+SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based
+on Version 6 state and parameters
+'''
 
 import cython
 import datetime
+import json
 import numpy as np
 from respiration cimport BPLUT, arrhenius, linear_constraint
 
 # Number of grid cells in sparse ("land") arrays
 DEF SPARSE_N = 1664040
-DEF ANC_DATA_DIR = '/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data'
-DEF L4SM_DATA_DIR = '/anx_lagr4/SMAP/L4SM/Vv6032'
-DEF OUTPUT_DIR = '/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20220106'
-DEF ORIGIN = '20150331' # First day, in YYYYMMDD
 
 # Additional Tsoil parameter (fixed for all PFTs)
 cdef float TSOIL1 = 66.02 # deg K
@@ -30,19 +29,13 @@ cdef:
     float SOC2[SPARSE_N]
     float NPP[SPARSE_N]
 
-PFT[:] = np.fromfile('%s/SMAP_L4C_PFT_map_M09land.uint8' % ANC_DATA_DIR, np.uint8)
-SOC0[:] = np.fromfile(
-    '%s/tcf_natv91_C0_M09land_2015089.flt32' % ANC_DATA_DIR, np.float32)
-SOC1[:] = np.fromfile(
-    '%s/tcf_natv91_C1_M09land_2015089.flt32' % ANC_DATA_DIR, np.float32)
-SOC2[:] = np.fromfile(
-    '%s/tcf_natv91_C2_M09land_2015089.flt32' % ANC_DATA_DIR, np.float32)
-NPP[:] = np.fromfile(
-    '%s/tcf_natv91_npp_sum_M09land.flt32' % ANC_DATA_DIR, np.float32) / 365
-
+# NOTE: BPLUT is initialized here because we *need* it to be a C struct and
+#   1) It cannot be a C struct if it is imported from a *.pyx file (it gets
+#   converted to a dict); and 2) We can't initalize the C struct's state if
+#   it is in a *.pxd file
+cdef BPLUT params
 # NOTE: Must have an (arbitrary) value in 0th position to avoid overflow of
 #   indexing (as PFT=0 is not used and C starts counting at 0)
-cdef BPLUT params
 params.smsf0[:] = [0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 params.smsf1[:] = [0, 25.0, 30.5, 39.8, 31.3, 44.9, 50.5, 25.0, 25.1]
 params.tsoil[:] = [0, 266.05, 392.24, 233.94, 265.23, 240.71, 261.42, 253.98, 281.69]
@@ -57,7 +50,7 @@ for p in range(1, 9):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def main(int num_steps = 2177):
+def main(config_file = None, int num_steps = 2177):
     '''
     Forward run of the L4C soil decomposition and heterotrophic respiration
     algorithm. Starts on March 31, 2015 and continues for the specified
@@ -75,21 +68,24 @@ def main(int num_steps = 2177):
         float rh2[SPARSE_N]
         float w_mult[SPARSE_N]
         float t_mult[SPARSE_N]
-        float k_mult
+    # Read in configuration file, then load state data
+    if config_file is None:
+        config_file = '../data/L4Cython_RECO_M09_config.json'
+    with open(config_file) as file:
+        config = json.load(file)
+    load_state(config)
     # We leave rh_total as a NumPy array because it is one we want to
     #   write to disk
     rh_total = np.full((SPARSE_N,), np.nan, dtype = np.float32)
-    date_start = datetime.datetime.strptime(ORIGIN, '%Y%m%d')
+    date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
     for step in range(num_steps):
         date = date_start + datetime.timedelta(days = step)
         date = date.strftime('%Y%m%d')
         # Convert to percentage units
         smsf = 100 * np.fromfile(
-            '%s/L4_SM_gph_Vv6032_smsf_M09land_%s.flt32' % (L4SM_DATA_DIR, date),
-            dtype = np.float32)
+            config['data']['drivers']['smsf'] % date, dtype = np.float32)
         tsoil = np.fromfile(
-            '%s/L4_SM_gph_Vv6032_tsoil_M09land_%s.flt32' % (L4SM_DATA_DIR, date),
-            dtype = np.float32)
+            config['data']['drivers']['tsoil'] % date, dtype = np.float32)
         for i in range(0, SPARSE_N):
             pft = int(PFT[i])
             if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
@@ -97,10 +93,9 @@ def main(int num_steps = 2177):
             w_mult[i] = linear_constraint(
                 smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
             t_mult[i] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
-            k_mult = w_mult[i] * t_mult[i]
-            rh0[i] = k_mult * SOC0[i] * params.decay_rate[0][pft]
-            rh1[i] = k_mult * SOC1[i] * params.decay_rate[1][pft]
-            rh2[i] = k_mult * SOC2[i] * params.decay_rate[2][pft]
+            rh0[i] = w_mult[i] * t_mult[i] * SOC0[i] * params.decay_rate[0][pft]
+            rh1[i] = w_mult[i] * t_mult[i] * SOC1[i] * params.decay_rate[1][pft]
+            rh2[i] = w_mult[i] * t_mult[i] * SOC2[i] * params.decay_rate[2][pft]
             # "the adjustment...to account for material transferred into the
             #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
             rh1[i] = rh1[i] * (1 - params.f_structural[pft])
@@ -110,5 +105,21 @@ def main(int num_steps = 2177):
             SOC1[i] = (NPP[i] * (1 - params.f_metabolic[pft])) - rh1[i]
             SOC2[i] = (params.f_structural[pft] * rh1[i]) - rh2[i]
         np.array(rh_total).astype(np.float32).tofile(
-            '%s/L4Cython_RH_%s_M09land.flt32' % (OUTPUT_DIR, date))
+            '%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
         break # TODO FIXME
+
+
+def load_state(config):
+    '''
+    Populates global state variables with data.
+
+    Parameters
+    ----------
+    config : dict
+        The configuration data dictionary
+    '''
+    PFT[:] = np.fromfile(config['data']['PFT_map'], np.uint8)
+    SOC0[:] = np.fromfile(config['data']['SOC'][0], np.float32)
+    SOC1[:] = np.fromfile(config['data']['SOC'][1], np.float32)
+    SOC2[:] = np.fromfile(config['data']['SOC'][2], np.float32)
+    NPP[:] = np.fromfile(config['data']['NPP_annual_sum'], np.float32) / 365
