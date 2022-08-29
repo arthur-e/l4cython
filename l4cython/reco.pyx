@@ -31,10 +31,6 @@ cdef float KRECAL = 0.0093
 OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
 
 # Allocate memory for PFT, SOC and litterfall (NPP) files
-# NOTE: While we should be using PyMem_Free later, these variables will
-#   be in use for the life of the program, so we let them free up only when
-#   the program exits; for some reason, a segfault is encountered when
-#   using: PyMem_Free(SOC1)
 cdef:
     unsigned char* PFT
     float* SOC0
@@ -115,7 +111,7 @@ def main(config_file = None, int num_steps = 2177):
                 k = (M01_NESTED_IN_M09 * i) + j
                 pft = int(PFT[k])
                 if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
-                    continue
+                    continue # Skip invalid PFTs
                 w_mult[k] = linear_constraint(
                     smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
                 t_mult[k] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
@@ -131,11 +127,22 @@ def main(config_file = None, int num_steps = 2177):
                 SOC0[k] = (NPP[k] * params.f_metabolic[pft]) - rh0[k]
                 SOC1[k] = (NPP[k] * (1 - params.f_metabolic[pft])) - rh1[k]
                 SOC2[k] = (params.f_structural[pft] * rh1[k]) - rh2[k]
-        # TODO FIXME Implicit break
+        # TODO FIXME break
         OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
         OUT_M01.tofile(
             '%s/L4Cython_RH_%s_M01land.flt32' % (config['model']['output_dir'], date))
         break
+    PyMem_Free(PFT)
+    PyMem_Free(SOC0)
+    PyMem_Free(SOC1)
+    PyMem_Free(SOC2)
+    PyMem_Free(NPP)
+    PyMem_Free(rh0)
+    PyMem_Free(rh1)
+    PyMem_Free(rh2)
+    PyMem_Free(rh_total)
+    PyMem_Free(w_mult)
+    PyMem_Free(t_mult)
 
 
 def load_state(config):
