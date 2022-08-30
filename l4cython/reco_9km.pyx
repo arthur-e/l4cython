@@ -34,19 +34,19 @@ cdef:
 #   1) It cannot be a C struct if it is imported from a *.pyx file (it gets
 #   converted to a dict); and 2) We can't initalize the C struct's state if
 #   it is in a *.pxd file
-cdef BPLUT params
+cdef BPLUT PARAMS
 # NOTE: Must have an (arbitrary) value in 0th position to avoid overflow of
 #   indexing (as PFT=0 is not used and C starts counting at 0)
-params.smsf0[:] = [0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-params.smsf1[:] = [0, 25.0, 30.5, 39.8, 31.3, 44.9, 50.5, 25.0, 25.1]
-params.tsoil[:] = [0, 266.05, 392.24, 233.94, 265.23, 240.71, 261.42, 253.98, 281.69]
-params.cue[:] = [0, 0.687, 0.469, 0.755, 0.799, 0.649, 0.572, 0.708, 0.705]
-params.f_metabolic[:] = [0, 0.49, 0.71, 0.67, 0.67, 0.62, 0.76, 0.78, 0.78]
-params.f_structural[:] = [0, 0.3, 0.3, 0.7, 0.3, 0.35, 0.55, 0.5, 0.8]
-params.decay_rate[0] = [0, 0.020, 0.022, 0.031, 0.028, 0.013, 0.022, 0.019, 0.031]
+PARAMS.smsf0[:] = [0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+PARAMS.smsf1[:] = [0, 25.0, 30.5, 39.8, 31.3, 44.9, 50.5, 25.0, 25.1]
+PARAMS.tsoil[:] = [0, 266.05, 392.24, 233.94, 265.23, 240.71, 261.42, 253.98, 281.69]
+PARAMS.cue[:] = [0, 0.687, 0.469, 0.755, 0.799, 0.649, 0.572, 0.708, 0.705]
+PARAMS.f_metabolic[:] = [0, 0.49, 0.71, 0.67, 0.67, 0.62, 0.76, 0.78, 0.78]
+PARAMS.f_structural[:] = [0, 0.3, 0.3, 0.7, 0.3, 0.35, 0.55, 0.5, 0.8]
+PARAMS.decay_rate[0] = [0, 0.020, 0.022, 0.031, 0.028, 0.013, 0.022, 0.019, 0.031]
 for p in range(1, 9):
-    params.decay_rate[1][p] = params.decay_rate[0][p] * KSTRUCT
-    params.decay_rate[2][p] = params.decay_rate[0][p] * KRECAL
+    PARAMS.decay_rate[1][p] = PARAMS.decay_rate[0][p] * KSTRUCT
+    PARAMS.decay_rate[2][p] = PARAMS.decay_rate[0][p] * KRECAL
 
 
 @cython.boundscheck(False)
@@ -92,19 +92,19 @@ def main(config_file = None, int num_steps = 2177):
             if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
                 continue
             w_mult[i] = linear_constraint(
-                smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
-            t_mult[i] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
-            rh0[i] = w_mult[i] * t_mult[i] * SOC0[i] * params.decay_rate[0][pft]
-            rh1[i] = w_mult[i] * t_mult[i] * SOC1[i] * params.decay_rate[1][pft]
-            rh2[i] = w_mult[i] * t_mult[i] * SOC2[i] * params.decay_rate[2][pft]
+                smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
+            t_mult[i] = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
+            rh0[i] = w_mult[i] * t_mult[i] * SOC0[i] * PARAMS.decay_rate[0][pft]
+            rh1[i] = w_mult[i] * t_mult[i] * SOC1[i] * PARAMS.decay_rate[1][pft]
+            rh2[i] = w_mult[i] * t_mult[i] * SOC2[i] * PARAMS.decay_rate[2][pft]
             # "the adjustment...to account for material transferred into the
             #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
-            rh1[i] = rh1[i] * (1 - params.f_structural[pft])
+            rh1[i] = rh1[i] * (1 - PARAMS.f_structural[pft])
             rh_total[i] = rh0[i] + rh1[i] + rh2[i]
             # Calculate change in SOC pools; NPP[i] is daily litterfall
-            SOC0[i] = (NPP[i] * params.f_metabolic[pft]) - rh0[i]
-            SOC1[i] = (NPP[i] * (1 - params.f_metabolic[pft])) - rh1[i]
-            SOC2[i] = (params.f_structural[pft] * rh1[i]) - rh2[i]
+            SOC0[i] = (NPP[i] * PARAMS.f_metabolic[pft]) - rh0[i]
+            SOC1[i] = (NPP[i] * (1 - PARAMS.f_metabolic[pft])) - rh1[i]
+            SOC2[i] = (PARAMS.f_structural[pft] * rh1[i]) - rh2[i]
         np.array(rh_total).astype(np.float32).tofile(
             '%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
         break # TODO FIXME

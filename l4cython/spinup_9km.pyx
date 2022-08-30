@@ -3,6 +3,8 @@
 '''
 Soil organic carbon (SOC) spin-up for SMAP Level 4 Carbon (L4C) model, based
 on Version 6 state and parameters.
+
+Takes about 130-150 seconds for the analytical spin-up.
 '''
 
 import cython
@@ -30,17 +32,17 @@ cdef float ANNUAL_NPP[SPARSE_N]
 #   for any array that needs to be written to disk (using NumPy)
 OUT_M09 = np.full((SPARSE_N,), np.nan, dtype = np.float32)
 
-cdef BPLUT params
-params.smsf0[:] = [0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-params.smsf1[:] = [0, 25.0, 30.5, 39.8, 31.3, 44.9, 50.5, 25.0, 25.1]
-params.tsoil[:] = [0, 266.05, 392.24, 233.94, 265.23, 240.71, 261.42, 253.98, 281.69]
-params.cue[:] = [0, 0.687, 0.469, 0.755, 0.799, 0.649, 0.572, 0.708, 0.705]
-params.f_metabolic[:] = [0, 0.49, 0.71, 0.67, 0.67, 0.62, 0.76, 0.78, 0.78]
-params.f_structural[:] = [0, 0.3, 0.3, 0.7, 0.3, 0.35, 0.55, 0.5, 0.8]
-params.decay_rate[0] = [0, 0.020, 0.022, 0.031, 0.028, 0.013, 0.022, 0.019, 0.031]
+cdef BPLUT PARAMS
+PARAMS.smsf0[:] = [0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+PARAMS.smsf1[:] = [0, 25.0, 30.5, 39.8, 31.3, 44.9, 50.5, 25.0, 25.1]
+PARAMS.tsoil[:] = [0, 266.05, 392.24, 233.94, 265.23, 240.71, 261.42, 253.98, 281.69]
+PARAMS.cue[:] = [0, 0.687, 0.469, 0.755, 0.799, 0.649, 0.572, 0.708, 0.705]
+PARAMS.f_metabolic[:] = [0, 0.49, 0.71, 0.67, 0.67, 0.62, 0.76, 0.78, 0.78]
+PARAMS.f_structural[:] = [0, 0.3, 0.3, 0.7, 0.3, 0.35, 0.55, 0.5, 0.8]
+PARAMS.decay_rate[0] = [0, 0.020, 0.022, 0.031, 0.028, 0.013, 0.022, 0.019, 0.031]
 for p in range(1, 9):
-    params.decay_rate[1][p] = params.decay_rate[0][p] * KSTRUCT
-    params.decay_rate[2][p] = params.decay_rate[0][p] * KRECAL
+    PARAMS.decay_rate[1][p] = PARAMS.decay_rate[0][p] * KSTRUCT
+    PARAMS.decay_rate[2][p] = PARAMS.decay_rate[0][p] * KRECAL
 
 
 @cython.boundscheck(False)
@@ -49,11 +51,50 @@ def main(config_file = None):
     '''
     '''
     cdef:
-        Py_ssize_t i
-        Py_ssize_t doy
         float* soc0
         float* soc1
         float* soc2
+    soc0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    soc1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    soc2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    # Read in configuration file, then load state data
+    if config_file is None:
+        config_file = '../data/L4Cython_spin-up_M09_config.json'
+    with open(config_file) as file:
+        config = json.load(file)
+    load_state(config)
+    # Step 1: Analytical spin-up
+    analytical_spinup(config, soc0, soc1, soc2)
+    OUT_M09 = to_numpy(soc0, SPARSE_N)
+    OUT_M09.tofile(
+        '%s/L4Cython_Cana0_M09land.flt32' % config['model']['output_dir'])
+    OUT_M09 = to_numpy(soc1, SPARSE_N)
+    OUT_M09.tofile(
+        '%s/L4Cython_Cana1_M09land.flt32' % config['model']['output_dir'])
+    OUT_M09 = to_numpy(soc2, SPARSE_N)
+    OUT_M09.tofile(
+        '%s/L4Cython_Cana2_M09land.flt32' % config['model']['output_dir'])
+    PyMem_Free(soc0)
+    PyMem_Free(soc1)
+    PyMem_Free(soc2)
+
+
+cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
+    '''
+    Analytical SOC spin-up: the initial soil C states are found by solving
+    the differential equations that describe inputs, transfers, and decay
+    of soil C.
+
+    Parameters
+    ----------
+    config : dict
+    float*: soc0
+    float*: soc1
+    float*: soc2
+    '''
+    cdef:
+        Py_ssize_t i
+        Py_ssize_t doy
         float* f_met
         float* f_str
         float* k0 # Decay rates of each pool
@@ -63,21 +104,12 @@ def main(config_file = None):
         float w_mult[SPARSE_N]
         float t_mult[SPARSE_N]
         float denom0, denom1
-    soc0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    soc1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    soc2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     f_met = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     f_str = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    # Read in configuration file, then load state data
-    if config_file is None:
-        config_file = '../data/L4Cython_spin-up_M09_config.json'
-    with open(config_file) as file:
-        config = json.load(file)
-    load_state(config)
     # For each day of the climatological year
     for doy in range(1, 366):
         jday = str(doy).zfill(3)
@@ -95,15 +127,15 @@ def main(config_file = None):
                 # Initialize k_mult sum at zero; set base decay rates and
                 #   allocation factors
                 k_mult[i] = 0
-                k0[i] = params.decay_rate[0][pft]
-                k1[i] = params.decay_rate[1][pft]
-                k2[i] = params.decay_rate[2][pft]
-                f_met[i] = params.f_metabolic[pft]
-                f_str[i] = params.f_structural[pft]
+                k0[i] = PARAMS.decay_rate[0][pft]
+                k1[i] = PARAMS.decay_rate[1][pft]
+                k2[i] = PARAMS.decay_rate[2][pft]
+                f_met[i] = PARAMS.f_metabolic[pft]
+                f_str[i] = PARAMS.f_structural[pft]
             # Compute and increment annual k_mult sum
             w_mult[i] = linear_constraint(
-                smsf[i], params.smsf0[pft], params.smsf1[pft], 0)
-            t_mult[i] = arrhenius(tsoil[i], params.tsoil[pft], TSOIL1, TSOIL2)
+                smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
+            t_mult[i] = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
             k_mult[i] = k_mult[i] + (w_mult[i] * t_mult[i])
     # Outside of the daily loop, but for each pixel...
     for i in range(0, SPARSE_N):
@@ -122,18 +154,6 @@ def main(config_file = None):
             soc2[i] = (f_str[i] * k_mult[i] * soc1[i]) / k2[i]
         else:
             soc2[i] = 0
-    OUT_M09 = to_numpy(soc0, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_Cana0_M09land.flt32' % config['model']['output_dir'])
-    OUT_M09 = to_numpy(soc1, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_Cana1_M09land.flt32' % config['model']['output_dir'])
-    OUT_M09 = to_numpy(soc2, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_Cana2_M09land.flt32' % config['model']['output_dir'])
-    PyMem_Free(soc0)
-    PyMem_Free(soc1)
-    PyMem_Free(soc2)
     PyMem_Free(f_met)
     PyMem_Free(f_str)
     PyMem_Free(k0)
