@@ -178,6 +178,9 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
     cdef:
         Py_ssize_t i
         Py_ssize_t doy
+        int iter
+        int pft
+        int success
         float w_mult
         float t_mult
         float* k_mult
@@ -186,14 +189,18 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
         float* k2
         float* f_met
         float* f_str
-        float* diffs
-    diffs = <float*> PyMem_Malloc(sizeof(float) * 3)
+        float* delta # 3-element, recycling vector: diff. in each pool
+        float* diffs # For each pixel, total diffs. over clim. year
+        float* tolerance # Tolerance at each pixel
     k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    f_met = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    f_str = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    f_met = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    f_str = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    delta = <float*> PyMem_Malloc(sizeof(float) * 3)
+    diffs = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    tolerance = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     # Pre-allocate the decay rate and f_met, f_str arrays
     for i in range(SPARSE_N):
         pft = int(PFT[i])
@@ -204,11 +211,11 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
         k0[i] = PARAMS.decay_rate[0][pft]
         k1[i] = PARAMS.decay_rate[1][pft]
         k2[i] = PARAMS.decay_rate[2][pft]
-    # Jones et al. (2017) write that goal is NEE tolerance <= 1 g C m-2 year-1
-    tol = np.inf
-    while np.abs(tol).max() > 1:
+        tolerance[i] = 10000 # A large-ish 32-bit floating-point number
+    iter = 1
+    success = 0
+    while success == 0:
         # For each day of the climatological year
-        print('Tolerance is...')
         for doy in range(1, 366):
             jday = str(doy).zfill(3)
             # Pre-compute k_mult
@@ -217,7 +224,7 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
             tsoil = np.fromfile(
                 config['data']['climatology']['tsoil'] % jday, dtype = np.float32)
             for i in range(SPARSE_N):
-                pft = int(PFT[i])
+                pft = PFT[i]
                 if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
                     continue
                 w_mult = linear_constraint(
@@ -225,24 +232,53 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                 t_mult = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
                 k_mult[i] = w_mult * t_mult
             for i in prange(SPARSE_N, nogil = True):
+                pft = PFT[i]
+                if pft == 0 or pft > 8:
+                    continue
+                # Reset the annual Delta-NEE totals
+                if doy == 1:
+                    diffs[i] = 0
+                # Compute one daily soil decomposition step for this pixel
                 numerical_step(
-                    diffs, ANNUAL_NPP[i], k_mult[i], f_met[i], f_str[i],
+                    delta, ANNUAL_NPP[i], k_mult[i], f_met[i], f_str[i],
                     k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
-                soc0[i] = soc0[i] + diffs[0]
-                soc1[i] = soc1[i] + diffs[1]
-                soc2[i] = soc2[i] + diffs[2]
-            return
-    PyMem_Free(diffs)
+                # Compute change in SOC storage as SOC + dSOC
+                # i.e., "diffs" are the NEE/ change in SOC storage
+                soc0[i] = soc0[i] + delta[0]
+                soc1[i] = soc1[i] + delta[1]
+                soc2[i] = soc2[i] + delta[2]
+                # Add up the daily NEE/ dSOC changes
+                diffs[i] = diffs[i] + (delta[0] + delta[1] + delta[2])
+                # At end of year, calculate change in Delta-NEE relative to
+                #   previous year
+                if doy == 365:
+                    if iter == 0:
+                        # Overwrite the initial (large) arbitrary number
+                        tolerance[i] = diffs[i]
+                    else:
+                        # i.e., Difference in Delta-NEE
+                        tolerance[i] = tolerance[i] - diffs[i]
+                    # Assume that we have fully equilibrated
+                    success = 1
+                    # Jones et al. (2017) write that goal is NEE
+                    #   tolerance <= 1 g C m-2 year-1
+                    if tolerance[i] > 1:
+                        success = 0
+            ##############
+            return # FIXME
+            ##############
+        iter = iter + 1
     PyMem_Free(k_mult)
-    PyMem_Free(f_met)
-    PyMem_Free(f_str)
     PyMem_Free(k0)
     PyMem_Free(k1)
     PyMem_Free(k2)
+    PyMem_Free(f_met)
+    PyMem_Free(f_str)
+    PyMem_Free(diffs)
 
 
 cdef void numerical_step(
-        float* diffs, float litter, float k_mult, float f_met, float f_str,
+        float* delta, float litter, float k_mult, float f_met, float f_str,
         float k0, float k1, float k2, float c0, float c1, float c2) nogil:
     'A single daily soil decomposition step (for a single pixel)'
     cdef:
@@ -256,9 +292,9 @@ cdef void numerical_step(
     rh1 = k_mult * k1 * c1
     rh2 = k_mult * k2 * c2
     # Calculate change in C pools (g C m-2 units)
-    diffs[0] = (litter * f_met) - rh0
-    diffs[1] = (litter * (1 - f_met)) - rh1
-    diffs[2] = (f_str * rh1) - rh2
+    delta[0] = (litter * f_met) - rh0
+    delta[1] = (litter * (1 - f_met)) - rh1
+    delta[2] = (f_str * rh1) - rh2
 
 
 def load_state(config):
