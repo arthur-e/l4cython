@@ -12,7 +12,11 @@ reco = Extension(
 )
 
 spinup = Extension(
-    name = 'spinup', sources = ['spinup_9km.pyx'], define_macros = MACROS
+    name = 'spinup',
+    sources = ['spinup_9km.pyx'],
+    define_macros = MACROS,
+    extra_compile_args = ['-fopenmp'],
+    extra_link_args = ['-fopenmp']
 )
 
 setup(ext_modules = cythonize([reco, spinup]))

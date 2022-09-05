@@ -11,6 +11,8 @@ import cython
 import datetime
 import json
 import numpy as np
+from libc.math cimport fabs
+from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy
 
@@ -51,6 +53,7 @@ def main(config_file = None):
     '''
     '''
     cdef:
+        int i
         float* soc0
         float* soc1
         float* soc2
@@ -64,16 +67,17 @@ def main(config_file = None):
         config = json.load(file)
     load_state(config)
     # Step 1: Analytical spin-up
-    analytical_spinup(config, soc0, soc1, soc2)
-    OUT_M09 = to_numpy(soc0, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_Cana0_M09land.flt32' % config['model']['output_dir'])
-    OUT_M09 = to_numpy(soc1, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_Cana1_M09land.flt32' % config['model']['output_dir'])
-    OUT_M09 = to_numpy(soc2, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_Cana2_M09land.flt32' % config['model']['output_dir'])
+    # analytical_spinup(config, soc0, soc1, soc2)
+    # OUT_M09 = to_numpy(soc0, SPARSE_N)
+    # OUT_M09.tofile(
+    #     '%s/L4Cython_Cana0_M09land.flt32' % config['model']['output_dir'])
+    # OUT_M09 = to_numpy(soc1, SPARSE_N)
+    # OUT_M09.tofile(
+    #     '%s/L4Cython_Cana1_M09land.flt32' % config['model']['output_dir'])
+    # OUT_M09 = to_numpy(soc2, SPARSE_N)
+    # OUT_M09.tofile(
+    #     '%s/L4Cython_Cana2_M09land.flt32' % config['model']['output_dir'])
+    numerical_spinup(config, soc0, soc1, soc2)
     PyMem_Free(soc0)
     PyMem_Free(soc1)
     PyMem_Free(soc2)
@@ -160,6 +164,101 @@ cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
     PyMem_Free(k1)
     PyMem_Free(k2)
     PyMem_Free(k_mult)
+
+
+cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
+    '''
+    Parameters
+    ----------
+    config : dict
+    float*: soc0
+    float*: soc1
+    float*: soc2
+    '''
+    cdef:
+        Py_ssize_t i
+        Py_ssize_t doy
+        float w_mult
+        float t_mult
+        float* k_mult
+        float* k0
+        float* k1
+        float* k2
+        float* f_met
+        float* f_str
+        float* diffs
+    diffs = <float*> PyMem_Malloc(sizeof(float) * 3)
+    k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    f_met = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    f_str = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    k0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    k1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    k2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    # Pre-allocate the decay rate and f_met, f_str arrays
+    for i in range(SPARSE_N):
+        pft = int(PFT[i])
+        if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+            continue
+        f_met[i] = PARAMS.f_metabolic[pft]
+        f_str[i] = PARAMS.f_structural[pft]
+        k0[i] = PARAMS.decay_rate[0][pft]
+        k1[i] = PARAMS.decay_rate[1][pft]
+        k2[i] = PARAMS.decay_rate[2][pft]
+    # Jones et al. (2017) write that goal is NEE tolerance <= 1 g C m-2 year-1
+    tol = np.inf
+    while np.abs(tol).max() > 1:
+        # For each day of the climatological year
+        print('Tolerance is...')
+        for doy in range(1, 366):
+            jday = str(doy).zfill(3)
+            # Pre-compute k_mult
+            smsf = 100 * np.fromfile( # Convert to percentage units
+                config['data']['climatology']['smsf'] % jday, dtype = np.float32)
+            tsoil = np.fromfile(
+                config['data']['climatology']['tsoil'] % jday, dtype = np.float32)
+            for i in range(SPARSE_N):
+                pft = int(PFT[i])
+                if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+                    continue
+                w_mult = linear_constraint(
+                    smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
+                t_mult = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
+                k_mult[i] = w_mult * t_mult
+            for i in prange(SPARSE_N, nogil = True):
+                numerical_step(
+                    diffs, ANNUAL_NPP[i], k_mult[i], f_met[i], f_str[i],
+                    k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
+                soc0[i] = soc0[i] + diffs[0]
+                soc1[i] = soc1[i] + diffs[1]
+                soc2[i] = soc2[i] + diffs[2]
+            return
+    PyMem_Free(diffs)
+    PyMem_Free(k_mult)
+    PyMem_Free(f_met)
+    PyMem_Free(f_str)
+    PyMem_Free(k0)
+    PyMem_Free(k1)
+    PyMem_Free(k2)
+
+
+cdef void numerical_step(
+        float* diffs, float litter, float k_mult, float f_met, float f_str,
+        float k0, float k1, float k2, float c0, float c1, float c2) nogil:
+    'A single daily soil decomposition step (for a single pixel)'
+    cdef:
+        float rh0
+        float rh1
+        float rh2
+        float dc0
+        float dc1
+        float dc2
+    rh0 = k_mult * k0 * c0
+    rh1 = k_mult * k1 * c1
+    rh2 = k_mult * k2 * c2
+    # Calculate change in C pools (g C m-2 units)
+    diffs[0] = (litter * f_met) - rh0
+    diffs[1] = (litter * (1 - f_met)) - rh1
+    diffs[2] = (f_str * rh1) - rh2
 
 
 def load_state(config):
