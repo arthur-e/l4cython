@@ -11,7 +11,7 @@ import cython
 import datetime
 import json
 import numpy as np
-from libc.math cimport fabs
+from libc.math cimport isnan
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy
@@ -67,8 +67,18 @@ def main(config_file = None):
     with open(config_file) as file:
         config = json.load(file)
     load_state(config)
-    # Step 1: Analytical spin-up
+    # Step 1: Analytical spin-up; note that soc0, soc1, soc2 are both
+    #   inputs and outputs of the spin-up functions (K&R-style)
     analytical_spinup(config, soc0, soc1, soc2)
+    OUT_M09 = to_numpy(soc0, SPARSE_N)
+    OUT_M09.tofile(
+        '%s/L4Cython_Cana0_M09land.flt32' % config['model']['output_dir'])
+    OUT_M09 = to_numpy(soc1, SPARSE_N)
+    OUT_M09.tofile(
+        '%s/L4Cython_Cana1_M09land.flt32' % config['model']['output_dir'])
+    OUT_M09 = to_numpy(soc2, SPARSE_N)
+    OUT_M09.tofile(
+        '%s/L4Cython_Cana2_M09land.flt32' % config['model']['output_dir'])
     # Step 2: Numerical spin-up
     numerical_spinup(config, soc0, soc1, soc2)
     OUT_M09 = to_numpy(soc0, SPARSE_N)
@@ -101,6 +111,7 @@ cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
     cdef:
         Py_ssize_t i
         Py_ssize_t doy
+        int pft
         float* f_met
         float* f_str
         float* k0 # Decay rates of each pool
@@ -120,14 +131,16 @@ cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
     # For each day of the climatological year
     for doy in tqdm(range(1, 366)):
         jday = str(doy).zfill(3)
-        # Convert to percentage units
-        smsf = 100 * np.fromfile(
+        # NOTE: It will ALWAYS be faster to read these all-at-once rather than
+        #   to initialize them with heap allocations, then extract each
+        #   element one-at-a-time (as in load_state())
+        smsf = 100 * np.fromfile( # Convert to percentage units
             config['data']['climatology']['smsf'] % jday, dtype = np.float32)
         tsoil = np.fromfile(
             config['data']['climatology']['tsoil'] % jday, dtype = np.float32)
         for i in range(SPARSE_N):
             pft = int(PFT[i])
-            if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+            if pft == 0 or pft > 8:
                 continue
             # Just once for each pixel
             if doy == 1:
@@ -145,7 +158,10 @@ cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
             t_mult[i] = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
             k_mult[i] = k_mult[i] + (w_mult[i] * t_mult[i])
     # Outside of the daily loop, but for each pixel...
-    for i in range(0, SPARSE_N):
+    for i in prange(SPARSE_N, nogil = True):
+        pft = int(PFT[i])
+        if pft == 0 or pft > 8:
+            continue
         # Calculate analytical steady-state of SOC
         denom0 = (k_mult[i] * k0[i])
         if denom0 > 0:
@@ -187,6 +203,7 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
         int success
         int tol_count # Number of pixels with tolerance, for calculating...
         float tol_mean # ...Overall mean tolerance
+        float tol_sum # Sum of all tolerances
         float w_mult
         float t_mult
         float* k_mult
@@ -224,7 +241,7 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
     while success == 0:
         # Assume that we have fully equilibrated
         success = 1
-        tol_mean = 0.0
+        tol_sum = 0.0
         tol_count = 0
         # For each day of the climatological year
         for doy in tqdm(range(1, 366)):
@@ -273,9 +290,13 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                     #   tolerance <= 1 g C m-2 year-1
                     if tolerance[i] > 1:
                         success = 0
-                    tol_count += 1
-                    tol_mean += tolerance[i]
-        print('Mean tolerance is: %.2f' % tol_mean / tol_count)
+                    if not isnan(tolerance[i]):
+                        tol_count += 1
+                        tol_sum += tolerance[i]
+        tol_mean = (tol_sum / tol_count)
+        print('Total tolerance is: %.2f' % tol_sum)
+        print('Pixels counted: %d' % tol_count)
+        print('Mean tolerance is: %.2f' % tol_mean)
         iter = iter + 1
     OUT_M09 = to_numpy(tolerance, SPARSE_N)
     OUT_M09.tofile(
