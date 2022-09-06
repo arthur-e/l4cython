@@ -1,8 +1,5 @@
 import numpy as np
-
-cdef extern from "math.h":
-    double exp(double x)
-
+from libc.math cimport exp
 
 cdef struct BPLUT:
     float smsf0[9] # wetness [0-100%]
@@ -15,7 +12,7 @@ cdef struct BPLUT:
 
 
 cdef inline float arrhenius(
-        float tsoil, float beta0, float beta1, float beta2):
+        float tsoil, float beta0, float beta1, float beta2) nogil:
     '''
     The Arrhenius equation for response of enzymes to (soil) temperature,
     constrained to lie on the closed interval [0, 1].
@@ -46,7 +43,7 @@ cdef inline float arrhenius(
 
 
 cdef inline float linear_constraint(
-        float x, float xmin, float xmax, int reversed):
+        float x, float xmin, float xmax, int reversed) nogil:
     '''
     Returns a linear ramp function, for deriving a value on [0, 1] from
     an input value `x`:
@@ -72,7 +69,6 @@ cdef inline float linear_constraint(
     -------
     float
     '''
-    assert reversed == 0 or reversed == 1
     if reversed == 1:
         if x >= xmax:
             return 0

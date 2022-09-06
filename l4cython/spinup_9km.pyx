@@ -15,6 +15,7 @@ from libc.math cimport fabs
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy
+from tqdm import tqdm
 
 # Number of grid cells in sparse ("land") arrays
 DEF SPARSE_N = 1664040
@@ -67,17 +68,18 @@ def main(config_file = None):
         config = json.load(file)
     load_state(config)
     # Step 1: Analytical spin-up
-    # analytical_spinup(config, soc0, soc1, soc2)
-    # OUT_M09 = to_numpy(soc0, SPARSE_N)
-    # OUT_M09.tofile(
-    #     '%s/L4Cython_Cana0_M09land.flt32' % config['model']['output_dir'])
-    # OUT_M09 = to_numpy(soc1, SPARSE_N)
-    # OUT_M09.tofile(
-    #     '%s/L4Cython_Cana1_M09land.flt32' % config['model']['output_dir'])
-    # OUT_M09 = to_numpy(soc2, SPARSE_N)
-    # OUT_M09.tofile(
-    #     '%s/L4Cython_Cana2_M09land.flt32' % config['model']['output_dir'])
+    analytical_spinup(config, soc0, soc1, soc2)
+    # Step 2: Numerical spin-up
     numerical_spinup(config, soc0, soc1, soc2)
+    OUT_M09 = to_numpy(soc0, SPARSE_N)
+    OUT_M09.tofile(
+        '%s/L4Cython_Cnum0_M09land.flt32' % config['model']['output_dir'])
+    OUT_M09 = to_numpy(soc1, SPARSE_N)
+    OUT_M09.tofile(
+        '%s/L4Cython_Cnum1_M09land.flt32' % config['model']['output_dir'])
+    OUT_M09 = to_numpy(soc2, SPARSE_N)
+    OUT_M09.tofile(
+        '%s/L4Cython_Cnum2_M09land.flt32' % config['model']['output_dir'])
     PyMem_Free(soc0)
     PyMem_Free(soc1)
     PyMem_Free(soc2)
@@ -114,15 +116,16 @@ cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
     k1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    print('Beginning analytical spin-up...')
     # For each day of the climatological year
-    for doy in range(1, 366):
+    for doy in tqdm(range(1, 366)):
         jday = str(doy).zfill(3)
         # Convert to percentage units
         smsf = 100 * np.fromfile(
             config['data']['climatology']['smsf'] % jday, dtype = np.float32)
         tsoil = np.fromfile(
             config['data']['climatology']['tsoil'] % jday, dtype = np.float32)
-        for i in range(0, SPARSE_N):
+        for i in range(SPARSE_N):
             pft = int(PFT[i])
             if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
                 continue
@@ -154,6 +157,7 @@ cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
             soc1[i] = (ANNUAL_NPP[i] * (1 - f_met[i])) / denom1
         else:
             soc1[i] = 0
+        # Guard against division by zero
         if k2[i] > 0:
             soc2[i] = (f_str[i] * k_mult[i] * soc1[i]) / k2[i]
         else:
@@ -181,6 +185,8 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
         int iter
         int pft
         int success
+        int tol_count # Number of pixels with tolerance, for calculating...
+        float tol_mean # ...Overall mean tolerance
         float w_mult
         float t_mult
         float* k_mult
@@ -211,12 +217,17 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
         k0[i] = PARAMS.decay_rate[0][pft]
         k1[i] = PARAMS.decay_rate[1][pft]
         k2[i] = PARAMS.decay_rate[2][pft]
-        tolerance[i] = 10000 # A large-ish 32-bit floating-point number
+        tolerance[i] = 0
     iter = 1
     success = 0
+    print('Beginning numerical spin-up...')
     while success == 0:
+        # Assume that we have fully equilibrated
+        success = 1
+        tol_mean = 0.0
+        tol_count = 0
         # For each day of the climatological year
-        for doy in range(1, 366):
+        for doy in tqdm(range(1, 366)):
             jday = str(doy).zfill(3)
             # Pre-compute k_mult
             smsf = 100 * np.fromfile( # Convert to percentage units
@@ -224,7 +235,7 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
             tsoil = np.fromfile(
                 config['data']['climatology']['tsoil'] % jday, dtype = np.float32)
             for i in range(SPARSE_N):
-                pft = PFT[i]
+                pft = int(PFT[i])
                 if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
                     continue
                 w_mult = linear_constraint(
@@ -232,7 +243,7 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                 t_mult = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
                 k_mult[i] = w_mult * t_mult
             for i in prange(SPARSE_N, nogil = True):
-                pft = PFT[i]
+                pft = int(PFT[i])
                 if pft == 0 or pft > 8:
                     continue
                 # Reset the annual Delta-NEE totals
@@ -244,9 +255,9 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                     k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
                 # Compute change in SOC storage as SOC + dSOC
                 # i.e., "diffs" are the NEE/ change in SOC storage
-                soc0[i] = soc0[i] + delta[0]
-                soc1[i] = soc1[i] + delta[1]
-                soc2[i] = soc2[i] + delta[2]
+                soc0[i] += delta[0]
+                soc1[i] += delta[1]
+                soc2[i] += delta[2]
                 # Add up the daily NEE/ dSOC changes
                 diffs[i] = diffs[i] + (delta[0] + delta[1] + delta[2])
                 # At end of year, calculate change in Delta-NEE relative to
@@ -258,23 +269,26 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                     else:
                         # i.e., Difference in Delta-NEE
                         tolerance[i] = tolerance[i] - diffs[i]
-                    # Assume that we have fully equilibrated
-                    success = 1
                     # Jones et al. (2017) write that goal is NEE
                     #   tolerance <= 1 g C m-2 year-1
                     if tolerance[i] > 1:
                         success = 0
-            ##############
-            return # FIXME
-            ##############
+                    tol_count += 1
+                    tol_mean += tolerance[i]
+        print('Mean tolerance is: %.2f' % tol_mean / tol_count)
         iter = iter + 1
+    OUT_M09 = to_numpy(tolerance, SPARSE_N)
+    OUT_M09.tofile(
+        '%s/L4Cython_numspin_tol_M09land.flt32' % config['model']['output_dir'])
     PyMem_Free(k_mult)
     PyMem_Free(k0)
     PyMem_Free(k1)
     PyMem_Free(k2)
     PyMem_Free(f_met)
     PyMem_Free(f_str)
+    PyMem_Free(delta)
     PyMem_Free(diffs)
+    PyMem_Free(tolerance)
 
 
 cdef void numerical_step(
