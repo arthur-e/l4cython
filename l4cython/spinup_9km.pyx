@@ -293,9 +293,9 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                     if not isnan(tolerance[i]):
                         tol_count += 1
                         tol_sum += tolerance[i]
-        tol_mean = (tol_sum / tol_count)
         print('Total tolerance is: %.2f' % tol_sum)
         print('Pixels counted: %d' % tol_count)
+        tol_mean = (tol_sum / tol_count)
         print('Mean tolerance is: %.2f' % tol_mean)
         iter = iter + 1
     OUT_M09 = to_numpy(tolerance, SPARSE_N)
@@ -327,9 +327,14 @@ cdef void numerical_step(
     rh1 = k_mult * k1 * c1
     rh2 = k_mult * k2 * c2
     # Calculate change in C pools (g C m-2 units)
-    delta[0] = (litter * f_met) - rh0
-    delta[1] = (litter * (1 - f_met)) - rh1
-    delta[2] = (f_str * rh1) - rh2
+    if litter < 0:
+        delta[0] = 0
+        delta[1] = 0
+        delta[2] = 0
+    else:
+        delta[0] = (litter * f_met) - rh0
+        delta[1] = (litter * (1 - f_met)) - rh1
+        delta[2] = (f_str * rh1) - rh2
 
 
 def load_state(config):
