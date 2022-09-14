@@ -135,7 +135,9 @@ cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
         # NOTE: It will ALWAYS be faster to read these all-at-once rather than
         #   to initialize them with heap allocations, then extract each
         #   element one-at-a-time (as in load_state())
-        smsf = 100 * np.fromfile( # Convert to percentage units
+        # NOTE: For compatibility with TCF, the SMSF data are already in
+        #   percentage units, i.e., on [0,100]
+        smsf = np.fromfile(
             config['data']['climatology']['smsf'] % jday, dtype = np.float32)
         tsoil = np.fromfile(
             config['data']['climatology']['tsoil'] % jday, dtype = np.float32)
@@ -248,7 +250,9 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
         for doy in tqdm(range(1, 366)):
             jday = str(doy).zfill(3)
             # Pre-compute k_mult
-            smsf = 100 * np.fromfile( # Convert to percentage units
+            # NOTE: For compatibility with TCF, the SMSF data are already in
+            #   percentage units, i.e., on [0,100]
+            smsf = np.fromfile(
                 config['data']['climatology']['smsf'] % jday, dtype = np.float32)
             tsoil = np.fromfile(
                 config['data']['climatology']['tsoil'] % jday, dtype = np.float32)
@@ -266,6 +270,9 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                     continue
                 # Reset the annual Delta-NEE totals
                 if doy == 1:
+                    delta[0] = 0
+                    delta[1] = 0
+                    delta[2] = 0
                     diffs[i] = 0
                 # Compute one daily soil decomposition step for this pixel
                 numerical_step(
@@ -296,8 +303,9 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                         tol_sum += tolerance[i]
         print('Total tolerance is: %.2f' % tol_sum)
         print('Pixels counted: %d' % tol_count)
-        tol_mean = (tol_sum / tol_count)
-        print('Mean tolerance is: %.2f' % tol_mean)
+        if tol_count > 0:
+            tol_mean = (tol_sum / tol_count)
+            print('Mean tolerance is: %.2f' % tol_mean)
         iter = iter + 1
     OUT_M09 = to_numpy(tolerance, SPARSE_N)
     OUT_M09.tofile(
