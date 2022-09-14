@@ -35,6 +35,7 @@ cdef float ANNUAL_NPP[SPARSE_N]
 #   for any array that needs to be written to disk (using NumPy)
 OUT_M09 = np.full((SPARSE_N,), np.nan, dtype = np.float32)
 
+# L4_C BPLUT Version 6 (Vv6042, Vv6040, Nature Run v9.1)
 cdef BPLUT PARAMS
 PARAMS.smsf0[:] = [0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 PARAMS.smsf1[:] = [0, 25.0, 30.5, 39.8, 31.3, 44.9, 50.5, 25.0, 25.1]
@@ -175,7 +176,7 @@ cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
             soc1[i] = 0
         # Guard against division by zero
         if k2[i] > 0:
-            soc2[i] = (f_str[i] * k_mult[i] * soc1[i]) / k2[i]
+            soc2[i] = (f_str[i] * k1[i] * soc1[i]) / k2[i]
         else:
             soc2[i] = 0
     PyMem_Free(f_met)

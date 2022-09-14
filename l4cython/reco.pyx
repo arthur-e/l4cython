@@ -42,6 +42,7 @@ SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 NPP = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
+# L4_C BPLUT Version 6 (Vv6042, Vv6040, Nature Run v9.1)
 # NOTE: Must have an (arbitrary) value in 0th position to avoid overflow of
 #   indexing (as PFT=0 is not used and C starts counting at 0)
 cdef BPLUT PARAMS

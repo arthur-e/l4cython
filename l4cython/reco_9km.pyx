@@ -30,6 +30,7 @@ cdef:
     float SOC2[SPARSE_N]
     float NPP[SPARSE_N]
 
+# L4_C BPLUT Version 6 (Vv6042, Vv6040, Nature Run v9.1)
 # NOTE: BPLUT is initialized here because we *need* it to be a C struct and
 #   1) It cannot be a C struct if it is imported from a *.pyx file (it gets
 #   converted to a dict); and 2) We can't initalize the C struct's state if
