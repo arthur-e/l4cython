@@ -2,9 +2,13 @@
 
 '''
 Soil organic carbon (SOC) spin-up for SMAP Level 4 Carbon (L4C) model, based
-on Version 6 state and parameters.
+on Version 6 state and parameters. Takes about 130-150 seconds for the
+analytical spin-up.
 
-Takes about 130-150 seconds for the analytical spin-up.
+Required data:
+
+- Surface soil wetness ("SMSF"), in percentage units [0,100]
+- Soil temperature, in degrees K
 '''
 
 import cython
@@ -12,9 +16,10 @@ import datetime
 import json
 import numpy as np
 from libc.math cimport isnan
+from libc.stdio cimport printf
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
-from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy
+from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy, to_numpy_double
 from tqdm import tqdm
 
 # Number of grid cells in sparse ("land") arrays
@@ -34,6 +39,7 @@ cdef float ANNUAL_NPP[SPARSE_N]
 # Python arrays that want heap allocations must be global; this one is reused
 #   for any array that needs to be written to disk (using NumPy)
 OUT_M09 = np.full((SPARSE_N,), np.nan, dtype = np.float32)
+OUT_M09_DOUBLE = np.full((SPARSE_N,), np.nan, dtype = np.float64)
 
 # L4_C BPLUT Version 6 (Vv6042, Vv6040, Nature Run v9.1)
 cdef BPLUT PARAMS
@@ -216,8 +222,8 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
         float* f_met
         float* f_str
         float* delta # 3-element, recycling vector: diff. in each pool
-        float* diffs # For each pixel, total diffs. over clim. year
-        float* tolerance # Tolerance at each pixel
+        double* diffs # For each pixel, total diffs. over clim. year
+        double* tolerance # Tolerance at each pixel
     k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
@@ -225,8 +231,8 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
     f_met = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     f_str = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     delta = <float*> PyMem_Malloc(sizeof(float) * 3)
-    diffs = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    tolerance = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    diffs = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
+    tolerance = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
     # Pre-allocate the decay rate and f_met, f_str arrays
     for i in range(SPARSE_N):
         pft = int(PFT[i])
@@ -269,10 +275,10 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                 if pft == 0 or pft > 8:
                     continue
                 # Reset the annual Delta-NEE totals
+                delta[0] = 0
+                delta[1] = 0
+                delta[2] = 0
                 if doy == 1:
-                    delta[0] = 0
-                    delta[1] = 0
-                    delta[2] = 0
                     diffs[i] = 0
                 # Compute one daily soil decomposition step for this pixel
                 numerical_step(
@@ -284,11 +290,11 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                 soc1[i] += delta[1]
                 soc2[i] += delta[2]
                 # Add up the daily NEE/ dSOC changes
-                diffs[i] = diffs[i] + (delta[0] + delta[1] + delta[2])
+                diffs[i] = diffs[i] + <double>(delta[0] + delta[1] + delta[2])
                 # At end of year, calculate change in Delta-NEE relative to
                 #   previous year
                 if doy == 365:
-                    if iter == 0:
+                    if iter == 1:
                         # Overwrite the initial (large) arbitrary number
                         tolerance[i] = diffs[i]
                     else:
@@ -296,9 +302,9 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                         tolerance[i] = tolerance[i] - diffs[i]
                     # Jones et al. (2017) write that goal is NEE
                     #   tolerance <= 1 g C m-2 year-1
-                    if tolerance[i] > 1:
-                        success = 0
                     if not isnan(tolerance[i]):
+                        if tolerance[i] > 1:
+                            success = 0
                         tol_count += 1
                         tol_sum += tolerance[i]
         print('Total tolerance is: %.2f' % tol_sum)
@@ -307,9 +313,9 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
             tol_mean = (tol_sum / tol_count)
             print('Mean tolerance is: %.2f' % tol_mean)
         iter = iter + 1
-    OUT_M09 = to_numpy(tolerance, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_numspin_tol_M09land.flt32' % config['model']['output_dir'])
+    OUT_M09_DOUBLE = to_numpy_double(tolerance, SPARSE_N)
+    OUT_M09_DOUBLE.tofile(
+        '%s/L4Cython_numspin_tol_M09land.flt64' % config['model']['output_dir'])
     PyMem_Free(k_mult)
     PyMem_Free(k0)
     PyMem_Free(k1)
