@@ -5,6 +5,11 @@ Soil organic carbon (SOC) spin-up for SMAP Level 4 Carbon (L4C) model, based
 on Version 6 state and parameters. Takes about 130-150 seconds for the
 analytical spin-up.
 
+Debugging:
+
+- Checked out f_met, f_str, k0, k1, k2; all fine
+- k_mult is fine for all(?) dates (spot-check only)
+
 Required data:
 
 - Surface soil wetness ("SMSF"), in percentage units [0,100]
@@ -16,7 +21,6 @@ import datetime
 import json
 import numpy as np
 from libc.math cimport isnan
-from libc.stdio cimport printf
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy, to_numpy_double
@@ -280,9 +284,10 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                 delta[2] = 0
                 if doy == 1:
                     diffs[i] = 0
-                # Compute one daily soil decomposition step for this pixel
+                # Compute one daily soil decomposition step for this pixel;
+                #   note that litterfall is 1/365 of the annual NPP sum
                 numerical_step(
-                    delta, ANNUAL_NPP[i], k_mult[i], f_met[i], f_str[i],
+                    delta, ANNUAL_NPP[i] / 365, k_mult[i], f_met[i], f_str[i],
                     k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
                 # Compute change in SOC storage as SOC + dSOC
                 # i.e., "diffs" are the NEE/ change in SOC storage
