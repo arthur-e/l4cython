@@ -5,10 +5,9 @@ Soil organic carbon (SOC) spin-up for SMAP Level 4 Carbon (L4C) model, based
 on Version 6 state and parameters. Takes about 130-150 seconds for the
 analytical spin-up.
 
-Debugging:
-
-- Checked out f_met, f_str, k0, k1, k2; all fine
-- k_mult is fine for all(?) dates (spot-check only)
+After the first iteration (first climatological year) of the numerical
+spin-up, the increments to the structural and recalcitrant pools (deltas)
+may be so small in some areas that NaNs are emplaced.
 
 Required data:
 
@@ -21,6 +20,7 @@ import datetime
 import json
 import numpy as np
 from libc.math cimport isnan
+from libc.stdio cimport printf
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy, to_numpy_double
@@ -66,12 +66,12 @@ def main(config_file = None):
     '''
     cdef:
         int i
-        float* soc0
-        float* soc1
-        float* soc2
-    soc0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    soc1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    soc2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+        double* soc0
+        double* soc1
+        double* soc2
+    soc0 = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
+    soc1 = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
+    soc2 = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
     # Read in configuration file, then load state data
     if config_file is None:
         config_file = '../data/L4Cython_spin-up_M09_config.json'
@@ -81,32 +81,32 @@ def main(config_file = None):
     # Step 1: Analytical spin-up; note that soc0, soc1, soc2 are both
     #   inputs and outputs of the spin-up functions (K&R-style)
     analytical_spinup(config, soc0, soc1, soc2)
-    OUT_M09 = to_numpy(soc0, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_Cana0_M09land.flt32' % config['model']['output_dir'])
-    OUT_M09 = to_numpy(soc1, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_Cana1_M09land.flt32' % config['model']['output_dir'])
-    OUT_M09 = to_numpy(soc2, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_Cana2_M09land.flt32' % config['model']['output_dir'])
+    OUT_M09_DOUBLE = to_numpy_double(soc0, SPARSE_N)
+    OUT_M09_DOUBLE.tofile(
+        '%s/L4Cython_Cana0_M09land.flt64' % config['model']['output_dir'])
+    OUT_M09_DOUBLE = to_numpy_double(soc1, SPARSE_N)
+    OUT_M09_DOUBLE.tofile(
+        '%s/L4Cython_Cana1_M09land.flt64' % config['model']['output_dir'])
+    OUT_M09_DOUBLE = to_numpy_double(soc2, SPARSE_N)
+    OUT_M09_DOUBLE.tofile(
+        '%s/L4Cython_Cana2_M09land.flt64' % config['model']['output_dir'])
     # Step 2: Numerical spin-up
     numerical_spinup(config, soc0, soc1, soc2)
-    OUT_M09 = to_numpy(soc0, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_Cnum0_M09land.flt32' % config['model']['output_dir'])
-    OUT_M09 = to_numpy(soc1, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_Cnum1_M09land.flt32' % config['model']['output_dir'])
-    OUT_M09 = to_numpy(soc2, SPARSE_N)
-    OUT_M09.tofile(
-        '%s/L4Cython_Cnum2_M09land.flt32' % config['model']['output_dir'])
+    OUT_M09_DOUBLE = to_numpy_double(soc0, SPARSE_N)
+    OUT_M09_DOUBLE.tofile(
+        '%s/L4Cython_Cnum0_M09land.flt64' % config['model']['output_dir'])
+    OUT_M09_DOUBLE = to_numpy_double(soc1, SPARSE_N)
+    OUT_M09_DOUBLE.tofile(
+        '%s/L4Cython_Cnum1_M09land.flt64' % config['model']['output_dir'])
+    OUT_M09_DOUBLE = to_numpy_double(soc2, SPARSE_N)
+    OUT_M09_DOUBLE.tofile(
+        '%s/L4Cython_Cnum2_M09land.flt64' % config['model']['output_dir'])
     PyMem_Free(soc0)
     PyMem_Free(soc1)
     PyMem_Free(soc2)
 
 
-cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
+cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
     '''
     Analytical SOC spin-up: the initial soil C states are found by solving
     the differential equations that describe inputs, transfers, and decay
@@ -115,9 +115,9 @@ cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
     Parameters
     ----------
     config : dict
-    float*: soc0
-    float*: soc1
-    float*: soc2
+    double*: soc0
+    double*: soc1
+    double*: soc2
     '''
     cdef:
         Py_ssize_t i
@@ -178,17 +178,17 @@ cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
         # Calculate analytical steady-state of SOC
         denom0 = (k_mult[i] * k0[i])
         if denom0 > 0:
-            soc0[i] = (ANNUAL_NPP[i] * f_met[i]) / denom0
+            soc0[i] = <double>(ANNUAL_NPP[i] * f_met[i]) / denom0
         else:
             soc0[i] = 0
         denom1 = (k_mult[i] * k1[i])
         if denom1 > 0:
-            soc1[i] = (ANNUAL_NPP[i] * (1 - f_met[i])) / denom1
+            soc1[i] = <double>(ANNUAL_NPP[i] * (1 - f_met[i])) / denom1
         else:
             soc1[i] = 0
         # Guard against division by zero
         if k2[i] > 0:
-            soc2[i] = (f_str[i] * k1[i] * soc1[i]) / k2[i]
+            soc2[i] = <double>(f_str[i] * k1[i] * soc1[i]) / k2[i]
         else:
             soc2[i] = 0
     PyMem_Free(f_met)
@@ -199,14 +199,14 @@ cdef analytical_spinup(config, float* soc0, float* soc1, float* soc2):
     PyMem_Free(k_mult)
 
 
-cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
+cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     '''
     Parameters
     ----------
     config : dict
-    float*: soc0
-    float*: soc1
-    float*: soc2
+    double*: soc0
+    double*: soc1
+    double*: soc2
     '''
     cdef:
         Py_ssize_t i
@@ -225,7 +225,7 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
         float* k2
         float* f_met
         float* f_str
-        float* delta # 3-element, recycling vector: diff. in each pool
+        double* delta # 3-element, recycling vector: diff. in each pool
         double* diffs # For each pixel, total diffs. over clim. year
         double* tolerance # Tolerance at each pixel
     k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
@@ -234,7 +234,7 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
     k2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     f_met = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     f_str = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    delta = <float*> PyMem_Malloc(sizeof(float) * 3)
+    delta = <double*> PyMem_Malloc(sizeof(double) * 3)
     diffs = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
     tolerance = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
     # Pre-allocate the decay rate and f_met, f_str arrays
@@ -289,13 +289,18 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
                 numerical_step(
                     delta, ANNUAL_NPP[i] / 365, k_mult[i], f_met[i], f_str[i],
                     k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
-                # Compute change in SOC storage as SOC + dSOC
-                # i.e., "diffs" are the NEE/ change in SOC storage
-                soc0[i] += delta[0]
-                soc1[i] += delta[1]
-                soc2[i] += delta[2]
-                # Add up the daily NEE/ dSOC changes
-                diffs[i] = diffs[i] + <double>(delta[0] + delta[1] + delta[2])
+                # Compute change in SOC storage as SOC + dSOC, i.e., "diffs"
+                #   are the NEE/ change in SOC storage; it's unclear why, but
+                #   we absolutely MUST test for NaNs here, not upstream
+                if not isnan(delta[0]):
+                    soc0[i] += delta[0]
+                    diffs[i] += delta[0] # Add up the daily NEE/ dSOC changes
+                if not isnan(delta[1]):
+                    soc1[i] += delta[1]
+                    diffs[i] += delta[1]
+                if not isnan(delta[2]):
+                    soc2[i] += delta[2]
+                    diffs[i] += delta[2]
                 # At end of year, calculate change in Delta-NEE relative to
                 #   previous year
                 if doy == 365:
@@ -333,28 +338,23 @@ cdef numerical_spinup(config, float* soc0, float* soc1, float* soc2):
 
 
 cdef void numerical_step(
-        float* delta, float litter, float k_mult, float f_met, float f_str,
-        float k0, float k1, float k2, float c0, float c1, float c2) nogil:
+        double* delta, float litter, float k_mult, float f_met, float f_str,
+        float k0, float k1, float k2, double c0, double c1, double c2) nogil:
     'A single daily soil decomposition step (for a single pixel)'
     cdef:
         float rh0
         float rh1
         float rh2
-        float dc0
-        float dc1
-        float dc2
     rh0 = k_mult * k0 * c0
     rh1 = k_mult * k1 * c1
     rh2 = k_mult * k2 * c2
     # Calculate change in C pools (g C m-2 units)
     if litter < 0:
-        delta[0] = 0
-        delta[1] = 0
-        delta[2] = 0
+        litter = 0
     else:
-        delta[0] = (litter * f_met) - rh0
-        delta[1] = (litter * (1 - f_met)) - rh1
-        delta[2] = (f_str * rh1) - rh2
+        delta[0] = <double>(litter * f_met) - rh0
+        delta[1] = <double>(litter * (1 - f_met)) - rh1
+        delta[2] = <double>(f_str * rh1) - rh2
 
 
 def load_state(config):
