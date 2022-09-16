@@ -7,12 +7,25 @@ analytical spin-up.
 
 After the first iteration (first climatological year) of the numerical
 spin-up, the increments to the structural and recalcitrant pools (deltas)
-may be so small in some areas that NaNs are emplaced.
+may be so small in some areas that NaNs are emplaced. For a reference on
+accelerated decomposition:
+
+    https://doi.org/10.1016/j.ecolmodel.2005.04.008
 
 Required data:
 
 - Surface soil wetness ("SMSF"), in percentage units [0,100]
 - Soil temperature, in degrees K
+
+10 iterations is likely too few; from the tcf Vv6042 results, here are the
+[1, 10, 50, 90, 99] percentiles of C0, C1, and C2:
+
+    array([ 31.,  67., 120., 244., 362.])
+    array([ 31.,  64., 119., 257., 398.])
+    array([ 563.,  939., 1708., 3312., 4542.])
+
+TODO I think litter rates need to be scaled as well. Rates might be scaled
+differently for each pool...
 '''
 
 import cython
@@ -20,7 +33,6 @@ import datetime
 import json
 import numpy as np
 from libc.math cimport isnan
-from libc.stdio cimport printf
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy, to_numpy_double
@@ -93,12 +105,18 @@ def main(config_file = None):
     # Step 2: Numerical spin-up
     numerical_spinup(config, soc0, soc1, soc2)
     OUT_M09_DOUBLE = to_numpy_double(soc0, SPARSE_N)
+    if config['model']['accelerated']:
+        OUT_M09_DOUBLE *= config['model']['ad_rate']
     OUT_M09_DOUBLE.tofile(
         '%s/L4Cython_Cnum0_M09land.flt64' % config['model']['output_dir'])
     OUT_M09_DOUBLE = to_numpy_double(soc1, SPARSE_N)
+    if config['model']['accelerated']:
+        OUT_M09_DOUBLE *= config['model']['ad_rate']
     OUT_M09_DOUBLE.tofile(
         '%s/L4Cython_Cnum1_M09land.flt64' % config['model']['output_dir'])
     OUT_M09_DOUBLE = to_numpy_double(soc2, SPARSE_N)
+    if config['model']['accelerated']:
+        OUT_M09_DOUBLE *= config['model']['ad_rate']
     OUT_M09_DOUBLE.tofile(
         '%s/L4Cython_Cnum2_M09land.flt64' % config['model']['output_dir'])
     PyMem_Free(soc0)
@@ -215,6 +233,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         int pft
         int success
         int tol_count # Number of pixels with tolerance, for calculating...
+        float ad # Accelerated decomposition rate for litterfall
         float tol_mean # ...Overall mean tolerance
         float tol_sum # Sum of all tolerances
         float w_mult
@@ -247,11 +266,20 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         k0[i] = PARAMS.decay_rate[0][pft]
         k1[i] = PARAMS.decay_rate[1][pft]
         k2[i] = PARAMS.decay_rate[2][pft]
+        # If accelerated decomposition is used
+        if config['model']['accelerated']:
+            k0[i] = k0[i] * config['model']['ad_rate']
+            k1[i] = k1[i] * config['model']['ad_rate']
+            k2[i] = k2[i] * config['model']['ad_rate']
         tolerance[i] = 0
+    # For adjusting litterfall size if accelerated decomp. is used
+    ad = 1.0
+    if config['model']['accelerated']:
+        ad = <float>(1 / config['model']['ad_rate'])
+    print('Beginning numerical spin-up...')
     iter = 1
     success = 0
-    print('Beginning numerical spin-up...')
-    while success == 0:
+    while success != 1 and iter <= config['max_iter']:
         # Assume that we have fully equilibrated
         success = 1
         tol_sum = 0.0
@@ -274,6 +302,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                     smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
                 t_mult = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
                 k_mult[i] = w_mult * t_mult
+            # Loop over pixels
             for i in prange(SPARSE_N, nogil = True):
                 pft = int(PFT[i])
                 if pft == 0 or pft > 8:
@@ -287,8 +316,8 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 # Compute one daily soil decomposition step for this pixel;
                 #   note that litterfall is 1/365 of the annual NPP sum
                 numerical_step(
-                    delta, ANNUAL_NPP[i] / 365, k_mult[i], f_met[i], f_str[i],
-                    k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
+                    delta, ad * (ANNUAL_NPP[i] / 365), k_mult[i], f_met[i],
+                    f_str[i], k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
                 # Compute change in SOC storage as SOC + dSOC, i.e., "diffs"
                 #   are the NEE/ change in SOC storage; it's unclear why, but
                 #   we absolutely MUST test for NaNs here, not upstream
