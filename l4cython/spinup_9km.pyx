@@ -246,8 +246,10 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         float* k2
         float* f_met
         float* f_str
+        float* gpp # Annual GPP sum
+        float* ra_total # Annual autotrophic respiration (RA) sum
+        float* rh_total # Annual heterotrophic respiration (RH) sum
         double* delta # 3-element, recycling vector: diff. in each pool
-        double* diffs # For each pixel, total diffs. over clim. year
         double* tolerance # Tolerance at each pixel
     k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
@@ -255,16 +257,21 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     k2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     f_met = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     f_str = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    ra_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     delta = <double*> PyMem_Malloc(sizeof(double) * 3)
-    diffs = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
     tolerance = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
-    # Pre-allocate the decay rate and f_met, f_str arrays
+    # Pre-allocate the decay rate, CUE, and f_met, f_str arrays
     for i in range(SPARSE_N):
         pft = int(PFT[i])
         if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
             continue
         f_met[i] = PARAMS.f_metabolic[pft]
         f_str[i] = PARAMS.f_structural[pft]
+        # Calculate annual GPP sum as (NPP / CUE)
+        gpp[i] = ANNUAL_NPP[i] / PARAMS.cue[pft]
+        ra_total[i] = gpp[i] - ANNUAL_NPP[i]
         k0[i] = PARAMS.decay_rate[0][pft]
         k1[i] = PARAMS.decay_rate[1][pft]
         k2[i] = PARAMS.decay_rate[2][pft]
@@ -306,38 +313,32 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 pft = int(PFT[i])
                 if pft == 0 or pft > 8:
                     continue
-                # Reset the annual Delta-NEE totals
+                # Reset the annual Delta-NEE totals and annual RH sum
                 delta[0] = 0
                 delta[1] = 0
                 delta[2] = 0
                 if doy == 1:
-                    diffs[i] = 0
+                    rh_total[i] = 0
                 # Compute one daily soil decomposition step for this pixel;
                 #   note that litterfall is 1/365 of the annual NPP sum
                 numerical_step(
                     delta, (ANNUAL_NPP[i] / 365), k_mult[i], f_met[i],
-                    f_str[i], k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
-                # Compute change in SOC storage as SOC + dSOC, i.e., "diffs"
-                #   are the NEE/ change in SOC storage; it's unclear why, but
-                #   we absolutely MUST test for NaNs here, not upstream
+                    f_str[i], k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i],
+                    rh_total[i])
+                # Compute change in SOC storage as SOC + dSOC, it's unclear
+                #   why, but we absolutely MUST test for NaNs here, not upstream
                 if not isnan(delta[0]):
                     soc0[i] += delta[0]
-                    diffs[i] += delta[0] # Add up the daily NEE/ dSOC changes
                 if not isnan(delta[1]):
                     soc1[i] += delta[1]
-                    diffs[i] += delta[1]
                 if not isnan(delta[2]):
                     soc2[i] += delta[2]
-                    diffs[i] += delta[2]
                 # At end of year, calculate change in Delta-NEE relative to
                 #   previous year
                 if doy == 365:
-                    if iter == 1:
-                        # Overwrite the initial (large) arbitrary number
-                        tolerance[i] = diffs[i]
-                    else:
-                        # i.e., Difference in Delta-NEE
-                        tolerance[i] = tolerance[i] - diffs[i]
+                    # i.e., tolerance is the Annual NEE sum:
+                    #   NEE = (RA + RH) - GPP
+                    tolerance[i] = (ra_total[i] + rh_total[i]) - gpp[i]
                     # Jones et al. (2017) write that goal is NEE
                     #   tolerance <= 1 g C m-2 year-1
                     if not isnan(tolerance[i]):
@@ -346,10 +347,11 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                         tol_count += 1
                         tol_sum += tolerance[i]
         print('[%d/%d] Total tolerance is: %.2f' % (iter, max_iter, tol_sum))
-        print('[%d/%d] Pixels counted: %d' % (iter, max_iter, tol_count))
+        print('--- Pixels counted: %d' % tol_count)
         if tol_count > 0:
             tol_mean = (tol_sum / tol_count)
-            print('[%d/%d] Mean tolerance is: %.2f' % (iter, max_iter, tol_mean))
+            print('--- Mean tolerance is: %.2f' % tol_mean)
+        # Increment; also a counter for the number of climatological years
         iter = iter + 1
     OUT_M09_DOUBLE = to_numpy_double(tolerance, SPARSE_N)
     OUT_M09_DOUBLE.tofile(
@@ -360,14 +362,17 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     PyMem_Free(k2)
     PyMem_Free(f_met)
     PyMem_Free(f_str)
+    PyMem_Free(gpp)
+    PyMem_Free(ra_total)
+    PyMem_Free(rh_total)
     PyMem_Free(delta)
-    PyMem_Free(diffs)
     PyMem_Free(tolerance)
 
 
 cdef void numerical_step(
         double* delta, float litter, float k_mult, float f_met, float f_str,
-        float k0, float k1, float k2, double c0, double c1, double c2) nogil:
+        float k0, float k1, float k2, double c0, double c1, double c2,
+        float rh_total) nogil:
     'A single daily soil decomposition step (for a single pixel)'
     cdef:
         float rh0
@@ -383,6 +388,9 @@ cdef void numerical_step(
         delta[0] = <double>(litter * f_met) - rh0
         delta[1] = <double>(litter * (1 - f_met)) - rh1
         delta[2] = <double>(f_str * rh1) - rh2
+    # Adjust structural RH pool for material transferred to recalcitrant
+    rh1 = rh2 * (1 - f_str)
+    rh_total = rh0 + rh1 + rh2
 
 
 def load_state(config):
