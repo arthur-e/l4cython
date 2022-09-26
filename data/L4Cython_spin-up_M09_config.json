@@ -13,9 +13,9 @@
   "model": {
     "output_dir": "/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20220106",
     "accelerated": true,
-    "ad_rate": 10
+    "ad_rate": [1, 1, 1]
   },
 
-  "max_iter": 10
+  "max_iter": 20
 
 }

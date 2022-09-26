@@ -12,20 +12,13 @@ accelerated decomposition:
 
     https://doi.org/10.1016/j.ecolmodel.2005.04.008
 
+Accelerated decomposition rate coefficients of more than 100 tend to create
+unstable pixels in the steady-state image.
+
 Required data:
 
 - Surface soil wetness ("SMSF"), in percentage units [0,100]
 - Soil temperature, in degrees K
-
-10 iterations is likely too few; from the tcf Vv6042 results, here are the
-[1, 10, 50, 90, 99] percentiles of C0, C1, and C2:
-
-    array([ 31.,  67., 120., 244., 362.])
-    array([ 31.,  64., 119., 257., 398.])
-    array([ 563.,  939., 1708., 3312., 4542.])
-
-TODO I think litter rates need to be scaled as well. Rates might be scaled
-differently for each pool...
 '''
 
 import cython
@@ -93,6 +86,12 @@ def main(config_file = None):
     # Step 1: Analytical spin-up; note that soc0, soc1, soc2 are both
     #   inputs and outputs of the spin-up functions (K&R-style)
     analytical_spinup(config, soc0, soc1, soc2)
+    # If accelerated decomposition is used
+    if config['model']['accelerated']:
+        for i in range(SPARSE_N):
+            soc0[i] = soc0[i] * config['model']['ad_rate'][0]
+            soc1[i] = soc1[i] * config['model']['ad_rate'][1]
+            soc2[i] = soc2[i] * config['model']['ad_rate'][2]
     OUT_M09_DOUBLE = to_numpy_double(soc0, SPARSE_N)
     OUT_M09_DOUBLE.tofile(
         '%s/L4Cython_Cana0_M09land.flt64' % config['model']['output_dir'])
@@ -106,17 +105,17 @@ def main(config_file = None):
     numerical_spinup(config, soc0, soc1, soc2)
     OUT_M09_DOUBLE = to_numpy_double(soc0, SPARSE_N)
     if config['model']['accelerated']:
-        OUT_M09_DOUBLE *= config['model']['ad_rate']
+        OUT_M09_DOUBLE *= config['model']['ad_rate'][0]
     OUT_M09_DOUBLE.tofile(
         '%s/L4Cython_Cnum0_M09land.flt64' % config['model']['output_dir'])
     OUT_M09_DOUBLE = to_numpy_double(soc1, SPARSE_N)
     if config['model']['accelerated']:
-        OUT_M09_DOUBLE *= config['model']['ad_rate']
+        OUT_M09_DOUBLE *= config['model']['ad_rate'][1]
     OUT_M09_DOUBLE.tofile(
         '%s/L4Cython_Cnum1_M09land.flt64' % config['model']['output_dir'])
     OUT_M09_DOUBLE = to_numpy_double(soc2, SPARSE_N)
     if config['model']['accelerated']:
-        OUT_M09_DOUBLE *= config['model']['ad_rate']
+        OUT_M09_DOUBLE *= config['model']['ad_rate'][2]
     OUT_M09_DOUBLE.tofile(
         '%s/L4Cython_Cnum2_M09land.flt64' % config['model']['output_dir'])
     PyMem_Free(soc0)
@@ -181,6 +180,10 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
                 k0[i] = PARAMS.decay_rate[0][pft]
                 k1[i] = PARAMS.decay_rate[1][pft]
                 k2[i] = PARAMS.decay_rate[2][pft]
+                if config['model']['accelerated']:
+                    k0[i] = k0[i] * config['model']['ad_rate'][0]
+                    k1[i] = k1[i] * config['model']['ad_rate'][1]
+                    k2[i] = k2[i] * config['model']['ad_rate'][2]
                 f_met[i] = PARAMS.f_metabolic[pft]
                 f_str[i] = PARAMS.f_structural[pft]
             # Compute and increment annual k_mult sum
@@ -233,7 +236,6 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         int pft
         int success
         int tol_count # Number of pixels with tolerance, for calculating...
-        float ad # Accelerated decomposition rate for litterfall
         float tol_mean # ...Overall mean tolerance
         float tol_sum # Sum of all tolerances
         float w_mult
@@ -268,18 +270,15 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         k2[i] = PARAMS.decay_rate[2][pft]
         # If accelerated decomposition is used
         if config['model']['accelerated']:
-            k0[i] = k0[i] * config['model']['ad_rate']
-            k1[i] = k1[i] * config['model']['ad_rate']
-            k2[i] = k2[i] * config['model']['ad_rate']
+            k0[i] = k0[i] * config['model']['ad_rate'][0]
+            k1[i] = k1[i] * config['model']['ad_rate'][1]
+            k2[i] = k2[i] * config['model']['ad_rate'][2]
         tolerance[i] = 0
-    # For adjusting litterfall size if accelerated decomp. is used
-    ad = 1.0
-    if config['model']['accelerated']:
-        ad = <float>(1 / config['model']['ad_rate'])
     print('Beginning numerical spin-up...')
     iter = 1
     success = 0
-    while success != 1 and iter <= config['max_iter']:
+    max_iter = config['max_iter']
+    while success != 1 and iter <= max_iter:
         # Assume that we have fully equilibrated
         success = 1
         tol_sum = 0.0
@@ -316,7 +315,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 # Compute one daily soil decomposition step for this pixel;
                 #   note that litterfall is 1/365 of the annual NPP sum
                 numerical_step(
-                    delta, ad * (ANNUAL_NPP[i] / 365), k_mult[i], f_met[i],
+                    delta, (ANNUAL_NPP[i] / 365), k_mult[i], f_met[i],
                     f_str[i], k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
                 # Compute change in SOC storage as SOC + dSOC, i.e., "diffs"
                 #   are the NEE/ change in SOC storage; it's unclear why, but
@@ -346,11 +345,11 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                             success = 0
                         tol_count += 1
                         tol_sum += tolerance[i]
-        print('Total tolerance is: %.2f' % tol_sum)
-        print('Pixels counted: %d' % tol_count)
+        print('[%d/%d] Total tolerance is: %.2f' % (iter, max_iter, tol_sum))
+        print('[%d/%d] Pixels counted: %d' % (iter, max_iter, tol_count))
         if tol_count > 0:
             tol_mean = (tol_sum / tol_count)
-            print('Mean tolerance is: %.2f' % tol_mean)
+            print('[%d/%d] Mean tolerance is: %.2f' % (iter, max_iter, tol_mean))
         iter = iter + 1
     OUT_M09_DOUBLE = to_numpy_double(tolerance, SPARSE_N)
     OUT_M09_DOUBLE.tofile(

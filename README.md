@@ -95,3 +95,36 @@ respration = Extension(
 ```
 
 [See this article for more information.](https://cython.readthedocs.io/en/latest/src/userguide/numpy_tutorial.html#using-multiple-threads)
+
+
+On Spin-up to Steady-State Conditions
+-------------------------------------
+
+```
+10 iterations is likely too few; from the tcf Vv6042 results, here are the
+[1, 10, 50, 90, 99] percentiles of C0, C1, and C2:
+
+    array([ 31.,  67., 120., 244., 362.])
+    array([ 31.,  64., 119., 257., 398.])
+    array([ 563.,  939., 1708., 3312., 4542.])
+
+With AD coefficients (1, 1, 100):
+    [ 31.  66. 118. 202. 285.]
+    [ 28.  63. 120. 246. 378.]
+    [ 567. 1219. 2115. 3780. 5408.]
+
+With AD coefficients (1, 1, 1000):
+    [ 31.  66. 118. 202. 285.]
+    [ 28.  63. 120. 246. 378.]
+    [ 573. 1219. 2137. 3773. 5840.]
+
+With AD coefficients (1, 2, 10):
+    [ 31.  66. 118. 202. 285.]
+    [ 29.  64. 122. 250. 389.]
+    [  398.  1235.  2378.  6286. 13344.]
+
+With AD coefficients (1, 1, 10):
+    [ 31.  66. 118. 202. 285.]
+    [ 28.  63. 120. 246. 378.]
+    [  361.  1218.  2370.  6311. 13323.]
+```
