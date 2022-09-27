@@ -259,7 +259,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     f_str = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     ra_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    rh_total = <float*> PyMem_Malloc(sizeof(float) * 1)
     delta = <double*> PyMem_Malloc(sizeof(double) * 3)
     tolerance = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
     # Pre-allocate the decay rate, CUE, and f_met, f_str arrays
@@ -313,18 +313,15 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 pft = int(PFT[i])
                 if pft == 0 or pft > 8:
                     continue
-                # Reset the annual Delta-NEE totals and annual RH sum
+                # Reset the annual delta-SOC arrays
                 delta[0] = 0
                 delta[1] = 0
                 delta[2] = 0
-                if doy == 1:
-                    rh_total[i] = 0
                 # Compute one daily soil decomposition step for this pixel;
                 #   note that litterfall is 1/365 of the annual NPP sum
                 numerical_step(
-                    delta, (ANNUAL_NPP[i] / 365), k_mult[i], f_met[i],
-                    f_str[i], k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i],
-                    rh_total[i])
+                    delta, rh_total, (ANNUAL_NPP[i] / 365), k_mult[i], f_met[i],
+                    f_str[i], k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
                 # Compute change in SOC storage as SOC + dSOC, it's unclear
                 #   why, but we absolutely MUST test for NaNs here, not upstream
                 if not isnan(delta[0]):
@@ -338,7 +335,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 if doy == 365:
                     # i.e., tolerance is the Annual NEE sum:
                     #   NEE = (RA + RH) - GPP
-                    tolerance[i] = (ra_total[i] + rh_total[i]) - gpp[i]
+                    tolerance[i] = (ra_total[i] + rh_total[0]) - gpp[i]
                     # Jones et al. (2017) write that goal is NEE
                     #   tolerance <= 1 g C m-2 year-1
                     if not isnan(tolerance[i]):
@@ -370,9 +367,9 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
 
 
 cdef void numerical_step(
-        double* delta, float litter, float k_mult, float f_met, float f_str,
-        float k0, float k1, float k2, double c0, double c1, double c2,
-        float rh_total) nogil:
+        double* delta, float* rh_total, float litter, float k_mult,
+        float f_met, float f_str, float k0, float k1, float k2,
+        double c0, double c1, double c2) nogil:
     'A single daily soil decomposition step (for a single pixel)'
     cdef:
         float rh0
@@ -390,7 +387,7 @@ cdef void numerical_step(
         delta[2] = <double>(f_str * rh1) - rh2
     # Adjust structural RH pool for material transferred to recalcitrant
     rh1 = rh2 * (1 - f_str)
-    rh_total = rh0 + rh1 + rh2
+    rh_total[0] = rh0 + rh1 + rh2
 
 
 def load_state(config):
