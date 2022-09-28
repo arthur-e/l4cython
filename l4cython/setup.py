@@ -7,8 +7,8 @@ MACROS = [ # Avoids warning "Using deprecated NumPy API"
     ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')
 ] # https://stackoverflow.com/questions/52749662/using-deprecated-numpy-api
 
-test = Extension(
-    name = 'test', sources = ['reco_9km.pyx'], define_macros = MACROS
+reco_9km = Extension(
+    name = 'reco_9km', sources = ['reco_9km.pyx'], define_macros = MACROS
 )
 
 reco = Extension(
@@ -23,4 +23,4 @@ spinup = Extension(
     extra_link_args = ['-fopenmp']
 )
 
-setup(ext_modules = cythonize([reco, spinup, test]))
+setup(ext_modules = cythonize([spinup, reco, reco_9km]))

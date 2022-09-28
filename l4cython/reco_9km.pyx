@@ -4,12 +4,18 @@
 SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
 Version 6 state and parameters. The `main()` routine is optimized for model
 execution but it may take several seconds to load the state data.
+
+Required data:
+
+- Surface soil wetness ("SMSF"), in proportion units [0,1]
+- Soil temperature, in degrees K
 '''
 
 import cython
 import datetime
 import json
 import numpy as np
+from tqdm import tqdm
 from respiration cimport BPLUT, arrhenius, linear_constraint
 
 # Number of grid cells in sparse ("land") arrays
@@ -52,16 +58,11 @@ for p in range(1, 9):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def main(config_file = None, int num_steps = 2177):
+def main(config_file = None):
     '''
     Forward run of the L4C soil decomposition and heterotrophic respiration
     algorithm. Starts on March 31, 2015 and continues for the specified
     number of time steps.
-
-    Parameters
-    ----------
-    num_steps : int
-        Number of (daily) time steps to compute forward
     '''
     cdef:
         Py_ssize_t i
@@ -80,7 +81,8 @@ def main(config_file = None, int num_steps = 2177):
     #   write to disk
     rh_total = np.full((SPARSE_N,), np.nan, dtype = np.float32)
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
-    for step in range(num_steps):
+    num_steps = int(config['daily_steps'])
+    for step in tqdm(range(num_steps)):
         date = date_start + datetime.timedelta(days = step)
         date = date.strftime('%Y%m%d')
         # Convert to percentage units
@@ -103,12 +105,13 @@ def main(config_file = None, int num_steps = 2177):
             rh1[i] = rh1[i] * (1 - PARAMS.f_structural[pft])
             rh_total[i] = rh0[i] + rh1[i] + rh2[i]
             # Calculate change in SOC pools; NPP[i] is daily litterfall
-            SOC0[i] = (NPP[i] * PARAMS.f_metabolic[pft]) - rh0[i]
-            SOC1[i] = (NPP[i] * (1 - PARAMS.f_metabolic[pft])) - rh1[i]
-            SOC2[i] = (PARAMS.f_structural[pft] * rh1[i]) - rh2[i]
+            SOC0[i] += (NPP[i] * PARAMS.f_metabolic[pft]) - rh0[i]
+            SOC1[i] += (NPP[i] * (1 - PARAMS.f_metabolic[pft])) - rh1[i]
+            SOC2[i] += (PARAMS.f_structural[pft] * rh1[i]) - rh2[i]
+        # NOTE: Writing more than one array per iteration of this loop will
+        #   cause a segmenation fault
         np.array(rh_total).astype(np.float32).tofile(
             '%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
-        break # TODO FIXME
 
 
 def load_state(config):

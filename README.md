@@ -103,28 +103,34 @@ On Spin-up to Steady-State Conditions
 ```
 10 iterations is likely too few; from the tcf Vv6042 results, here are the
 [1, 10, 50, 90, 99] percentiles of C0, C1, and C2:
+    [ 31.,  67., 120., 244., 362.]
+    [ 31.,  64., 119., 257., 398.]
+    [ 563.,  939., 1708., 3312., 4542.]
 
-    array([ 31.,  67., 120., 244., 362.])
-    array([ 31.,  64., 119., 257., 398.])
-    array([ 563.,  939., 1708., 3312., 4542.])
-
-With AD coefficients (1, 1, 100):
+5 iterations of tolerance = Delta NEE sum, with AD = [1, 1, 100]:
     [ 31.  66. 118. 202. 285.]
     [ 28.  63. 120. 246. 378.]
-    [ 567. 1219. 2115. 3780. 5408.]
+    [  641.  1272.  2228.  4469. 11755.]
 
-With AD coefficients (1, 1, 1000):
+10 iterations of tolerance = Delta NEE sum, with AD = [1, 1, 100]:
     [ 31.  66. 118. 202. 285.]
     [ 28.  63. 120. 246. 378.]
-    [ 573. 1219. 2137. 3773. 5840.]
+    [ 587. 1225. 2110. 3771. 5454.]
 
-With AD coefficients (1, 2, 10):
-    [ 31.  66. 118. 202. 285.]
-    [ 29.  64. 122. 250. 389.]
-    [  398.  1235.  2378.  6286. 13344.]
-
-With AD coefficients (1, 1, 10):
+20 iterations of tolerance = Delta NEE sum, with AD = [1, 1, 100]:
     [ 31.  66. 118. 202. 285.]
     [ 28.  63. 120. 246. 378.]
-    [  361.  1218.  2370.  6311. 13323.]
+    [ 583. 1224. 2107. 3760. 5470.]
+
+10 iterations of tolerance = Delta NEE sum, with AD = [1, 1, 1]:
+    [ 31.  66. 118. 202. 285.]
+    [ 28.  63. 120. 246. 378.]
+    [ 606. 1248. 2194. 3899. 5471.]
+
+3 iterations (ended early) of tolerance = Delta NEE sum, with early quit
+condition activated when "Pixels counted" went to zero (presumably because
+they had all equilibrated); no AD:
+    [ 31.  66. 118. 202. 285.]
+    [ 28.  63. 120. 247. 378.]
+    [ 606. 1248. 2194. 3900. 5472.]
 ```

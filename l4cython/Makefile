@@ -7,8 +7,11 @@ clean:
 spinup:
 	python3 -c "from spinup import main;print(main())"
 
+run:
+	python3 -c "from reco import main; print(main())"
+
 test:
-	python3 -c "from test import main; print(test())"
+	python3 -c "from reco_9km import main; print(main())"
 
 timeit:
-	python3 -m timeit -s "from reco import main" "print(main())"
+	python3 -m timeit -s "from reco_9km import main" "print(main())"

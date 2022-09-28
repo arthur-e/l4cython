@@ -4,12 +4,21 @@
 SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
 Version 6 state and parameters. The `main()` routine is optimized for model
 execution but it may take several seconds to load the state data.
+
+After the initial state data are loaded it takes about 40-60 seconds per
+data day.
+
+Required data:
+
+- Surface soil wetness ("SMSF"), in proportion units [0,1]
+- Soil temperature, in degrees K
 '''
 
 import cython
 import datetime
 import json
 import numpy as np
+from tqdm import tqdm
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy
 
@@ -60,16 +69,11 @@ for p in range(1, 9):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def main(config_file = None, int num_steps = 2177):
+def main(config_file = None):
     '''
     Forward run of the L4C soil decomposition and heterotrophic respiration
     algorithm. Starts on March 31, 2015 and continues for the specified
     number of time steps.
-
-    Parameters
-    ----------
-    num_steps : int
-        Number of (daily) time steps to compute forward
     '''
     cdef:
         Py_ssize_t i
@@ -95,7 +99,8 @@ def main(config_file = None, int num_steps = 2177):
         config = json.load(file)
     load_state(config)
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
-    for step in range(num_steps):
+    num_steps = int(config['daily_steps'])
+    for step in tqdm(range(num_steps)):
         date = date_start + datetime.timedelta(days = step)
         date = date.strftime('%Y%m%d')
         # Convert to percentage units
@@ -124,14 +129,12 @@ def main(config_file = None, int num_steps = 2177):
                 rh1[k] = rh1[k] * (1 - PARAMS.f_structural[pft])
                 rh_total[k] = rh0[k] + rh1[k] + rh2[k]
                 # Calculate change in SOC pools; NPP[i] is daily litterfall
-                SOC0[k] = (NPP[k] * PARAMS.f_metabolic[pft]) - rh0[k]
-                SOC1[k] = (NPP[k] * (1 - PARAMS.f_metabolic[pft])) - rh1[k]
-                SOC2[k] = (PARAMS.f_structural[pft] * rh1[k]) - rh2[k]
-        # TODO FIXME break
+                SOC0[k] += (NPP[k] * PARAMS.f_metabolic[pft]) - rh0[k]
+                SOC1[k] += (NPP[k] * (1 - PARAMS.f_metabolic[pft])) - rh1[k]
+                SOC2[k] += (PARAMS.f_structural[pft] * rh1[k]) - rh2[k]
         OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
         OUT_M01.tofile(
             '%s/L4Cython_RH_%s_M01land.flt32' % (config['model']['output_dir'], date))
-        break
     PyMem_Free(PFT)
     PyMem_Free(SOC0)
     PyMem_Free(SOC1)
@@ -167,6 +170,8 @@ def load_state(config):
     for idx, data in enumerate(
             np.fromfile(config['data']['SOC'][2], np.float32)):
         SOC2[idx] = data
+    # NOTE: Calculating litterfall as average daily NPP (constant fraction of
+    #   the annual NPP sum)
     for idx, data in enumerate(
             np.fromfile(config['data']['NPP_annual_sum'], np.float32) / 365):
         NPP[idx] = data
