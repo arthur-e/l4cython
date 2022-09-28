@@ -222,6 +222,15 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
 
 cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     '''
+    Numerical SOC spin-up; the steady-state condition is defined by the inter-
+    annual change in NEE (Delta-NEE) approaching zero. The near-zero condition
+    or "tolerance" is defined as <1 g C m-2 year-1. Note that Jones et al.
+    (2017) defined the steady state as when the annual NEE sum approaches
+    zero. However, this condition is not guaranteed and, indeed, in the
+    original L4C calibration code, it is actually Delta-NEE that is monitored
+    for convergence. Note that an equivalent convergence diagnostic would be
+    the change in SOC pools (Delta-SOC).
+
     Parameters
     ----------
     config : dict
@@ -249,6 +258,8 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         float* gpp # Annual GPP sum
         float* ra_total # Annual autotrophic respiration (RA) sum
         float* rh_total # Annual heterotrophic respiration (RH) sum
+        float* nee_sum # Annual NEE sum
+        float* nee_last_year # Last year's annual NEE sum
         double* delta # 3-element, recycling vector: diff. in each pool
         double* tolerance # Tolerance at each pixel
     k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
@@ -260,6 +271,8 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     ra_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     rh_total = <float*> PyMem_Malloc(sizeof(float) * 1)
+    nee_sum = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    nee_last_year = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     delta = <double*> PyMem_Malloc(sizeof(double) * 3)
     tolerance = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
     # Pre-allocate the decay rate, CUE, and f_met, f_str arrays
@@ -333,11 +346,17 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 # At end of year, calculate change in Delta-NEE relative to
                 #   previous year
                 if doy == 365:
-                    # i.e., tolerance is the Annual NEE sum:
+                    # i.e., tolerance is the change in the Annual NEE sum:
                     #   NEE = (RA + RH) - GPP
-                    tolerance[i] = (ra_total[i] + rh_total[0]) - gpp[i]
+                    #   DeltaNEE = NEE(t) - NEE(t-1)
+                    nee_sum[i] = (ra_total[i] + rh_total[0]) - gpp[i]
                     # Jones et al. (2017) write that goal is NEE
                     #   tolerance <= 1 g C m-2 year-1
+                    if iter > 0:
+                        tolerance[i] = nee_last_year[i] - nee_sum[i]
+                    else:
+                        tolerance[i] = nee_sum[i]
+                    nee_last_year[i] = nee_sum[i]
                     if not isnan(tolerance[i]):
                         if tolerance[i] > 1:
                             success = 0
@@ -362,6 +381,8 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     PyMem_Free(gpp)
     PyMem_Free(ra_total)
     PyMem_Free(rh_total)
+    PyMem_Free(nee_sum)
+    PyMem_Free(nee_last_year)
     PyMem_Free(delta)
     PyMem_Free(tolerance)
 
