@@ -25,7 +25,7 @@ import cython
 import datetime
 import json
 import numpy as np
-from libc.math cimport isnan
+from libc.math cimport isnan, fabs
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy, to_numpy_double
@@ -68,6 +68,9 @@ for p in range(1, 9):
 @cython.wraparound(False)
 def main(config_file = None):
     '''
+    Soil organic carbon (SOC) spin-up; will write out a file for each soil
+    pool after the analytical spin-up ("Cana") and after the numerical
+    spin-up ("Cnum"), in addition to a final tolerance file.
     '''
     cdef:
         int i
@@ -326,6 +329,10 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 pft = int(PFT[i])
                 if pft == 0 or pft > 8:
                     continue
+                # Skip pixels that have already equilibrated
+                if iter > 1 and not isnan(tolerance[i]):
+                    if fabs(tolerance[i]) < 1:
+                        continue
                 # Reset the annual delta-SOC arrays
                 delta[0] = 0
                 delta[1] = 0
@@ -358,7 +365,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                         tolerance[i] = nee_sum[i]
                     nee_last_year[i] = nee_sum[i]
                     if not isnan(tolerance[i]):
-                        if tolerance[i] > 1:
+                        if fabs(tolerance[i]) > 1:
                             success = 0
                         tol_count += 1
                         tol_sum += tolerance[i]
@@ -367,6 +374,9 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         if tol_count > 0:
             tol_mean = (tol_sum / tol_count)
             print('--- Mean tolerance is: %.2f' % tol_mean)
+        else:
+            print('QUIT early due to zero pixel count in tolerance calculation')
+            break # Quit if we're not counting valid pixels anymore
         # Increment; also a counter for the number of climatological years
         iter = iter + 1
     OUT_M09_DOUBLE = to_numpy_double(tolerance, SPARSE_N)
