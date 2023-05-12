@@ -2,8 +2,9 @@
 
 '''
 SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
-Version 6 state and parameters. The `main()` routine is optimized for model
-execution but it may take several seconds to load the state data.
+Version 6 state and parameters, at 9-km spatial resolution. The `main()`
+routine is optimized for model execution but it may take several seconds to
+load the state data.
 
 Required data:
 
