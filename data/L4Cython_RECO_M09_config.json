@@ -12,15 +12,15 @@
       "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_C1_M09land_0002089.flt32",
       "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_C2_M09land_0002089.flt32"
     ],
-    "NPP_annual_sum": "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_natv91_npp_sum_M09land.flt32",
+    "NPP_annual_sum": "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_npp_sum_M09land.flt32",
     "drivers": {
-      "smsf": "/anx_lagr4/SMAP/L4SM/Vv6032/L4_SM_gph_Vv6032_smsf_vwc_M09land_%s.flt32",
-      "tsoil": "/anx_lagr4/SMAP/L4SM/Vv6032/L4_SM_gph_Vv6032_tsoil_M09land_%s.flt32"
+      "smsf": "/anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv7032_smsf_vwc_M09land_%s.flt32",
+      "tsoil": "/anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv7032_tsoil_M09land_%s.flt32"
     }
   },
 
   "model": {
-    "output_dir": "/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20220928"
+    "output_dir": "/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230523"
   }
 
 }

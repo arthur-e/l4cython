@@ -1,4 +1,5 @@
 '''
+Converts the 1-km, 2D binary file(s) to a GeoTIFF.
 '''
 
 import numpy as np
@@ -13,6 +14,13 @@ def main():
         arr[arr < 0] = -9999
         ease2_to_geotiff(
             arr, f'/ntsg_home/tcf_OL7000_C{i}_M01_0002089.tiff', grid = 'M01')
+
+    # And now the annual NPP sum
+    npp = np.fromfile('/ntsg_home/tcf_OL7000_npp_sum_M01.flt32', np.float32)\
+        .reshape(EASE2_GRID_PARAMS['M01']['shape'])
+    npp[npp < 0] = -9999
+    ease2_to_geotiff(
+        npp, '/ntsg_home/tcf_OL7000_npp_sum_M01.tiff', grid = 'M01')
 
 
 if __name__ == '__main__':
