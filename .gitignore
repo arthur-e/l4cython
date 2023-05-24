@@ -6,7 +6,7 @@
 virtualenv.sh
 
 # Cython compilation files
-*.c
+l4cython/*.c
 *.cpython*
 build/
 
