@@ -5,13 +5,29 @@ L4C-Cython
 - [ ] Routine to read-in BPLUT
 
 
-Building and Troubleshooting
+Building and Testing
 ----------------------------
+
+Use the `Makefile`:
+
+```sh
+cd l4cython
+make
+
+# Runs the 9-km RECO module
+make test
+```
+
+Or, to build manually:
 
 ```sh
 cd l4cython
 python setup.py build_ext --inplace
 ```
+
+
+Troubleshooting
+----------------------------
 
 The debugger `gdb` can be installed from source (needs Python 2 support, which isn't the default):
 

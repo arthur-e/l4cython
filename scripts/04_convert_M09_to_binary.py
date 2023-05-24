@@ -13,7 +13,7 @@ def main():
             f'/ntsg_home/tcf_OL7000_C{i}_M09_0002089.tiff', band_axis = False)
         sparse = SparseArray(arr, grid = 'M09', dtype = np.float32)
         sparse.deflate()
-        arr.astype(np.float32)\
+        sparse.data.astype(np.float32)\
             .tofile(f'/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_C{i}_M09land_0002089.flt32')
 
     # And now the annual NPP sum
