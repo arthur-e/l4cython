@@ -6,7 +6,11 @@
 virtualenv.sh
 
 # Cython compilation files
-l4cython/*.c
+a.out
+mkgrid.c
+reco.c
+reco_9km.c
+spinup_9km.c
 *.cpython*
 build/
 

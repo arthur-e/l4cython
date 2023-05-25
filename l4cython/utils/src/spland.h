@@ -12,6 +12,8 @@
 #include <limits.h>
 #include <assert.h>
 
+#include "hdf.h"
+#include "mfhdf.h"
 #include "uuta.h"
 
 #define   MAIN_NAME    "MKGRID"

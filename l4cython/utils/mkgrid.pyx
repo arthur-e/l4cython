@@ -1,6 +1,6 @@
 # cython: language_level=3
-# distutils: sources = src/spland.c
-# distutils: include_dirs = src/
+# distutils: sources = ["src/spland.c"]
+# distutils: include_dirs = ["src/"]
 
 '''
 '''
@@ -9,7 +9,7 @@ import cython
 import numpy as np
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from tqdm import tqdm
-from spland cimport M_2D_B0, spland_inflate_9km
+from spland cimport spland_ref_struct, spland_inflate_9km, spland_load_9km_rc
 
 # Number of grid cells in sparse ("land") arrays
 DEF SPARSE_N = 1664040
@@ -35,9 +35,8 @@ def main():
     '''
     '''
     DEFLATED[:] = np.fromfile('/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230523/L4Cython_RH_20150331_M09land.flt32', np.float32)
-    spland_inflate_9km
-
-
+    cdef spland_ref_struct lookup
+    spland_load_9km_rc(&lookup)
 
 
 def load_9km_rc():

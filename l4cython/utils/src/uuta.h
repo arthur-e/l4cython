@@ -60,6 +60,9 @@
 // are echoed
 #include <sys/types.h>
 
+#include "hdf.h"
+#include "mfhdf.h"
+
 #define VersTag "v1.0-2013-07-03T15:04:00,barley,jmg"
 
 // typedef int64_t signed long;
