@@ -7,17 +7,13 @@
 
 import cython
 import numpy as np
-from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
-from libc.stdlib cimport calloc
-from libc.stdio cimport fopen, fread, fclose
-from tqdm import tqdm
+from libc.stdlib cimport free, calloc
+from libc.stdio cimport fopen, fread, fclose, fwrite
 from spland cimport spland_ref_struct, spland_inflate_9km, spland_inflate_init_9km, spland_load_9km_rc
 
 DEF SPARSE_N = 1664040 # Number of grid cells in sparse ("land") arrays
 DEF NCOL9KM = 3856
 DEF NROW9KM = 1624
-DEF LAND_R_FILE = '/anx_v2/laj/smap/code/landdomdef/output/MCD12Q1_M09land_row.uint16'
-DEF LAND_C_FILE = '/anx_v2/laj/smap/code/landdomdef/output/MCD12Q1_M09land_col.uint16'
 
 # From hntdefs.h
 DEF DFNT_FLOAT32 = 5
@@ -31,29 +27,44 @@ DEF DFNT_UINT32 = 25
 DEF DFNT_INT64  = 26
 DEF DFNT_UINT64 = 27
 
-# TOTALLY UNECESSARY but getting a segfault without
-cdef:
-    float DUMMY[SPARSE_N]
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def main():
+def main(filename):
     '''
     '''
-    # TOTALLY UNECESSARY but getting a segfault without
-    DUMMY[:] = np.fromfile('/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230523/L4Cython_RH_20150331_M09land.flt32', np.float32)
+    # Convert the unicode filename to a C string
+    filename_byte_string = filename.encode('UTF-8')
+    cdef char* fname = filename_byte_string
 
     # Load the index lookup file
     cdef spland_ref_struct lookup
+    # Allocate space and read in row/col reference data
+    # NOTE: Using 9-km row/col for both 9-km and 1-km nested grids
+    lookup.row = <unsigned short*>calloc(sizeof(unsigned short), SPARSE_N);
+    lookup.col = <unsigned short*>calloc(sizeof(unsigned short), SPARSE_N);
     spland_load_9km_rc(&lookup)
 
-    n_bytes = sizeof(float) * SPARSE_N
-    DEFLATED = <unsigned char*>calloc(sizeof(unsigned char), <size_t>n_bytes)
-    fid = fopen('/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230523/L4Cython_RH_20150331_M09land.flt32', 'rb')
-    fread(DEFLATED, sizeof(unsigned char), <size_t>n_bytes, fid)
+    # Read in the deflated array
+    in_bytes = sizeof(float) * SPARSE_N
+    deflated = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    fid = fopen(fname, 'rb')
+    fread(deflated, sizeof(unsigned char), <size_t>in_bytes, fid)
     fclose(fid)
 
-    n_bytes = sizeof(float) * NCOL9KM * NROW9KM
-    INFLATED = <unsigned char*>calloc(sizeof(unsigned char), <size_t>n_bytes)
-    spland_inflate_init_9km(&INFLATED, DFNT_FLOAT32);
-    # spland_inflate_9km(lookup, &DEFLATED, &INFLATED, DFNT_FLOAT32)
+    # Inflate the output array
+    out_bytes = sizeof(float) * NCOL9KM * NROW9KM
+    inflated = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
+    spland_inflate_init_9km(&inflated, DFNT_FLOAT32);
+    spland_inflate_9km(lookup, &deflated, &inflated, DFNT_FLOAT32)
+
+    # Write the output file
+    output_filename = filename_byte_string\
+        .decode('UTF-8').replace('M09land', 'M09').encode('UTF-8')
+    cdef char* ofname = output_filename
+    fid = fopen(ofname, 'wb')
+    fwrite(inflated, sizeof(unsigned char), <size_t>out_bytes, fid)
+    fclose(fid)
+
+    free(deflated)
+    free(inflated)
