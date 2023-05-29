@@ -2,7 +2,6 @@
 #include "spland.h"
 
 /*DEFLATE function for 9km grid*/
-
 void spland_deflate_9km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
                         const unsigned int dataType) {
 
@@ -25,7 +24,6 @@ void spland_deflate_9km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
 }
 
 /*DEFLATE function for nested 1km grid*/
-
 void spland_deflate_1km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
                         const unsigned int dataType) {
 
@@ -61,7 +59,6 @@ void spland_deflate_1km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
 }
 
 /*INFLATE function for 9km grid*/
-
 void spland_inflate_9km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
                         const unsigned int dataType) {
 
@@ -121,7 +118,6 @@ void spland_inflate_1km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
 }
 
 /*Function for loading ancil row/col data for sparse format*/
-
 int spland_load_9km_rc(spland_ref_struct *SPLAND) {
 
   FILE *fid;
@@ -143,6 +139,48 @@ int spland_load_9km_rc(spland_ref_struct *SPLAND) {
   }
 
   return (0);
+}
+
+/*Initialize the inflation matrix with fill values*/
+void spland_inflate_init_9km(void *dest_p, const uint32 dataType) {
+
+  uint32 r, c;
+
+  size_t destSlot;
+
+  for (r = 0; r < NROW9KM; r++) {
+    for (c = 0; c < NCOL9KM; c++) {
+
+      destSlot = (size_t)M_2D_B0(r, c, NCOL9KM);
+
+      set_fillval_UUTA(dest_p, dataType, destSlot);
+
+    } // end:: col 9km loop
+  }   // end:: row 9km loop
+}
+
+void spland_inflate_init_1km(void *dest_p, const uint32 dataType) {
+
+  uint32 r, c, rn, cn;
+
+  size_t destSlot;
+
+  for (r = 0; r < NROW9KM; r++) {
+    for (c = 0; c < NCOL9KM; c++) {
+      for (rn = 0; rn < NESTED_1KM_IN_9KM; rn++) {
+        for (cn = 0; cn < NESTED_1KM_IN_9KM; cn++) {
+
+          // reference 1km nested grid
+          destSlot =
+              (size_t)M_2D_N9_B0(r, c, rn, cn, NESTED_1KM_IN_9KM, NCOL1KM);
+
+          set_fillval_UUTA(dest_p, dataType, destSlot);
+
+        } // end:: col 1km nested loop
+      }   // end:: row 1km nested loop
+
+    } // end:: col 9km loop
+  }   // end:: row 9km loop
 }
 
 // copy nElements of SOURCE, beginning at "atSlot", into DEST slot 0, where each
@@ -243,24 +281,6 @@ void *getFromUUTA(void *vDest_p, void *vSource_p, const signed int dataType,
   memcpy(vDest_p, (unsigned char *)src_p->aUint8_p + thisOffset, sizOfOne);
   return (vDest_p);
 } // end::getFromUUTA()
-
-/*Initialize the inflation matrix with fill values*/
-void spland_inflate_init_9km(void *dest_p, const uint32 dataType) {
-
-  uint32 r, c;
-
-  size_t destSlot;
-
-  for (r = 0; r < NROW9KM; r++) {
-    for (c = 0; c < NCOL9KM; c++) {
-
-      destSlot = (size_t)M_2D_B0(r, c, NCOL9KM);
-
-      set_fillval_UUTA(dest_p, dataType, destSlot);
-
-    } // end:: col 9km loop
-  }   // end:: row 9km loop
-}
 
 /*Set fill value for an array of a given data type at the specified location in
  * the array*/

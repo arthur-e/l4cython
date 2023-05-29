@@ -12,4 +12,5 @@ cdef extern from "src/spland.h":
     void spland_inflate_1km(spland_ref_struct SPLAND, void* src_p, void* dest_p, const unsigned int dataType)
 
     void spland_inflate_init_9km(void* dest_p, const unsigned int dataType)
+    void spland_inflate_init_1km(void* dest_p, const unsigned int dataType)
     void set_fillval_UUTA(void* vDest_p, const unsigned int dataType, const size_t atSlot)
