@@ -68,6 +68,21 @@
 // typedef int64_t signed long;
 // typedef uint64_t unsigned long;
 
+enum NumericTypes {
+  isUnknownType  = DFNT_NONE   ,
+  isChar         = DFNT_CHAR8  ,
+  isInt8         = DFNT_INT8   ,
+  isUint8        = DFNT_UINT8  ,
+  isInt16        = DFNT_INT16  ,
+  isUint16       = DFNT_UINT16 ,
+  isInt32        = DFNT_INT32  ,
+  isUint32       = DFNT_UINT32 ,
+  isInt64        = DFNT_INT64  ,
+  isUint64       = DFNT_UINT64 ,
+  isFloat32      = DFNT_FLOAT32,
+ isFloat64      = DFNT_FLOAT64
+} ;
+
 // type-independent union (translation-layer) of pointers to atomic types
 typedef union {
   signed char *aInt8_p;

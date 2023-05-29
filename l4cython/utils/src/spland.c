@@ -132,8 +132,7 @@ int spland_load_9km_rc(spland_ref_struct *SPLAND) {
 
     fread(SPLAND->row, sizeof(unsigned short), LLAND9KM, fid);
     fclose(fid);
-
-  } 
+  }
 
   fid = fopen(LAND_C_FILE, "rb");
 
@@ -141,7 +140,6 @@ int spland_load_9km_rc(spland_ref_struct *SPLAND) {
 
     fread(SPLAND->col, sizeof(unsigned short), LLAND9KM, fid);
     fclose(fid);
-
   }
 
   return (0);
@@ -193,9 +191,9 @@ void *copyUUTA0(void *vDest_p, void *vSource_p, const signed int dataType,
 // to accomodate all the data requested here! Later we'll add an extension that
 // internally guards against overcopy via use of a UUTA's nElemAllocated
 // property.
-void *copyUUTA_to_UUTA(void *vDest_p, void *vSource_p, const signed int dataType,
-                       const size_t srcSlot, const size_t destSlot,
-                       size_t nElements) {
+void *copyUUTA_to_UUTA(void *vDest_p, void *vSource_p,
+                       const signed int dataType, const size_t srcSlot,
+                       const size_t destSlot, size_t nElements) {
   TI_ATOM_PTR *src_p = (TI_ATOM_PTR *)
       vSource_p; // ...essential to dereference the void * as a real type here
   TI_ATOM_PTR *dst_p = (TI_ATOM_PTR *)
@@ -220,8 +218,8 @@ void *setIntoUUTA(void *vDest_p, void *vSource_p, const signed int dataType,
   TI_ATOM_PTR *dst_p = (TI_ATOM_PTR *)vDest_p;
   size_t thisOffset = DFKNTsize(dataType) * atSlot;
 
-  memcpy((unsigned char *)(dst_p->aUint8_p + thisOffset), (unsigned char *)src_p,
-         DFKNTsize(dataType));
+  memcpy((unsigned char *)(dst_p->aUint8_p + thisOffset),
+         (unsigned char *)src_p, DFKNTsize(dataType));
 
   // return ptr to destination buffer as a syntactic convenience
   return vDest_p;
@@ -245,3 +243,65 @@ void *getFromUUTA(void *vDest_p, void *vSource_p, const signed int dataType,
   memcpy(vDest_p, (unsigned char *)src_p->aUint8_p + thisOffset, sizOfOne);
   return (vDest_p);
 } // end::getFromUUTA()
+
+/*Initialize the inflation matrix with fill values*/
+void spland_inflate_init_9km(void *dest_p, const uint32 dataType) {
+
+  uint32 r, c;
+
+  size_t destSlot;
+
+  for (r = 0; r < NROW9KM; r++) {
+    for (c = 0; c < NCOL9KM; c++) {
+
+      destSlot = (size_t)M_2D_B0(r, c, NCOL9KM);
+
+      set_fillval_UUTA(dest_p, dataType, destSlot);
+
+    } // end:: col 9km loop
+  }   // end:: row 9km loop
+}
+
+/*Set fill value for an array of a given data type at the specified location in
+ * the array*/
+void set_fillval_UUTA(void *vDest_p, const int32 dataType,
+                      const size_t atSlot) {
+
+  TI_ATOM_PTR *dst_p = (TI_ATOM_PTR *)vDest_p;
+
+  size_t i = atSlot;
+
+  // set fill value based on data type
+  switch (dataType) {
+  case isChar:
+    dst_p->aInt8_p[i] = (signed char)-127;
+    break;
+  case isUint8:
+    dst_p->aUint8_p[i] = (unsigned char)255;
+    break;
+  case isInt16:
+    dst_p->aInt16_p[i] = (signed short)-32767;
+    break;
+  case isUint16:
+    dst_p->aUint16_p[i] = (unsigned short)65535;
+    break;
+  case isInt32:
+    dst_p->aInt32_p[i] = (signed int)-2.1474e9;
+    break;
+  case isUint32:
+    dst_p->aUint32_p[i] = (unsigned int)-4.2950e9;
+    break;
+  case isInt64:
+    dst_p->aInt64_p[i] = (signed long)-9.2233e18;
+    break;
+  case isUint64:
+    dst_p->aUint64_p[i] = (unsigned long)1.8446e19;
+    break;
+  case isFloat32:
+    dst_p->aFlt32_p[i] = (float)-9.999e9;
+    break;
+  case isFloat64:
+    dst_p->aFlt64_p[i] = (double)-9.999e9;
+    break;
+  } // end switch on datatype
+}
