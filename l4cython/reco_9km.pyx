@@ -40,8 +40,9 @@ cdef:
 # L4_C BPLUT Version 7 (Vv7042, Vv7040, Nature Run v10)
 # NOTE: BPLUT is initialized here because we *need* it to be a C struct and
 #   1) It cannot be a C struct if it is imported from a *.pyx file (it gets
-#   converted to a dict); and 2) We can't initalize the C struct's state if
-#   it is in a *.pxd file
+#   converted to a dict); 2) If imported as a Python dictionary and coerced
+#   to a BPLUT struct, it's still (inexplicably) a dictionary; and 3) We can't
+#   initalize the C struct's state if it is in a *.pxd file
 cdef BPLUT PARAMS
 # NOTE: Must have an (arbitrary) value in 0th position to avoid overflow of
 #   indexing (as PFT=0 is not used and C starts counting at 0)

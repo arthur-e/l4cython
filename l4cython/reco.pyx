@@ -13,6 +13,11 @@ Required data:
 
 - Surface soil wetness ("SMSF"), in proportion units [0,1]
 - Soil temperature, in degrees K
+
+Possible improvements:
+
+- [ ] Use C `fopen()` and `fread()` to read the 1-km array data from binary
+    files; we know this works because of the `mkgrid` module.
 '''
 
 import cython
@@ -52,17 +57,22 @@ SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 NPP = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
-# L4_C BPLUT Version 6 (Vv6042, Vv6040, Nature Run v9.1)
+# L4_C BPLUT Version 7 (Vv7042, Vv7040, Nature Run v10)
+# NOTE: BPLUT is initialized here because we *need* it to be a C struct and
+#   1) It cannot be a C struct if it is imported from a *.pyx file (it gets
+#   converted to a dict); 2) If imported as a Python dictionary and coerced
+#   to a BPLUT struct, it's still (inexplicably) a dictionary; and 3) We can't
+#   initalize the C struct's state if it is in a *.pxd file
+cdef BPLUT PARAMS
 # NOTE: Must have an (arbitrary) value in 0th position to avoid overflow of
 #   indexing (as PFT=0 is not used and C starts counting at 0)
-cdef BPLUT PARAMS
-PARAMS.smsf0[:] = [0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-PARAMS.smsf1[:] = [0, 25.0, 30.5, 39.8, 31.3, 44.9, 50.5, 25.0, 25.1]
-PARAMS.tsoil[:] = [0, 266.05, 392.24, 233.94, 265.23, 240.71, 261.42, 253.98, 281.69]
+PARAMS.smsf0[:] = [0, 0.0, 0.0, 1.5, 0.0, 0.0, 0.0, 11.3, 0.0]
+PARAMS.smsf1[:] = [0, 30.1, 30.1, 35.1, 30.7, 75.4, 68.0, 30.1, 30.1]
+PARAMS.tsoil[:] = [0, 238.17, 422.77, 233.94, 246.48, 154.91, 366.14, 242.47, 265.06]
 PARAMS.cue[:] = [0, 0.687, 0.469, 0.755, 0.799, 0.649, 0.572, 0.708, 0.705]
 PARAMS.f_metabolic[:] = [0, 0.49, 0.71, 0.67, 0.67, 0.62, 0.76, 0.78, 0.78]
 PARAMS.f_structural[:] = [0, 0.3, 0.3, 0.7, 0.3, 0.35, 0.55, 0.5, 0.8]
-PARAMS.decay_rate[0] = [0, 0.020, 0.022, 0.031, 0.028, 0.013, 0.022, 0.019, 0.031]
+PARAMS.decay_rate[0] = [0, 0.020, 0.022, 0.030, 0.029, 0.012, 0.026, 0.018, 0.031]
 for p in range(1, 9):
     PARAMS.decay_rate[1][p] = PARAMS.decay_rate[0][p] * KSTRUCT
     PARAMS.decay_rate[2][p] = PARAMS.decay_rate[0][p] * KRECAL
