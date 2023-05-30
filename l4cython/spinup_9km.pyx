@@ -28,7 +28,8 @@ import numpy as np
 from libc.math cimport isnan, fabs
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
-from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy, to_numpy_double
+from respiration cimport BPLUT, arrhenius, linear_constraint
+from utils cimport to_numpy, to_numpy_double
 from tqdm import tqdm
 
 # Number of grid cells in sparse ("land") arrays

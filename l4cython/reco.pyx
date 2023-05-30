@@ -34,7 +34,8 @@ import json
 import numpy as np
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
-from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy
+from respiration cimport BPLUT, arrhenius, linear_constraint
+from utils cimport open_fid, to_numpy
 from tqdm import tqdm
 
 DEF READ = 'rb'.encode('UTF-8') # Binary read mode as byte string
@@ -211,24 +212,3 @@ def load_state(config):
     fclose(fid)
     for i in range(SPARSE_M01_N):
         NPP[i] = NPP[i] / 365
-
-
-cdef FILE* open_fid(bytes filename_byte_string, bytes mode):
-    '''
-    Open a file using a filename given as a Python byte string.
-
-    Parameters
-    ----------
-    filename_byte_string : bytes
-        Should be a Python string encoded, e.g., `filename.encode("UTF-8")`
-    mode : bytes
-
-    Returns
-    -------
-    FILE*
-    '''
-    cdef char* fname = filename_byte_string # Convert to a C string
-    cdef FILE* fid = fopen(fname, mode)
-    if fid is NULL:
-        print('ERROR -- File not found: %s' % filename_byte_string.decode('UTF-8'))
-    return fid
