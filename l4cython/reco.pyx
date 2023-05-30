@@ -6,7 +6,7 @@ Version 6 state and parameters, at 1-km spatial resolution. The `main()`
 routine is optimized for model execution but it may take several seconds to
 load the state data.
 
-After the initial state data are loaded it takes about 40-60 seconds per
+After the initial state data are loaded it takes about 15-20 seconds per
 data day.
 
 Required data:
@@ -22,8 +22,10 @@ Developer notes:
 
 Possible improvements:
 
-- [ ] Use C `fopen()` and `fread()` to read the 1-km array data from binary
-    files; we know this works because of the `mkgrid` module.
+- [ ] Add an "output_format" key to the "model" key of the config file;
+    this should include options like "M09", "M09land", and "M01" and if
+    "M09" is requested, the output array should be inflated. This can then
+    replace the "averaging" key.
 - [ ] 1-km global grid files will always be ~500 MB in size, without
     compression; try writing the array to an HDF5 file instead.
 '''
@@ -36,6 +38,7 @@ from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from respiration cimport BPLUT, arrhenius, linear_constraint
 from utils cimport open_fid, to_numpy
+from utils.mkgrid import inflate
 from tqdm import tqdm
 
 DEF READ = 'rb'.encode('UTF-8') # Binary read mode as byte string
@@ -159,13 +162,32 @@ def main(config_file = None):
                 #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
                 rh1[k] = rh1[k] * (1 - PARAMS.f_structural[pft])
                 rh_total[k] = rh0[k] + rh1[k] + rh2[k]
+                if rh_total[k] < 0:
+                    rh_total[k] = 0
                 # Calculate change in SOC pools; NPP[i] is daily litterfall
                 SOC0[k] += (NPP[k] * PARAMS.f_metabolic[pft]) - rh0[k]
                 SOC1[k] += (NPP[k] * (1 - PARAMS.f_metabolic[pft])) - rh1[k]
                 SOC2[k] += (PARAMS.f_structural[pft] * rh1[k]) - rh2[k]
-        OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
-        OUT_M01.tofile(
-            '%s/L4Cython_RH_%s_M01land.flt32' % (config['model']['output_dir'], date))
+        # If averaging from 1-km to 9-km resolution is requested...
+        if config['model']['averaging']:
+            rh_total_resampled = np.empty((SPARSE_M09_N,), np.float32)
+            for i in range(0, SPARSE_M09_N):
+                value = 0
+                count = 0
+                for j in range(0, M01_NESTED_IN_M09):
+                    k = (M01_NESTED_IN_M09 * i) + j
+                    value += rh_total[k]
+                    count += 1
+                value /= count
+                rh_total_resampled[i] = value
+            rh_total_resampled.tofile(
+                '%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
+            if config['debug']:
+                inflate('%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
+        else:
+            OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
+            OUT_M01.tofile(
+                '%s/L4Cython_RH_%s_M01land.flt32' % (config['model']['output_dir'], date))
     PyMem_Free(PFT)
     PyMem_Free(SOC0)
     PyMem_Free(SOC1)

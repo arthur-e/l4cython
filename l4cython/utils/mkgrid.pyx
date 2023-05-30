@@ -52,7 +52,7 @@ def inflate(filename, grid = 'M09'):
         spland_ref_struct lookup
         unsigned char* deflated
         unsigned char* inflated
-        
+
     # Assume 9-km grid, this also helps avoid warnings when compiling
     in_bytes = sizeof(float) * SPARSE_N
     out_bytes = sizeof(float) * NCOL9KM * NROW9KM
