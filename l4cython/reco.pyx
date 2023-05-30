@@ -14,24 +14,46 @@ Required data:
 - Surface soil wetness ("SMSF"), in proportion units [0,1]
 - Soil temperature, in degrees K
 
+Developer notes:
+
+- Large datasets (1-km resolution) that are read-in from disk by one function,
+    `load_state()`, and read-in from memory by another, `main()`, MUST be
+    assigned to global variables because they must use heap allocation.
+
 Possible improvements:
 
 - [ ] Use C `fopen()` and `fread()` to read the 1-km array data from binary
     files; we know this works because of the `mkgrid` module.
+- [ ] 1-km global grid files will always be ~500 MB in size, without
+    compression; try writing the array to an HDF5 file instead.
 '''
 
 import cython
 import datetime
 import json
 import numpy as np
-from tqdm import tqdm
+from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from respiration cimport BPLUT, arrhenius, linear_constraint, to_numpy
+from tqdm import tqdm
 
+DEF READ = 'rb'.encode('UTF-8') # Binary read mode as byte string
 DEF M01_NESTED_IN_M09 = 9 * 9
 # Number of grid cells in sparse ("land") arrays
 DEF SPARSE_M09_N = 1664040
 DEF SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
+
+cdef:
+    unsigned char* PFT
+    float* SOC0
+    float* SOC1
+    float* SOC2
+    float* NPP
+PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+NPP  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
 # Additional Tsoil parameter (fixed for all PFTs)
 cdef float TSOIL1 = 66.02 # deg K
@@ -43,19 +65,6 @@ cdef float KRECAL = 0.0093
 # Python arrays that want heap allocations must be global; this one is reused
 #   for any array that needs to be written to disk (using NumPy)
 OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
-
-# Allocate memory for PFT, SOC and litterfall (NPP) files
-cdef:
-    unsigned char* PFT
-    float* SOC0
-    float* SOC1
-    float* SOC2
-    float* NPP
-PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
-SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-NPP = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
 # L4_C BPLUT Version 7 (Vv7042, Vv7040, Nature Run v10)
 # NOTE: BPLUT is initialized here because we *need* it to be a C struct and
@@ -87,15 +96,19 @@ def main(config_file = None):
     number of time steps.
     '''
     cdef:
+        FILE* fid
         Py_ssize_t i
         Py_ssize_t j
         Py_ssize_t k
+        Py_ssize_t pft
         float* rh0
         float* rh1
         float* rh2
         float* rh_total
         float* w_mult
         float* t_mult
+        float* smsf
+        float* tsoil
         float k_mult
     rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
@@ -103,6 +116,8 @@ def main(config_file = None):
     rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     # Read in configuration file, then load state data
     if config_file is None:
         config_file = '../data/L4Cython_RECO_M01_config.json'
@@ -114,18 +129,22 @@ def main(config_file = None):
     for step in tqdm(range(num_steps)):
         date = date_start + datetime.timedelta(days = step)
         date = date.strftime('%Y%m%d')
-        # Convert to percentage units
-        smsf = 100 * np.fromfile(
-            config['data']['drivers']['smsf'] % date, dtype = np.float32)
-        tsoil = np.fromfile(
-            config['data']['drivers']['tsoil'] % date, dtype = np.float32)
+        # Read in soil moisture ("smsf") and soil temperature ("tsoil") data
+        fid = open_fid((config['data']['drivers']['smsf'] % date).encode('UTF-8'), READ)
+        fread(smsf, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+        fclose(fid)
+        fid = open_fid((config['data']['drivers']['tsoil'] % date).encode('UTF-8'), READ)
+        fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+        fclose(fid)
         # Iterate over each 9-km pixel
         for i in range(0, SPARSE_M09_N):
+            # Convert to percentage units
+            smsf[i] = 100 * smsf[i]
             # Iterate over each nested 1-km pixel
             for j in range(0, M01_NESTED_IN_M09):
                 # Hence, (i) indexes the 9-km pixel and k the 1-km pixel
                 k = (M01_NESTED_IN_M09 * i) + j
-                pft = int(PFT[k])
+                pft = PFT[k]
                 if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
                     continue # Skip invalid PFTs
                 w_mult[k] = linear_constraint(
@@ -168,21 +187,48 @@ def load_state(config):
     config : dict
         The configuration data dictionary
     '''
-    # Read in SOC and NPP data; this has to be done by element, it seems
-    for idx, data in enumerate(
-            np.fromfile(config['data']['PFT_map'], np.uint8)):
-        PFT[idx] = data
-    for idx, data in enumerate(
-            np.fromfile(config['data']['SOC'][0], np.float32)):
-        SOC0[idx] = data
-    for idx, data in enumerate(
-            np.fromfile(config['data']['SOC'][1], np.float32)):
-        SOC1[idx] = data
-    for idx, data in enumerate(
-            np.fromfile(config['data']['SOC'][2], np.float32)):
-        SOC2[idx] = data
+    # Allocate space, read in 1-km PFT map
+    n_bytes = sizeof(unsigned char)*SPARSE_M01_N
+    fid = open_fid(config['data']['PFT_map'].encode('UTF-8'), READ)
+    fread(PFT, sizeof(unsigned char), <size_t>n_bytes, fid)
+    fclose(fid)
+    # Allocate space for floating-point state datasets
+    n_bytes = sizeof(float)*SPARSE_M01_N
+    # Read in SOC datasets
+    fid = open_fid(config['data']['SOC'][0].encode('UTF-8'), READ)
+    fread(SOC0, sizeof(float), <size_t>n_bytes, fid)
+    fclose(fid)
+    fid = open_fid(config['data']['SOC'][1].encode('UTF-8'), READ)
+    fread(SOC1, sizeof(float), <size_t>n_bytes, fid)
+    fclose(fid)
+    fid = open_fid(config['data']['SOC'][2].encode('UTF-8'), READ)
+    fread(SOC2, sizeof(float), <size_t>n_bytes, fid)
+    fclose(fid)
     # NOTE: Calculating litterfall as average daily NPP (constant fraction of
     #   the annual NPP sum)
-    for idx, data in enumerate(
-            np.fromfile(config['data']['NPP_annual_sum'], np.float32) / 365):
-        NPP[idx] = data
+    fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
+    fread(NPP, sizeof(float), <size_t>n_bytes, fid)
+    fclose(fid)
+    for i in range(SPARSE_M01_N):
+        NPP[i] = NPP[i] / 365
+
+
+cdef FILE* open_fid(bytes filename_byte_string, bytes mode):
+    '''
+    Open a file using a filename given as a Python byte string.
+
+    Parameters
+    ----------
+    filename_byte_string : bytes
+        Should be a Python string encoded, e.g., `filename.encode("UTF-8")`
+    mode : bytes
+
+    Returns
+    -------
+    FILE*
+    '''
+    cdef char* fname = filename_byte_string # Convert to a C string
+    cdef FILE* fid = fopen(fname, mode)
+    if fid is NULL:
+        print('ERROR -- File not found: %s' % filename_byte_string.decode('UTF-8'))
+    return fid

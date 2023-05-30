@@ -48,6 +48,11 @@ def inflate(filename, grid = 'M09'):
         The pixel size of the gridded data, e.g., "M09" for 9-km data or
         "M01" for 1-km data
     '''
+    cdef:
+        spland_ref_struct lookup
+        unsigned char* deflated
+        unsigned char* inflated
+        
     # Assume 9-km grid, this also helps avoid warnings when compiling
     in_bytes = sizeof(float) * SPARSE_N
     out_bytes = sizeof(float) * NCOL9KM * NROW9KM
@@ -55,7 +60,6 @@ def inflate(filename, grid = 'M09'):
         in_bytes = sizeof(float) * SPARSE_N * 81
         out_bytes = sizeof(float) * NCOL1KM * NROW1KM
 
-    cdef spland_ref_struct lookup
     deflated = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
     inflated = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
     # NOTE: Using 9-km row/col for both 9-km and 1-km nested grids
@@ -79,6 +83,8 @@ def inflate(filename, grid = 'M09'):
 
     # Read in the deflated array
     fid = fopen(fname, 'rb')
+    if fid == NULL:
+        print('ERROR -- File not found: %s' % filename_byte_string.decode('UTF-8'))
     fread(deflated, sizeof(unsigned char), <size_t>in_bytes, fid)
     fclose(fid)
 
