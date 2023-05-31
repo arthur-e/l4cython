@@ -12,7 +12,14 @@ reco_9km = Extension(
 )
 
 reco = Extension(
-    name = 'reco', sources = ['reco.pyx'], define_macros = MACROS
+    name = 'reco',
+    sources = ['reco.pyx'],
+    define_macros = MACROS,
+    libraries = ['dfalt'],
+    include_dirs = ['/usr/include', '/usr/include/hdf'],
+    extra_compile_args = [
+        '-DHAVE_HDF4', '-ldfalt'
+    ]
 )
 
 spinup = Extension(

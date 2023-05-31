@@ -17,7 +17,7 @@ import datetime
 import json
 import numpy as np
 from tqdm import tqdm
-from respiration cimport BPLUT, arrhenius, linear_constraint
+from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint
 
 # Number of grid cells in sparse ("land") arrays
 DEF SPARSE_N = 1664040

@@ -21,9 +21,7 @@
 
   "model": {
     "output_dir": "/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230523",
-    "averaging": true
-  },
-
-  "debug": true
+    "output_format": "M09"
+  }
 
 }

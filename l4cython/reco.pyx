@@ -1,4 +1,6 @@
 # cython: language_level=3
+# distutils: sources = ["utils/src/spland.c"]
+# distutils: include_dirs = ["utils/src/"]
 
 '''
 SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
@@ -22,10 +24,6 @@ Developer notes:
 
 Possible improvements:
 
-- [ ] Add an "output_format" key to the "model" key of the config file;
-    this should include options like "M09", "M09land", and "M01" and if
-    "M09" is requested, the output array should be inflated. This can then
-    replace the "averaging" key.
 - [ ] 1-km global grid files will always be ~500 MB in size, without
     compression; try writing the array to an HDF5 file instead.
 '''
@@ -35,17 +33,14 @@ import datetime
 import json
 import numpy as np
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
+from libc.stdlib cimport free, calloc
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
-from respiration cimport BPLUT, arrhenius, linear_constraint
-from utils cimport open_fid, to_numpy
-from utils.mkgrid import inflate_file
+from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint
+from l4cython.utils cimport open_fid, to_numpy
+from l4cython.utils.mkgrid cimport inflate
+from l4cython.utils.mkgrid import write_inflated
+from l4cython.utils.fixtures import SPARSE_M09_N, SPARSE_M01_N, M01_NESTED_IN_M09, NCOL9KM, NROW9KM, DFNT_FLOAT32, READ, WRITE
 from tqdm import tqdm
-
-DEF READ = 'rb'.encode('UTF-8') # Binary read mode as byte string
-DEF M01_NESTED_IN_M09 = 9 * 9
-# Number of grid cells in sparse ("land") arrays
-DEF SPARSE_M09_N = 1664040
-DEF SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
 
 cdef:
     unsigned char* PFT
@@ -66,10 +61,6 @@ cdef float TSOIL2 = 227.13 # deg K
 cdef float KSTRUCT = 0.4 # Muliplier *against* base decay rate
 cdef float KRECAL = 0.0093
 
-# Python arrays that want heap allocations must be global; this one is reused
-#   for any array that needs to be written to disk (using NumPy)
-OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
-
 # L4_C BPLUT Version 7 (Vv7042, Vv7040, Nature Run v10)
 # NOTE: BPLUT is initialized here because we *need* it to be a C struct and
 #   1) It cannot be a C struct if it is imported from a *.pyx file (it gets
@@ -89,6 +80,10 @@ PARAMS.decay_rate[0] = [0, 0.020, 0.022, 0.030, 0.029, 0.012, 0.026, 0.018, 0.03
 for p in range(1, 9):
     PARAMS.decay_rate[1][p] = PARAMS.decay_rate[0][p] * KSTRUCT
     PARAMS.decay_rate[2][p] = PARAMS.decay_rate[0][p] * KRECAL
+
+# Python arrays that want heap allocations must be global; this one is reused
+#   for any array that needs to be written to disk (using NumPy)
+OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
 
 
 @cython.boundscheck(False)
@@ -122,11 +117,17 @@ def main(config_file = None):
     t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+
     # Read in configuration file, then load state data
     if config_file is None:
         config_file = '../data/L4Cython_RECO_M01_config.json'
     with open(config_file) as file:
         config = json.load(file)
+
+    # If an inflated (2D) representation is requested, allocate space
+    if config['model']['output_format'] == 'M09':
+        inflated_array = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M09_N)
+
     load_state(config)
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
     num_steps = int(config['daily_steps'])
@@ -134,10 +135,12 @@ def main(config_file = None):
         date = date_start + datetime.timedelta(days = step)
         date = date.strftime('%Y%m%d')
         # Read in soil moisture ("smsf") and soil temperature ("tsoil") data
-        fid = open_fid((config['data']['drivers']['smsf'] % date).encode('UTF-8'), READ)
+        fid = open_fid(
+            (config['data']['drivers']['smsf'] % date).encode('UTF-8'), READ)
         fread(smsf, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
-        fid = open_fid((config['data']['drivers']['tsoil'] % date).encode('UTF-8'), READ)
+        fid = open_fid(
+            (config['data']['drivers']['tsoil'] % date).encode('UTF-8'), READ)
         fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
         # Iterate over each 9-km pixel
@@ -168,8 +171,9 @@ def main(config_file = None):
                 SOC0[k] += (NPP[k] * PARAMS.f_metabolic[pft]) - rh0[k]
                 SOC1[k] += (NPP[k] * (1 - PARAMS.f_metabolic[pft])) - rh1[k]
                 SOC2[k] += (PARAMS.f_structural[pft] * rh1[k]) - rh2[k]
+
         # If averaging from 1-km to 9-km resolution is requested...
-        if config['model']['averaging']:
+        if config['model']['output_format'] in ('M09', 'M09land'):
             rh_total_resampled = np.empty((SPARSE_M09_N,), np.float32)
             for i in range(0, SPARSE_M09_N):
                 value = 0
@@ -180,10 +184,14 @@ def main(config_file = None):
                     count += 1
                 value /= count
                 rh_total_resampled[i] = value
-            rh_total_resampled.tofile(
-                '%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
-            if config['debug']:
-                inflate_file('%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
+            # Write a flat (1D) file or inflate the file and then write
+            if config['model']['output_format'] == 'M09land':
+                rh_total_resampled.tofile(
+                    '%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
+            elif config['model']['output_format'] == 'M09':
+                filename = ('%s/L4Cython_RH_%s_M09.flt32' % (config['model']['output_dir'], date))\
+                    .encode('UTF-8')
+                write_inflated(filename, rh_total_resampled)
         else:
             OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
             OUT_M01.tofile(
