@@ -13,7 +13,7 @@ data day.
 
 Required data:
 
-- Surface soil wetness ("SMSF"), in proportion units [0,1]
+- Surface soil wetness ("SMSF"), in percentage units [0,100]
 - Soil temperature, in degrees K
 
 Developer notes:
@@ -70,8 +70,8 @@ cdef float KRECAL = 0.0093
 cdef BPLUT PARAMS
 # NOTE: Must have an (arbitrary) value in 0th position to avoid overflow of
 #   indexing (as PFT=0 is not used and C starts counting at 0)
-PARAMS.smsf0[:] = [0, 0.0, 0.0, 1.5, 0.0, 0.0, 0.0, 11.3, 0.0]
-PARAMS.smsf1[:] = [0, 30.1, 30.1, 35.1, 30.7, 75.4, 68.0, 30.1, 30.1]
+PARAMS.smsf0[:] = [0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+PARAMS.smsf1[:] = [0, 25.0, 94.0, 42.3, 35.8, 44.9, 52.9, 25.0, 25.0]
 PARAMS.tsoil[:] = [0, 238.17, 422.77, 233.94, 246.48, 154.91, 366.14, 242.47, 265.06]
 PARAMS.cue[:] = [0, 0.687, 0.469, 0.755, 0.799, 0.649, 0.572, 0.708, 0.705]
 PARAMS.f_metabolic[:] = [0, 0.49, 0.71, 0.67, 0.67, 0.62, 0.76, 0.78, 0.78]
@@ -108,6 +108,7 @@ def main(config_file = None):
         float* t_mult
         float* smsf
         float* tsoil
+        float* soc_total
         float k_mult
     rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
@@ -117,6 +118,7 @@ def main(config_file = None):
     t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    soc_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
     # Read in configuration file, then load state data
     if config_file is None:
@@ -145,8 +147,6 @@ def main(config_file = None):
         fclose(fid)
         # Iterate over each 9-km pixel
         for i in range(0, SPARSE_M09_N):
-            # Convert to percentage units
-            smsf[i] = 100 * smsf[i]
             # Iterate over each nested 1-km pixel
             for j in range(0, M01_NESTED_IN_M09):
                 # Hence, (i) indexes the 9-km pixel and k the 1-km pixel
@@ -171,19 +171,30 @@ def main(config_file = None):
                 SOC0[k] += (NPP[k] * PARAMS.f_metabolic[pft]) - rh0[k]
                 SOC1[k] += (NPP[k] * (1 - PARAMS.f_metabolic[pft])) - rh1[k]
                 SOC2[k] += (PARAMS.f_structural[pft] * rh1[k]) - rh2[k]
+                soc_total[k] = SOC0[k] + SOC1[k] + SOC2[k]
 
         # If averaging from 1-km to 9-km resolution is requested...
         if config['model']['output_format'] in ('M09', 'M09land'):
             rh_total_resampled = np.empty((SPARSE_M09_N,), np.float32)
+            soc_total_resampled = np.empty((SPARSE_M09_N,), np.float32)
             for i in range(0, SPARSE_M09_N):
                 value = 0
+                soc = 0
                 count = 0
                 for j in range(0, M01_NESTED_IN_M09):
                     k = (M01_NESTED_IN_M09 * i) + j
+                    pft = PFT[k]
+                    if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+                        continue # Skip invalid PFTs
                     value += rh_total[k]
+                    soc += soc_total[k]
                     count += 1
+                if count == 0:
+                    continue
                 value /= count
+                soc /= count
                 rh_total_resampled[i] = value
+                soc_total_resampled[i] = soc
             # Write a flat (1D) file or inflate the file and then write
             if config['model']['output_format'] == 'M09land':
                 rh_total_resampled.tofile(
@@ -192,6 +203,9 @@ def main(config_file = None):
                 filename = ('%s/L4Cython_RH_%s_M09.flt32' % (config['model']['output_dir'], date))\
                     .encode('UTF-8')
                 write_inflated(filename, rh_total_resampled)
+                filename = ('%s/L4Cython_SOC_%s_M09.flt32' % (config['model']['output_dir'], date))\
+                    .encode('UTF-8')
+                write_inflated(filename, soc_total_resampled)
         else:
             OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
             OUT_M01.tofile(

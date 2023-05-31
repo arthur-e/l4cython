@@ -8,7 +8,7 @@ load the state data.
 
 Required data:
 
-- Surface soil wetness ("SMSF"), in proportion units [0,1]
+- Surface soil wetness ("SMSF"), in percentage units [0,100]
 - Soil temperature, in degrees K
 '''
 
@@ -46,8 +46,8 @@ cdef:
 cdef BPLUT PARAMS
 # NOTE: Must have an (arbitrary) value in 0th position to avoid overflow of
 #   indexing (as PFT=0 is not used and C starts counting at 0)
-PARAMS.smsf0[:] = [0, 0.0, 0.0, 1.5, 0.0, 0.0, 0.0, 11.3, 0.0]
-PARAMS.smsf1[:] = [0, 30.1, 30.1, 35.1, 30.7, 75.4, 68.0, 30.1, 30.1]
+PARAMS.smsf0[:] = [0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+PARAMS.smsf1[:] = [0, 25.0, 94.0, 42.3, 35.8, 44.9, 52.9, 25.0, 25.0]
 PARAMS.tsoil[:] = [0, 238.17, 422.77, 233.94, 246.48, 154.91, 366.14, 242.47, 265.06]
 PARAMS.cue[:] = [0, 0.687, 0.469, 0.755, 0.799, 0.649, 0.572, 0.708, 0.705]
 PARAMS.f_metabolic[:] = [0, 0.49, 0.71, 0.67, 0.67, 0.62, 0.76, 0.78, 0.78]
@@ -87,8 +87,7 @@ def main(config_file = None):
     for step in tqdm(range(num_steps)):
         date = date_start + datetime.timedelta(days = step)
         date = date.strftime('%Y%m%d')
-        # Convert to percentage units
-        smsf = 100 * np.fromfile(
+        smsf = np.fromfile(
             config['data']['drivers']['smsf'] % date, dtype = np.float32)
         tsoil = np.fromfile(
             config['data']['drivers']['tsoil'] % date, dtype = np.float32)
