@@ -100,6 +100,7 @@ def main(config_file = None):
         Py_ssize_t j
         Py_ssize_t k
         Py_ssize_t pft
+        char* ofname # Output filename
         float* rh0
         float* rh1
         float* rh2
@@ -175,37 +176,16 @@ def main(config_file = None):
 
         # If averaging from 1-km to 9-km resolution is requested...
         if config['model']['output_format'] in ('M09', 'M09land'):
-            rh_total_resampled = np.empty((SPARSE_M09_N,), np.float32)
-            soc_total_resampled = np.empty((SPARSE_M09_N,), np.float32)
-            for i in range(0, SPARSE_M09_N):
-                value = 0
-                soc = 0
-                count = 0
-                for j in range(0, M01_NESTED_IN_M09):
-                    k = (M01_NESTED_IN_M09 * i) + j
-                    pft = PFT[k]
-                    if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
-                        continue # Skip invalid PFTs
-                    value += rh_total[k]
-                    soc += soc_total[k]
-                    count += 1
-                if count == 0:
-                    continue
-                value /= count
-                soc /= count
-                rh_total_resampled[i] = value
-                soc_total_resampled[i] = soc
-            # Write a flat (1D) file or inflate the file and then write
-            if config['model']['output_format'] == 'M09land':
-                rh_total_resampled.tofile(
-                    '%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
-            elif config['model']['output_format'] == 'M09':
-                filename = ('%s/L4Cython_RH_%s_M09.flt32' % (config['model']['output_dir'], date))\
-                    .encode('UTF-8')
-                write_inflated(filename, rh_total_resampled)
-                filename = ('%s/L4Cython_SOC_%s_M09.flt32' % (config['model']['output_dir'], date))\
-                    .encode('UTF-8')
-                write_inflated(filename, soc_total_resampled)
+            fmt = config['model']['output_format']
+            inflated = 1 if fmt == 'M09' else 0
+            output_filename = ('%s/L4Cython_RH_%s_%s.flt32' % (config['model']['output_dir'], date, fmt))\
+                .encode('UTF-8')
+            ofname = output_filename
+            write_resampled(output_filename, rh_total, inflated)
+            output_filename = ('%s/L4Cython_SOC_%s_%s.flt32' % (config['model']['output_dir'], date, fmt))\
+                .encode('UTF-8')
+            ofname = output_filename
+            write_resampled(output_filename, soc_total, inflated)
         else:
             OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
             OUT_M01.tofile(
@@ -256,3 +236,36 @@ def load_state(config):
     fclose(fid)
     for i in range(SPARSE_M01_N):
         NPP[i] = NPP[i] / 365
+
+
+cdef void write_resampled(bytes output_filename, float* array_data, int inflated = 1):
+    '''
+    Resamples a 1-km array to 9-km, then writes the output to a file.
+
+    Parameters
+    ----------
+    output_filename : bytes
+    array_data : *float
+    inflated : int
+        1 if the output array should be inflated to a 2D global EASE-Grid 2.0
+    '''
+    data_resampled = np.empty((SPARSE_M09_N,), np.float32)
+    for i in range(0, SPARSE_M09_N):
+        value = 0
+        count = 0
+        for j in range(0, M01_NESTED_IN_M09):
+            k = (M01_NESTED_IN_M09 * i) + j
+            pft = PFT[k]
+            if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+                continue # Skip invalid PFTs
+            value += array_data[k]
+            count += 1
+        if count == 0:
+            continue
+        value /= count
+        data_resampled[i] = value
+    # Write a flat (1D) file or inflate the file and then write
+    if inflated == 0:
+        data_resampled.tofile(output_filename.decode('UTF-8'))
+    else:
+        write_inflated(output_filename, data_resampled)
