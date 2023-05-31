@@ -33,7 +33,6 @@ import datetime
 import json
 import numpy as np
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
-from libc.stdlib cimport free, calloc
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint

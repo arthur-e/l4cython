@@ -12,7 +12,7 @@ import numpy as np
 from libc.stdlib cimport free, calloc
 from libc.stdio cimport fopen, fread, fclose, fwrite
 from l4cython.utils cimport open_fid
-from l4cython.utils.fixtures import SPARSE_M09_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_INT16, DFNT_INT32, DFNT_UINT16, READ, WRITE
+from l4cython.utils.fixtures import SPARSE_M09_N, SPARSE_M01_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_INT16, DFNT_INT32, DFNT_UINT16, READ, WRITE
 from l4cython.utils.spland cimport spland_ref_struct, spland_inflate_9km, spland_inflate_init_9km, spland_inflate_1km, spland_inflate_init_1km, spland_load_9km_rc
 # Implicit importing of inflate() function from mkgrid.pxd
 
@@ -157,6 +157,54 @@ def inflate_file(filename, grid = 'M09'):
     fclose(fid)
     free(flat_array)
     free(grid_array)
+
+
+def write_deflated(output_filename, grid_numpy_array):
+    '''
+    Given a gridded (2D) array as a NumPy array, deflates the array to the
+    flat (1D or "sparse land") format and writes to a file. This function
+    works by writing the NumPy array to a temporary file, then having C's
+    low-level `fread()` read back the array as bytes. Then, we can properly
+    deflate the file and write to disk. This is necessary because `deflate()`
+    only works for C arrays.
+
+    For now, only NumPy arrays with 1-km elements should be passed.
+
+    Parameters
+    ----------
+    output_filename : str
+    grid_numpy_array : numpy.ndarray
+    '''
+    cdef:
+        char* fname
+        char* ofname
+        unsigned char* grid_array
+        unsigned char* deflated_array
+    in_bytes = sizeof(float) * NCOL1KM * NROW1KM
+    out_bytes = sizeof(float) * SPARSE_M01_N
+    grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    deflated_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
+
+    tmp = tempfile.NamedTemporaryFile()
+    grid_numpy_array.tofile(tmp.name) # Write to memory
+    # Get the filename as C bytes, then open for reading
+    tmp_filename = tmp.name.encode('UTF-8')
+    fname = tmp_filename
+    fid = open_fid(fname, READ)
+    if fid == NULL:
+        print('ERROR -- Temporary file "%s" not readable' % tmp.name)
+    fread(grid_array, sizeof(unsigned char), <size_t>in_bytes, fid)
+    fclose(fid)
+
+    # Inflate to a 2D grid, then write to file
+    deflated_array = deflate(
+        grid_array, DFNT_FLOAT32, 'M01'.encode('UTF-8'))
+    ofname = output_filename
+    fid = open_fid(ofname, WRITE)
+    fwrite(deflated_array, sizeof(unsigned char), <size_t>out_bytes, fid)
+    fclose(fid)
+    free(grid_array)
+    free(deflated_array)
 
 
 def write_inflated(output_filename, flat_numpy_array):
