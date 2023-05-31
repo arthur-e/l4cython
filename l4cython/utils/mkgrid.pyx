@@ -18,10 +18,79 @@ from l4cython.utils.spland cimport spland_ref_struct, spland_inflate_9km, spland
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
+def deflate_file(filename, grid = 'M09'):
+    '''
+    Converts a gridded (2D), binary file to a deflated (1D or "sparse land")
+    representation of the global EASE-Grid 2.0. The output file is written to
+    the same directory as the input file.
+
+    Parameters
+    ----------
+    filename : str
+        The input filename, which should contain a substring like "M09"
+        or "M01"
+    grid : str
+        The pixel size of the gridded data, e.g., "M09" for 9-km data or
+        "M01" for 1-km data
+    '''
+    # NOTE: The flat_array and grid_array are handled as uint8 regardless of
+    #   what the actual data type is; it just works this way in spland.c
+    cdef:
+        unsigned char* grid_array
+
+    # Assume 9-km grid, this also helps avoid warnings when compiling
+    in_bytes = sizeof(float) * NCOL9KM * NROW9KM
+    out_bytes = sizeof(float) * SPARSE_M09_N
+    if grid == 'M01':
+        in_bytes = sizeof(float) * NCOL1KM * NROW1KM
+        out_bytes = sizeof(float) * SPARSE_M09_N * 81
+    grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+
+    # Convert the unicode filename to a C string
+    filename_byte_string = filename.encode('UTF-8')
+    cdef char* fname = filename_byte_string
+
+    # Infer data type by file extension, e.g., *.flt32, *.int32, etc.
+    ext = filename_byte_string.decode('UTF-8').split('.').pop()
+    data_type = DFNT_FLOAT32
+    if ext == 'int32':
+        data_type = DFNT_INT32
+    elif ext == 'uint16':
+        data_type = DFNT_UINT16
+
+    # Read in the inflated array
+    fid = fopen(fname, 'rb')
+    if fid == NULL:
+        print('ERROR -- File not found: %s' % filename_byte_string.decode('UTF-8'))
+    fread(grid_array, sizeof(unsigned char), <size_t>in_bytes, fid)
+    fclose(fid)
+
+    # Inflate the output array
+    grid = grid.encode('UTF-8')
+    cdef char* c_grid = grid
+    flat_array = deflate(grid_array, data_type, c_grid)
+
+    output_filename = filename_byte_string\
+        .decode('UTF-8')\
+        .replace('M01', 'M01land')\
+        .replace('M09', 'M09land')\
+        .encode('UTF-8')
+    cdef char* ofname = output_filename
+
+    # Write the output file
+    fid = fopen(ofname, 'wb')
+    fwrite(flat_array, sizeof(unsigned char), <size_t>out_bytes, fid)
+    fclose(fid)
+    free(flat_array)
+    free(grid_array)
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def inflate_file(filename, grid = 'M09'):
     '''
     Converts a flat (1D or "land" format), binary file to an inflated (2D)
-    representation on the global EASE-Grid 2.0. The output file is written to
+    representation of the global EASE-Grid 2.0. The output file is written to
     the same directory as the input file.
 
     Note that the inflation code in spland.c can mess up NoData values; values
