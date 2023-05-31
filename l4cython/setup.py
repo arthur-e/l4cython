@@ -18,8 +18,9 @@ reco = Extension(
     libraries = ['dfalt'],
     include_dirs = ['/usr/include', '/usr/include/hdf'],
     extra_compile_args = [
-        '-DHAVE_HDF4', '-ldfalt', '-Wno-maybe-uninitialized'
-    ]
+        '-fopenmp', '-DHAVE_HDF4', '-ldfalt', '-Wno-maybe-uninitialized'
+    ],
+    extra_link_args = ['-fopenmp']
 )
 
 spinup = Extension(

@@ -34,13 +34,19 @@ import json
 import numpy as np
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from libc.stdlib cimport free, calloc
+from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint
 from l4cython.utils cimport open_fid, to_numpy
 from l4cython.utils.mkgrid cimport inflate
 from l4cython.utils.mkgrid import write_inflated
-from l4cython.utils.fixtures import SPARSE_M09_N, SPARSE_M01_N, M01_NESTED_IN_M09, NCOL9KM, NROW9KM, DFNT_FLOAT32, READ, WRITE
+from l4cython.utils.fixtures import NCOL9KM, NROW9KM, DFNT_FLOAT32, READ, WRITE
 from tqdm import tqdm
+
+# These are repeated here to facilitate multiprocessing (can't be Python numbers)
+DEF M01_NESTED_IN_M09 = 9 * 9
+DEF SPARSE_M09_N = 1664040 # Number of grid cells in sparse ("land") arrays
+DEF SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
 
 cdef:
     unsigned char* PFT
@@ -127,10 +133,6 @@ def main(config_file = None):
     with open(config_file) as file:
         config = json.load(file)
 
-    # If an inflated (2D) representation is requested, allocate space
-    if config['model']['output_format'] == 'M09':
-        inflated_array = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M09_N)
-
     load_state(config)
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
     num_steps = int(config['daily_steps'])
@@ -147,9 +149,9 @@ def main(config_file = None):
         fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
         # Iterate over each 9-km pixel
-        for i in range(0, SPARSE_M09_N):
+        for i in prange(SPARSE_M09_N, nogil = True):
             # Iterate over each nested 1-km pixel
-            for j in range(0, M01_NESTED_IN_M09):
+            for j in range(M01_NESTED_IN_M09):
                 # Hence, (i) indexes the 9-km pixel and k the 1-km pixel
                 k = (M01_NESTED_IN_M09 * i) + j
                 pft = PFT[k]
@@ -168,7 +170,7 @@ def main(config_file = None):
                 rh_total[k] = rh0[k] + rh1[k] + rh2[k]
                 if rh_total[k] < 0:
                     rh_total[k] = 0
-                # Calculate change in SOC pools; NPP[i] is daily litterfall
+                # Calculate change in SOC pools; NPP[k] is daily litterfall
                 SOC0[k] += (NPP[k] * PARAMS.f_metabolic[pft]) - rh0[k]
                 SOC1[k] += (NPP[k] * (1 - PARAMS.f_metabolic[pft])) - rh1[k]
                 SOC2[k] += (PARAMS.f_structural[pft] * rh1[k]) - rh2[k]
