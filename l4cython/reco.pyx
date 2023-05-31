@@ -38,7 +38,7 @@ from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from respiration cimport BPLUT, arrhenius, linear_constraint
 from utils cimport open_fid, to_numpy
-from utils.mkgrid import inflate
+from utils.mkgrid import inflate_file
 from tqdm import tqdm
 
 DEF READ = 'rb'.encode('UTF-8') # Binary read mode as byte string
@@ -183,7 +183,7 @@ def main(config_file = None):
             rh_total_resampled.tofile(
                 '%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
             if config['debug']:
-                inflate('%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
+                inflate_file('%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
         else:
             OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
             OUT_M01.tofile(

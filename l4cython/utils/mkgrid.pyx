@@ -3,7 +3,7 @@
 # distutils: include_dirs = ["src/"]
 
 '''
-Tools for manipulating inflated or deflated EASE-Grid 2.0 array data.
+Tools for manipulating grid_array or flat_array EASE-Grid 2.0 array data.
 '''
 
 import cython
@@ -31,13 +31,66 @@ DEF DFNT_INT64  = 26
 DEF DFNT_UINT64 = 27
 
 
+cdef unsigned char* inflate(unsigned char* flat_array, unsigned short data_type, bytes grid):
+    '''
+    The inflated array can be written to an output file using, e.g.:
+
+        out_bytes = sizeof(float) * number_of_pixels
+        fwrite(grid_array, sizeof(unsigned char), <size_t>out_bytes, fid)
+
+    Parameters
+    ----------
+    flat_array : unsigned char*
+        The flattened (1D or "sparse land") array
+    data_type : unsigned short
+        The numeric code representing the data type
+    grid : bytes
+        The pixel size of the gridded data, e.g., "M09" for 9-km data or
+        "M01" for 1-km data
+    '''
+    # NOTE: The flat_array and grid_array are handled as uint8 regardless of
+    #   what the actual data type is; it just works this way in spland.c
+    cdef:
+        spland_ref_struct lookup
+        unsigned char* grid_array
+
+    # Assume 9-km grid, this also helps avoid warnings when compiling
+    in_bytes = sizeof(float) * SPARSE_N
+    out_bytes = sizeof(float) * NCOL9KM * NROW9KM
+    if grid.decode('UTF-8') == 'M01':
+        in_bytes = sizeof(float) * SPARSE_N * 81
+        out_bytes = sizeof(float) * NCOL1KM * NROW1KM
+
+    grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
+    # NOTE: Using 9-km row/col for both 9-km and 1-km nested grids
+    lookup.row = <unsigned short*>calloc(sizeof(unsigned short), SPARSE_N);
+    lookup.col = <unsigned short*>calloc(sizeof(unsigned short), SPARSE_N);
+
+    # Load the index lookup file
+    spland_load_9km_rc(&lookup)
+
+    # Inflate the output array
+    if grid.decode('UTF-8') == 'M09':
+        spland_inflate_init_9km(&grid_array, data_type);
+        spland_inflate_9km(lookup, &flat_array, &grid_array, data_type)
+    elif grid.decode('UTF-8') == 'M01':
+        spland_inflate_init_1km(&grid_array, data_type);
+        spland_inflate_1km(lookup, &flat_array, &grid_array, data_type)
+    return grid_array
+
+
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def inflate(filename, grid = 'M09'):
+def inflate_file(filename, grid = 'M09'):
     '''
     Converts a flat (1D or "land" format), binary file to an inflated (2D)
     representation on the global EASE-Grid 2.0. The output file is written to
     the same directory as the input file.
+
+    Note that the inflation code in spland.c can mess up NoData values; values
+    like -9999 become much larger (more negative). This may be because it
+    handles all data as uint8 (unsigned char). I have no interest in debugging
+    spland.c as it was written by someone else.
 
     Parameters
     ----------
@@ -48,10 +101,10 @@ def inflate(filename, grid = 'M09'):
         The pixel size of the gridded data, e.g., "M09" for 9-km data or
         "M01" for 1-km data
     '''
+    # NOTE: The flat_array and grid_array are handled as uint8 regardless of
+    #   what the actual data type is; it just works this way in spland.c
     cdef:
-        spland_ref_struct lookup
-        unsigned char* deflated
-        unsigned char* inflated
+        unsigned char* flat_array
 
     # Assume 9-km grid, this also helps avoid warnings when compiling
     in_bytes = sizeof(float) * SPARSE_N
@@ -59,12 +112,7 @@ def inflate(filename, grid = 'M09'):
     if grid == 'M01':
         in_bytes = sizeof(float) * SPARSE_N * 81
         out_bytes = sizeof(float) * NCOL1KM * NROW1KM
-
-    deflated = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-    inflated = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
-    # NOTE: Using 9-km row/col for both 9-km and 1-km nested grids
-    lookup.row = <unsigned short*>calloc(sizeof(unsigned short), SPARSE_N);
-    lookup.col = <unsigned short*>calloc(sizeof(unsigned short), SPARSE_N);
+    flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
 
     # Convert the unicode filename to a C string
     filename_byte_string = filename.encode('UTF-8')
@@ -78,23 +126,17 @@ def inflate(filename, grid = 'M09'):
     elif ext == 'uint16':
         data_type = DFNT_UINT16
 
-    # Load the index lookup file
-    spland_load_9km_rc(&lookup)
-
     # Read in the deflated array
     fid = fopen(fname, 'rb')
     if fid == NULL:
         print('ERROR -- File not found: %s' % filename_byte_string.decode('UTF-8'))
-    fread(deflated, sizeof(unsigned char), <size_t>in_bytes, fid)
+    fread(flat_array, sizeof(unsigned char), <size_t>in_bytes, fid)
     fclose(fid)
 
     # Inflate the output array
-    if grid == 'M09':
-        spland_inflate_init_9km(&inflated, data_type);
-        spland_inflate_9km(lookup, &deflated, &inflated, data_type)
-    elif grid == 'M01':
-        spland_inflate_init_1km(&inflated, data_type);
-        spland_inflate_1km(lookup, &deflated, &inflated, data_type)
+    grid = grid.encode('UTF-8')
+    cdef char* c_grid = grid
+    grid_array = inflate(flat_array, data_type, c_grid)
 
     output_filename = filename_byte_string\
         .decode('UTF-8')\
@@ -105,8 +147,7 @@ def inflate(filename, grid = 'M09'):
 
     # Write the output file
     fid = fopen(ofname, 'wb')
-    fwrite(inflated, sizeof(unsigned char), <size_t>out_bytes, fid)
+    fwrite(grid_array, sizeof(unsigned char), <size_t>out_bytes, fid)
     fclose(fid)
-
-    free(deflated)
-    free(inflated)
+    free(flat_array)
+    free(grid_array)
