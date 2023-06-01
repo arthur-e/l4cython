@@ -12,7 +12,7 @@ import numpy as np
 from libc.stdlib cimport free, calloc
 from libc.stdio cimport fopen, fread, fclose, fwrite
 from l4cython.utils cimport open_fid
-from l4cython.utils.fixtures import SPARSE_M09_N, SPARSE_M01_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_INT16, DFNT_INT32, DFNT_UINT16, READ, WRITE
+from l4cython.utils.fixtures import SPARSE_M09_N, SPARSE_M01_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32, READ, WRITE
 from l4cython.utils.spland cimport spland_ref_struct, spland_inflate_9km, spland_inflate_init_9km, spland_inflate_1km, spland_inflate_init_1km, spland_load_9km_rc
 # Implicit importing of inflate() function from mkgrid.pxd
 
@@ -159,7 +159,8 @@ def inflate_file(filename, grid = 'M09'):
     free(grid_array)
 
 
-def write_deflated(output_filename, grid_numpy_array):
+def write_deflated(
+        output_filename, grid_numpy_array, data_type = DFNT_FLOAT32):
     '''
     Given a gridded (2D) array as a NumPy array, deflates the array to the
     flat (1D or "sparse land") format and writes to a file. This function
@@ -174,14 +175,32 @@ def write_deflated(output_filename, grid_numpy_array):
     ----------
     output_filename : str
     grid_numpy_array : numpy.ndarray
+    data_type : int
+        Defaults to `DFNT_FLOAT32`
     '''
     cdef:
         char* fname
         char* ofname
         unsigned char* grid_array
         unsigned char* deflated_array
-    in_bytes = sizeof(float) * NCOL1KM * NROW1KM
-    out_bytes = sizeof(float) * SPARSE_M01_N
+    if data_type == DFNT_FLOAT32:
+        sz = sizeof(float)
+    elif data_type == DFNT_FLOAT64:
+        sz = sizeof(double)
+    elif data_type == DFNT_INT8:
+        sz = sizeof(char)
+    elif data_type == DFNT_UINT8:
+        sz = sizeof(unsigned char)
+    elif data_type == DFNT_INT16:
+        sz = sizeof(signed short)
+    elif data_type == DFNT_UINT16:
+        sz = sizeof(unsigned short)
+    elif data_type == DFNT_INT32:
+        sz = sizeof(signed int)
+    elif data_type == DFNT_UINT32:
+        sz = sizeof(unsigned int)
+    in_bytes = sz * NCOL1KM * NROW1KM
+    out_bytes = sz * SPARSE_M01_N
     grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
     deflated_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
 
@@ -197,8 +216,7 @@ def write_deflated(output_filename, grid_numpy_array):
     fclose(fid)
 
     # Inflate to a 2D grid, then write to file
-    deflated_array = deflate(
-        grid_array, DFNT_FLOAT32, 'M01'.encode('UTF-8'))
+    deflated_array = deflate(grid_array, data_type, 'M01'.encode('UTF-8'))
     ofname = output_filename
     fid = open_fid(ofname, WRITE)
     fwrite(deflated_array, sizeof(unsigned char), <size_t>out_bytes, fid)
@@ -207,7 +225,8 @@ def write_deflated(output_filename, grid_numpy_array):
     free(deflated_array)
 
 
-def write_inflated(output_filename, flat_numpy_array):
+def write_inflated(
+        output_filename, flat_numpy_array, data_type = DFNT_FLOAT32):
     '''
     Given a flat (1D or "sparse land") array as a NumPy array, inflates the
     array to the global, 9-km grid and writes to a file. This function works
@@ -223,14 +242,32 @@ def write_inflated(output_filename, flat_numpy_array):
     ----------
     output_filename : str
     flat_numpy_array : numpy.ndarray
+    data_type : int
+        Defaults to `DFNT_FLOAT32`
     '''
     cdef:
         char* fname
         char* ofname
         unsigned char* flat_array
         unsigned char* inflated_array
-    in_bytes = sizeof(float) * SPARSE_M09_N
-    out_bytes = sizeof(float) * NCOL9KM * NROW9KM
+    if data_type == DFNT_FLOAT32:
+        sz = sizeof(float)
+    elif data_type == DFNT_FLOAT64:
+        sz = sizeof(double)
+    elif data_type == DFNT_INT8:
+        sz = sizeof(char)
+    elif data_type == DFNT_UINT8:
+        sz = sizeof(unsigned char)
+    elif data_type == DFNT_INT16:
+        sz = sizeof(signed short)
+    elif data_type == DFNT_UINT16:
+        sz = sizeof(unsigned short)
+    elif data_type == DFNT_INT32:
+        sz = sizeof(signed int)
+    elif data_type == DFNT_UINT32:
+        sz = sizeof(unsigned int)
+    in_bytes = sz * NCOL1KM * NROW1KM
+    out_bytes = sz * SPARSE_M01_N
     flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
     inflated_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
 
