@@ -229,8 +229,8 @@ def write_inflated(
         output_filename, flat_numpy_array, data_type = DFNT_FLOAT32):
     '''
     Given a flat (1D or "sparse land") array as a NumPy array, inflates the
-    array to the global, 9-km grid and writes to a file. This function works
-    by writing the NumPy array to a temporary file, then having C's low-level
+    array to the global grid and writes to a file. This function works by
+    writing the NumPy array to a temporary file, then having C's low-level
     `fread()` read back the array as bytes. Then, we can properly inflate the
     file and write to disk. This is necessary because `inflate()` only works
     for C arrays.
@@ -238,9 +238,14 @@ def write_inflated(
     For now, only NumPy arrays with 9-km elements should be passed; there is
     no support implemented for writing inflated 1-km arrays.
 
+    NOTE: `output_filename` is expected as bytes, not a string; if starting
+    with a string, use:
+
+        write_inflated(filename.encode('UTF-8'), ...)
+
     Parameters
     ----------
-    output_filename : str
+    output_filename : bytes
     flat_numpy_array : numpy.ndarray
     data_type : int
         Defaults to `DFNT_FLOAT32`

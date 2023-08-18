@@ -2,9 +2,10 @@
 
 '''
 SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
-Version 7 state and parameters, at 9-km spatial resolution. The `main()`
-routine is optimized for model execution but it may take several seconds to
-load the state data.
+Version 7 state and parameters, at 9-km spatial resolution.
+
+Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): About 1s per data-day for
+flat ("M09land") output, about 9s per data-day for 2D ("M09") output.
 
 Required data:
 
@@ -18,6 +19,7 @@ import json
 import numpy as np
 from tqdm import tqdm
 from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint
+from l4cython.utils.mkgrid import write_inflated
 
 # Number of grid cells in sparse ("land") arrays
 DEF SPARSE_N = 1664040
@@ -35,7 +37,7 @@ cdef:
     float SOC0[SPARSE_N]
     float SOC1[SPARSE_N]
     float SOC2[SPARSE_N]
-    float NPP[SPARSE_N]
+    float LITTERFALL[SPARSE_N]
 
 # L4_C BPLUT Version 7 (Vv7042, Vv7040, Nature Run v10)
 # NOTE: BPLUT is initialized here because we *need* it to be a C struct and
@@ -105,14 +107,18 @@ def main(config_file = None):
             #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
             rh1[i] = rh1[i] * (1 - PARAMS.f_structural[pft])
             rh_total[i] = rh0[i] + rh1[i] + rh2[i]
-            # Calculate change in SOC pools; NPP[i] is daily litterfall
-            SOC0[i] += (NPP[i] * PARAMS.f_metabolic[pft]) - rh0[i]
-            SOC1[i] += (NPP[i] * (1 - PARAMS.f_metabolic[pft])) - rh1[i]
+            # Calculate change in SOC pools
+            SOC0[i] += (LITTERFALL[i] * PARAMS.f_metabolic[pft]) - rh0[i]
+            SOC1[i] += (LITTERFALL[i] * (1 - PARAMS.f_metabolic[pft])) - rh1[i]
             SOC2[i] += (PARAMS.f_structural[pft] * rh1[i]) - rh2[i]
         # NOTE: Writing more than one array per iteration of this loop will
         #   cause a segmenation fault
-        np.array(rh_total).astype(np.float32).tofile(
-            '%s/L4Cython_RH_%s_M09land.flt32' % (config['model']['output_dir'], date))
+        output_filename = '%s/L4Cython_RH_%s_M09.flt32' % (config['model']['output_dir'], date)
+        if config['model']['output_format'] == 'M09land':
+            np.array(rh_total).astype(np.float32)\
+                .tofile(output_filename.replace('M09', 'M09land'))
+        else:
+            write_inflated(output_filename.encode('UTF-8'), rh_total)
 
 
 def load_state(config):
@@ -128,4 +134,4 @@ def load_state(config):
     SOC0[:] = np.fromfile(config['data']['SOC'][0], np.float32)
     SOC1[:] = np.fromfile(config['data']['SOC'][1], np.float32)
     SOC2[:] = np.fromfile(config['data']['SOC'][2], np.float32)
-    NPP[:] = np.fromfile(config['data']['NPP_annual_sum'], np.float32) / 365
+    LITTERFALL[:] = np.fromfile(config['data']['NPP_annual_sum'], np.float32) / 365

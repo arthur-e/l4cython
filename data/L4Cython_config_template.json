@@ -5,6 +5,7 @@
   "daily_steps": 1,
 
   "data": {
+    "porosity": "SMAP_L4_SM_lmc_00000000T000000_Vv7032_001.h5",
     "PFT_map": "SMAP_L4C_PFT_map_M09land.uint8",
     "SOC": [
       "tcf_natv91_C0_M09land_2015089.flt32",
@@ -19,7 +20,8 @@
   },
 
   "model": {
-    "output_dir": ""
+    "output_dir": "",
+    "output_format": "M09 or M09land, where the latter would indicate a flat 1D output array"
   }
 
 }

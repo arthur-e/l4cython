@@ -16,11 +16,14 @@
     "drivers": {
       "smsf": "/anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_smsf_M09land_%s.flt32",
       "tsoil": "/anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_tsoil_M09land_%s.flt32"
-    }
+    },
+    "SMAP_mdl": "/media/arthur.endsley/raid/SMAP/L4_C/Vv7042/SMAP_L4_C_mdl_%sT000000_Vv7042_001.h5"
   },
 
   "model": {
-    "output_dir": "/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230523"
+    "output_dir": "/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230523",
+    "output_fields": ["RH", "NEE"],
+    "output_format": "M09land"
   }
 
 }
