@@ -4,22 +4,27 @@
 SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
 Version 7 state and parameters, at 9-km spatial resolution.
 
-Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): About 1s per data-day for
-flat ("M09land") output, about 9s per data-day for 2D ("M09") output.
+Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): About 5s per data-day for
+flat ("M09land") output.
 
-Required data:
+Required daily driver data:
 
 - Surface soil wetness ("SMSF"), in percentage units [0,100]
 - Soil temperature, in degrees K
+- Gross primary productivity (GPP), in [g C m-2 day-1]
 '''
 
 import cython
 import datetime
 import json
 import numpy as np
-from tqdm import tqdm
+from libc.stdio cimport FILE, fread, fclose
+from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint
+from l4cython.utils cimport open_fid
 from l4cython.utils.mkgrid import write_inflated
+from l4cython.utils.fixtures import READ
+from tqdm import tqdm
 
 # Number of grid cells in sparse ("land") arrays
 DEF SPARSE_N = 1664040
@@ -31,13 +36,18 @@ cdef float TSOIL2 = 227.13 # deg K
 cdef float KSTRUCT = 0.4 # Muliplier *against* base decay rate
 cdef float KRECAL = 0.0093
 
-# The PFT map
-cdef unsigned char PFT[SPARSE_N]
 cdef:
-    float SOC0[SPARSE_N]
-    float SOC1[SPARSE_N]
-    float SOC2[SPARSE_N]
-    float LITTERFALL[SPARSE_N]
+    FILE* fid
+    unsigned char* PFT # The PFT map
+    float* SOC0
+    float* SOC1
+    float* SOC2
+    float* LITTERFALL
+PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_N)
+SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+LITTERFALL = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
 
 # L4_C BPLUT Version 7 (Vv7042, Vv7040, Nature Run v10)
 # NOTE: BPLUT is initialized here because we *need* it to be a C struct and
@@ -70,22 +80,33 @@ def main(config_file = None):
     '''
     cdef:
         Py_ssize_t i
-        float rh0[SPARSE_N]
-        float rh1[SPARSE_N]
-        float rh2[SPARSE_N]
-        float w_mult[SPARSE_N]
-        float t_mult[SPARSE_N]
+        float* rh0
+        float* rh1
+        float* rh2
+        float* gpp
+        float* w_mult
+        float* t_mult
+    rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+
     # Read in configuration file, then load state data
     if config_file is None:
         config_file = '../data/L4Cython_RECO_M09_config.json'
     with open(config_file) as file:
         config = json.load(file)
-    load_state(config)
-    # We leave rh_total as a NumPy array because it is one we want to
-    #   write to disk
+
+    load_state(config) # Load PFT map, SOC state, etc.
+
+    # We leave these as NumPy arrays because they're easier to write to disk
     rh_total = np.full((SPARSE_N,), np.nan, dtype = np.float32)
+    nee = np.full((SPARSE_N,), np.nan, dtype = np.float32)
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
     num_steps = int(config['daily_steps'])
+
     for step in tqdm(range(num_steps)):
         date = date_start + datetime.timedelta(days = step)
         date = date.strftime('%Y%m%d')
@@ -93,6 +114,11 @@ def main(config_file = None):
             config['data']['drivers']['smsf'] % date, dtype = np.float32)
         tsoil = np.fromfile(
             config['data']['drivers']['tsoil'] % date, dtype = np.float32)
+        # Read in the GPP data
+        fid = open_fid((config['data']['drivers']['GPP'] % date).encode('UTF-8'), READ)
+        fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+        fclose(fid)
+
         for i in range(0, SPARSE_N):
             pft = int(PFT[i])
             if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
@@ -111,14 +137,34 @@ def main(config_file = None):
             SOC0[i] += (LITTERFALL[i] * PARAMS.f_metabolic[pft]) - rh0[i]
             SOC1[i] += (LITTERFALL[i] * (1 - PARAMS.f_metabolic[pft])) - rh1[i]
             SOC2[i] += (PARAMS.f_structural[pft] * rh1[i]) - rh2[i]
-        # NOTE: Writing more than one array per iteration of this loop will
-        #   cause a segmenation fault
-        output_filename = '%s/L4Cython_RH_%s_M09.flt32' % (config['model']['output_dir'], date)
+            # NEE is equivalent to RH - NPP; can be an expensive calculation
+            if 'NEE' in config['model']['output_fields']:
+                nee[i] = rh_total[i] - (gpp[i] * PARAMS.cue[pft])
+        # Write datasets to disk
+        rh_filename = '%s/L4Cython_RH_%s_M09.flt32' % (config['model']['output_dir'], date)
+        nee_filename = '%s/L4Cython_NEE_%s_M09.flt32' % (config['model']['output_dir'], date)
         if config['model']['output_format'] == 'M09land':
-            np.array(rh_total).astype(np.float32)\
-                .tofile(output_filename.replace('M09', 'M09land'))
+            if 'RH' in config['model']['output_fields']:
+                np.array(rh_total).astype(np.float32)\
+                    .tofile(rh_filename.replace('M09', 'M09land'))
+            if 'NEE' in config['model']['output_fields']:
+                np.array(nee).astype(np.float32)\
+                    .tofile(nee_filename.replace('M09', 'M09land'))
         else:
-            write_inflated(output_filename.encode('UTF-8'), rh_total)
+            if 'RH' in config['model']['output_fields']:
+                write_inflated(rh_filename.encode('UTF-8'), rh_total)
+            if 'NEE' in config['model']['output_fields']:
+                write_inflated(nee_filename.encode('UTF-8'), nee)
+        PyMem_Free(PFT)
+        PyMem_Free(SOC0)
+        PyMem_Free(SOC1)
+        PyMem_Free(SOC2)
+        PyMem_Free(LITTERFALL)
+        PyMem_Free(rh0)
+        PyMem_Free(rh1)
+        PyMem_Free(rh2)
+        PyMem_Free(w_mult)
+        PyMem_Free(t_mult)
 
 
 def load_state(config):
@@ -130,8 +176,27 @@ def load_state(config):
     config : dict
         The configuration data dictionary
     '''
-    PFT[:] = np.fromfile(config['data']['PFT_map'], np.uint8)
-    SOC0[:] = np.fromfile(config['data']['SOC'][0], np.float32)
-    SOC1[:] = np.fromfile(config['data']['SOC'][1], np.float32)
-    SOC2[:] = np.fromfile(config['data']['SOC'][2], np.float32)
-    LITTERFALL[:] = np.fromfile(config['data']['NPP_annual_sum'], np.float32) / 365
+    # Allocate space, read in 1-km PFT map
+    n_bytes = sizeof(unsigned char)*SPARSE_N
+    fid = open_fid(config['data']['PFT_map'].encode('UTF-8'), READ)
+    fread(PFT, sizeof(unsigned char), <size_t>n_bytes, fid)
+    fclose(fid)
+    # Allocate space for floating-point state datasets
+    n_bytes = sizeof(float)*SPARSE_N
+    # Read in SOC datasets
+    fid = open_fid(config['data']['SOC'][0].encode('UTF-8'), READ)
+    fread(SOC0, sizeof(float), <size_t>n_bytes, fid)
+    fclose(fid)
+    fid = open_fid(config['data']['SOC'][1].encode('UTF-8'), READ)
+    fread(SOC1, sizeof(float), <size_t>n_bytes, fid)
+    fclose(fid)
+    fid = open_fid(config['data']['SOC'][2].encode('UTF-8'), READ)
+    fread(SOC2, sizeof(float), <size_t>n_bytes, fid)
+    fclose(fid)
+    # NOTE: Calculating litterfall as average daily NPP (constant fraction of
+    #   the annual NPP sum)
+    fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
+    fread(LITTERFALL, sizeof(float), <size_t>n_bytes, fid)
+    fclose(fid)
+    for i in range(SPARSE_N):
+        LITTERFALL[i] = LITTERFALL[i] / 365

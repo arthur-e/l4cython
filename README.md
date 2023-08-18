@@ -32,6 +32,23 @@ python setup.py build_ext --inplace
 Troubleshooting
 ----------------------------
 
+**First, distinguish between typed memory views and manual heap allocation:**
+
+```py
+# Typed memory view
+cdef:
+    float rh0[SPARSE_N]
+
+# Heap allocation
+cdef
+    float* rh0
+rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+```
+
+**Here are some tips:**
+
+- **Don't mix typed memory views with manual heap allocation.** They can be used in the same Cython program, but you cannot combine them in a single computation step, it will lead to a segfault.
+
 The debugger `gdb` can be installed from source (needs Python 2 support, which isn't the default):
 
 ```

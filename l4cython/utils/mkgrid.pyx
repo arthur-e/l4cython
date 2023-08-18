@@ -14,7 +14,7 @@ from libc.stdio cimport fopen, fread, fclose, fwrite
 from l4cython.utils cimport open_fid
 from l4cython.utils.fixtures import SPARSE_M09_N, SPARSE_M01_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32, READ, WRITE
 from l4cython.utils.spland cimport spland_ref_struct, spland_inflate_9km, spland_inflate_init_9km, spland_inflate_1km, spland_inflate_init_1km, spland_load_9km_rc
-# Implicit importing of inflate() function from mkgrid.pxd
+# Implicit importing of inflate() and deflate() functions from mkgrid.pxd
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -65,7 +65,7 @@ def deflate_file(filename, grid = 'M09'):
     fread(grid_array, sizeof(unsigned char), <size_t>in_bytes, fid)
     fclose(fid)
 
-    # Inflate the output array
+    # Deflate the output array
     grid = grid.encode('UTF-8')
     cdef char* c_grid = grid
     flat_array = deflate(grid_array, data_type, c_grid)

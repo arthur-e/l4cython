@@ -24,6 +24,7 @@ Developer notes:
 
 Possible improvements:
 
+- [ ] `FILE* fid` is not defined globally
 - [ ] 1-km global grid files will always be ~500 MB in size, without
     compression; try writing the array to an HDF5 file instead.
 '''
