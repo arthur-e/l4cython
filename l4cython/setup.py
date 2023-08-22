@@ -16,7 +16,7 @@ reco = Extension(
     sources = ['reco.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt'],
-    include_dirs = ['/usr/include', '/usr/include/hdf'],
+    include_dirs = ['/usr/include', '/usr/include/hdf', './utils'],
     extra_compile_args = [
         '-fopenmp', '-DHAVE_HDF4', '-ldfalt', '-Wno-maybe-uninitialized'
     ],

@@ -1,8 +1,8 @@
 # cython: language_level=3
 
 from libc.stdlib cimport calloc
-from l4cython.utils.spland cimport spland_ref_struct, spland_inflate_9km, spland_inflate_init_9km, spland_inflate_1km, spland_inflate_init_1km, spland_deflate_9km, spland_deflate_1km, spland_load_9km_rc
-from l4cython.utils.fixtures import SPARSE_M09_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM
+from spland cimport spland_ref_struct, spland_inflate_9km, spland_inflate_init_9km, spland_inflate_1km, spland_inflate_init_1km, spland_deflate_9km, spland_deflate_1km, spland_load_9km_rc
+from fixtures import SPARSE_M09_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM
 
 cdef inline unsigned char* deflate(unsigned char* grid_array, unsigned short data_type, bytes grid):
     # NOTE: The flat_array and grid_array are handled as uint8 regardless of
