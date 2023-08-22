@@ -43,29 +43,30 @@ from l4cython.utils.mkgrid import write_inflated
 from l4cython.utils.fixtures import NCOL9KM, NROW9KM, DFNT_FLOAT32, READ, WRITE
 from tqdm import tqdm
 
-# These are repeated here to facilitate multiprocessing (can't be Python numbers)
-DEF M01_NESTED_IN_M09 = 9 * 9
-DEF SPARSE_M09_N = 1664040 # Number of grid cells in sparse ("land") arrays
-DEF SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
+# EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
+#   can't be Python numbers)
+cdef:
+    int  M01_NESTED_IN_M09 = 9 * 9
+    long SPARSE_M09_N = 1664040 # Number of grid cells in sparse ("land") arrays
+    long SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
+    # Additional Tsoil parameter (fixed for all PFTs)
+    float TSOIL1 = 66.02 # deg K
+    float TSOIL2 = 227.13 # deg K
+    # Additional SOC decay parameters (fixed for all PFTs)
+    float KSTRUCT = 0.4 # Muliplier *against* base decay rate
+    float KRECAL = 0.0093
 
 cdef:
     unsigned char* PFT
     float* SOC0
     float* SOC1
     float* SOC2
-    float* NPP
+    float* LITTERFALL
 PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
 SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-NPP  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-
-# Additional Tsoil parameter (fixed for all PFTs)
-cdef float TSOIL1 = 66.02 # deg K
-cdef float TSOIL2 = 227.13 # deg K
-# Additional SOC decay parameters (fixed for all PFTs)
-cdef float KSTRUCT = 0.4 # Muliplier *against* base decay rate
-cdef float KRECAL = 0.0093
+LITTERFALL  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
 # L4_C BPLUT Version 7 (Vv7042, Vv7040, Nature Run v10)
 # NOTE: BPLUT is initialized here because we *need* it to be a C struct and
@@ -170,9 +171,9 @@ def main(config_file = None):
                 rh_total[k] = rh0[k] + rh1[k] + rh2[k]
                 if rh_total[k] < 0:
                     rh_total[k] = 0
-                # Calculate change in SOC pools; NPP[k] is daily litterfall
-                SOC0[k] += (NPP[k] * PARAMS.f_metabolic[pft]) - rh0[k]
-                SOC1[k] += (NPP[k] * (1 - PARAMS.f_metabolic[pft])) - rh1[k]
+                # Calculate change in SOC pools; LITTERFALL[k] is daily litterfall
+                SOC0[k] += (LITTERFALL[k] * PARAMS.f_metabolic[pft]) - rh0[k]
+                SOC1[k] += (LITTERFALL[k] * (1 - PARAMS.f_metabolic[pft])) - rh1[k]
                 SOC2[k] += (PARAMS.f_structural[pft] * rh1[k]) - rh2[k]
                 soc_total[k] = SOC0[k] + SOC1[k] + SOC2[k]
 
@@ -196,7 +197,7 @@ def main(config_file = None):
     PyMem_Free(SOC0)
     PyMem_Free(SOC1)
     PyMem_Free(SOC2)
-    PyMem_Free(NPP)
+    PyMem_Free(LITTERFALL)
     PyMem_Free(rh0)
     PyMem_Free(rh1)
     PyMem_Free(rh2)
@@ -234,10 +235,10 @@ def load_state(config):
     # NOTE: Calculating litterfall as average daily NPP (constant fraction of
     #   the annual NPP sum)
     fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
-    fread(NPP, sizeof(float), <size_t>n_bytes, fid)
+    fread(LITTERFALL, sizeof(float), <size_t>n_bytes, fid)
     fclose(fid)
     for i in range(SPARSE_M01_N):
-        NPP[i] = NPP[i] / 365
+        LITTERFALL[i] = LITTERFALL[i] / 365
 
 
 cdef void write_resampled(bytes output_filename, float* array_data, int inflated = 1):

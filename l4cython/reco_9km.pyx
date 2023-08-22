@@ -4,9 +4,8 @@
 SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
 Version 7 state and parameters, at 9-km spatial resolution.
 
-Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): About 1s per data-day if
-only NEE is produced, 6s per data-day for NEE and RH, in both cases producing
-a flat ("M09land") output.
+Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): About 1.2s per data-day
+when producing a flat ("M09land") output.
 
 Required daily driver data:
 
@@ -28,7 +27,7 @@ from l4cython.utils.fixtures import READ, WRITE
 from tqdm import tqdm
 
 # Number of grid cells in sparse ("land") arrays
-DEF SPARSE_N = 1664040
+SPARSE_N = 1664040
 
 # Additional Tsoil parameter (fixed for all PFTs)
 cdef float TSOIL1 = 66.02 # deg K
