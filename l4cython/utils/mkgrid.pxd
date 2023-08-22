@@ -1,8 +1,7 @@
 # cython: language_level=3
 
 from libc.stdlib cimport calloc
-from spland cimport spland_ref_struct, spland_inflate_9km, spland_inflate_init_9km, spland_inflate_1km, spland_inflate_init_1km, spland_deflate_9km, spland_deflate_1km, spland_load_9km_rc
-from fixtures import SPARSE_M09_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM
+from l4cython.utils.fixtures import SPARSE_M09_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM
 
 cdef inline unsigned char* deflate(unsigned char* grid_array, unsigned short data_type, bytes grid):
     # NOTE: The flat_array and grid_array are handled as uint8 regardless of
@@ -80,3 +79,21 @@ cdef inline unsigned char* inflate(unsigned char* flat_array, unsigned short dat
         spland_inflate_init_1km(&grid_array, data_type)
         spland_inflate_1km(lookup, &flat_array, &grid_array, data_type)
     return grid_array
+
+
+cdef extern from "src/spland.h":
+    ctypedef struct spland_ref_struct:
+        unsigned short* row # NOTE: 16-bit unsigned integer
+        unsigned short* col
+
+    int spland_load_9km_rc(spland_ref_struct* SPLAND)
+
+    void spland_deflate_9km(spland_ref_struct SPLAND, void* src_p, void* dest_p, const unsigned int dataType)
+    void spland_deflate_1km(spland_ref_struct SPLAND, void* src_p, void* dest_p, const unsigned int dataType)
+
+    void spland_inflate_9km(spland_ref_struct SPLAND, void* src_p, void* dest_p, const unsigned int dataType)
+    void spland_inflate_1km(spland_ref_struct SPLAND, void* src_p, void* dest_p, const unsigned int dataType)
+
+    void spland_inflate_init_9km(void* dest_p, const unsigned int dataType)
+    void spland_inflate_init_1km(void* dest_p, const unsigned int dataType)
+    void set_fillval_UUTA(void* vDest_p, const unsigned int dataType, const size_t atSlot)

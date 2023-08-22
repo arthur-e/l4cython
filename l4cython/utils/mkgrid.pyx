@@ -13,8 +13,7 @@ from libc.stdlib cimport free, calloc
 from libc.stdio cimport fopen, fread, fclose, fwrite
 from l4cython.utils cimport open_fid
 from l4cython.utils.fixtures import SPARSE_M09_N, SPARSE_M01_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32, READ, WRITE
-from l4cython.utils.spland cimport spland_ref_struct, spland_inflate_9km, spland_inflate_init_9km, spland_inflate_1km, spland_inflate_init_1km, spland_load_9km_rc
-# Implicit importing of inflate() and deflate() functions from mkgrid.pxd
+# Implicit importing of inflate(), deflate(), and spland_*() functions from mkgrid.pxd
 
 @cython.boundscheck(False)
 @cython.wraparound(False)

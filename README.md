@@ -6,26 +6,39 @@ the basis for the Soil Moisture Active Passive (SMAP) Level 4 Carbon (L4C) model
 
 - [x] PFT map in sparse, binary format
 - [ ] Routine to read-in BPLUT
+- https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html?highlight=packaging#distributing-cython-modules
 
 
 Building and Testing
 ----------------------------
 
-Use the `Makefile`:
+1. Install Cython and other Python dependencies.
+2. Build the `utils` module.
+3. Build the top-level `l4cython` modules.
 
-```sh
-cd l4cython
-make
-
-# Runs the 9-km RECO module
-make test
+**To install Cython and other Python dependencies,** from the project root directory:
+```
+pip install .
 ```
 
-Or, to build manually:
-
+**Then, build the `utils` module:**
 ```sh
+# From the project root
+cd l4cython/utils
+make
+```
+
+**Finally, build the top-level `l4cython` modules:**
+```sh
+# From the project root
 cd l4cython
-python setup.py build_ext --inplace
+make
+```
+
+**A 9-km test run can be conducted:**
+```sh
+# Runs the 9-km RECO module
+make test
 ```
 
 
