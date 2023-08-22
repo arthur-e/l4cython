@@ -4,8 +4,9 @@
 SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
 Version 7 state and parameters, at 9-km spatial resolution.
 
-Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): About 5s per data-day for
-flat ("M09land") output.
+Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): About 1s per data-day if
+only NEE is produced, 6s per data-day for NEE and RH, in both cases producing
+a flat ("M09land") output.
 
 Required daily driver data:
 
@@ -18,12 +19,12 @@ import cython
 import datetime
 import json
 import numpy as np
-from libc.stdio cimport FILE, fread, fclose
+from libc.stdio cimport FILE, fread, fwrite, fclose
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint
-from l4cython.utils cimport open_fid
+from l4cython.utils cimport open_fid, to_numpy
 from l4cython.utils.mkgrid import write_inflated
-from l4cython.utils.fixtures import READ
+from l4cython.utils.fixtures import READ, WRITE
 from tqdm import tqdm
 
 # Number of grid cells in sparse ("land") arrays
@@ -83,13 +84,17 @@ def main(config_file = None):
         float* rh0
         float* rh1
         float* rh2
+        float* rh_total
         float* gpp
+        float* nee
         float* w_mult
         float* t_mult
     rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    nee = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
 
@@ -101,12 +106,8 @@ def main(config_file = None):
 
     load_state(config) # Load PFT map, SOC state, etc.
 
-    # We leave these as NumPy arrays because they're easier to write to disk
-    rh_total = np.full((SPARSE_N,), np.nan, dtype = np.float32)
-    nee = np.full((SPARSE_N,), np.nan, dtype = np.float32)
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
     num_steps = int(config['daily_steps'])
-
     for step in tqdm(range(num_steps)):
         date = date_start + datetime.timedelta(days = step)
         date = date.strftime('%Y%m%d')
@@ -141,30 +142,35 @@ def main(config_file = None):
             if 'NEE' in config['model']['output_fields']:
                 nee[i] = rh_total[i] - (gpp[i] * PARAMS.cue[pft])
         # Write datasets to disk
-        rh_filename = '%s/L4Cython_RH_%s_M09.flt32' % (config['model']['output_dir'], date)
-        nee_filename = '%s/L4Cython_NEE_%s_M09.flt32' % (config['model']['output_dir'], date)
+        fname_rh  = '%s/L4Cython_RH_%s_M09.flt32' % (config['model']['output_dir'], date)
+        fname_nee = '%s/L4Cython_NEE_%s_M09.flt32' % (config['model']['output_dir'], date)
         if config['model']['output_format'] == 'M09land':
             if 'RH' in config['model']['output_fields']:
-                np.array(rh_total).astype(np.float32)\
-                    .tofile(rh_filename.replace('M09', 'M09land'))
+                fid = open_fid(fname_rh.replace('M09', 'M09land').encode('UTF-8'), WRITE)
+                fwrite(rh_total, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+                fclose(fid)
             if 'NEE' in config['model']['output_fields']:
-                np.array(nee).astype(np.float32)\
-                    .tofile(nee_filename.replace('M09', 'M09land'))
+                fid = open_fid(fname_nee.replace('M09', 'M09land').encode('UTF-8'), WRITE)
+                fwrite(nee, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+                fclose(fid)
         else:
             if 'RH' in config['model']['output_fields']:
-                write_inflated(rh_filename.encode('UTF-8'), rh_total)
+                write_inflated(fname_rh.encode('UTF-8'), to_numpy(rh_total, SPARSE_N))
             if 'NEE' in config['model']['output_fields']:
-                write_inflated(nee_filename.encode('UTF-8'), nee)
-        PyMem_Free(PFT)
-        PyMem_Free(SOC0)
-        PyMem_Free(SOC1)
-        PyMem_Free(SOC2)
-        PyMem_Free(LITTERFALL)
-        PyMem_Free(rh0)
-        PyMem_Free(rh1)
-        PyMem_Free(rh2)
-        PyMem_Free(w_mult)
-        PyMem_Free(t_mult)
+                write_inflated(fname_rh.encode('UTF-8'), to_numpy(nee, SPARSE_N))
+    PyMem_Free(PFT)
+    PyMem_Free(SOC0)
+    PyMem_Free(SOC1)
+    PyMem_Free(SOC2)
+    PyMem_Free(LITTERFALL)
+    PyMem_Free(rh0)
+    PyMem_Free(rh1)
+    PyMem_Free(rh2)
+    PyMem_Free(rh_total)
+    PyMem_Free(gpp)
+    PyMem_Free(nee)
+    PyMem_Free(w_mult)
+    PyMem_Free(t_mult)
 
 
 def load_state(config):

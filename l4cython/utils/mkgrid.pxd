@@ -4,6 +4,22 @@ from libc.stdlib cimport calloc
 from l4cython.utils.fixtures import SPARSE_M09_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM
 
 cdef inline unsigned char* deflate(unsigned char* grid_array, unsigned short data_type, bytes grid):
+    '''
+    Parameters
+    ----------
+    grid_array : unsigned char*
+        The inflated (2D) array
+    data_type : unsigned short
+        The numeric code representing the data type
+    grid : bytes
+        The pixel size of the gridded data, e.g., "M09" for 9-km data or
+        "M01" for 1-km data
+
+    Returns
+    -------
+    unsigned char*
+        Return type is a guess, but it is the deflated array
+    '''
     # NOTE: The flat_array and grid_array are handled as uint8 regardless of
     #   what the actual data type is; it just works this way in spland.c
     cdef:
@@ -49,6 +65,11 @@ cdef inline unsigned char* inflate(unsigned char* flat_array, unsigned short dat
     grid : bytes
         The pixel size of the gridded data, e.g., "M09" for 9-km data or
         "M01" for 1-km data
+
+    Returns
+    -------
+    unsigned char*
+        Return type is a guess, but it is the inflated array
     '''
     # NOTE: The flat_array and grid_array are handled as uint8 regardless of
     #   what the actual data type is; it just works this way in spland.c
