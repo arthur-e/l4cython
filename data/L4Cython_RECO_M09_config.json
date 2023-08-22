@@ -21,7 +21,7 @@
   },
 
   "model": {
-    "output_dir": "/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230523",
+    "output_dir": "/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230822",
     "output_fields": ["RH"],
     "output_format": "M09land"
   }

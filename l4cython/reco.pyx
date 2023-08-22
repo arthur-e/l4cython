@@ -25,6 +25,7 @@ Developer notes:
 Possible improvements:
 
 - [ ] `FILE* fid` is not defined globally
+- [ ] Add support for NEE output, by reading in L4C GPP data
 - [ ] 1-km global grid files will always be ~500 MB in size, without
     compression; try writing the array to an HDF5 file instead.
 '''

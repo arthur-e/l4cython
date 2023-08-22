@@ -18,12 +18,12 @@ import cython
 import datetime
 import json
 import numpy as np
-from libc.stdio cimport FILE, fread, fwrite, fclose
+from libc.stdio cimport FILE, fread, fclose
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint
 from l4cython.utils cimport open_fid, to_numpy
 from l4cython.utils.mkgrid import write_inflated
-from l4cython.utils.fixtures import READ, WRITE
+from l4cython.utils.fixtures import READ
 from tqdm import tqdm
 
 # Number of grid cells in sparse ("land") arrays
@@ -48,6 +48,10 @@ SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
 SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
 SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
 LITTERFALL = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+
+# Python arrays that want heap allocations must be global; this one is reused
+#   for any array that needs to be written to disk (using NumPy)
+OUT_M09 = np.full((SPARSE_N,), np.nan, dtype = np.float32)
 
 # L4_C BPLUT Version 7 (Vv7042, Vv7040, Nature Run v10)
 # NOTE: BPLUT is initialized here because we *need* it to be a C struct and
@@ -145,13 +149,11 @@ def main(config_file = None):
         fname_nee = '%s/L4Cython_NEE_%s_M09.flt32' % (config['model']['output_dir'], date)
         if config['model']['output_format'] == 'M09land':
             if 'RH' in config['model']['output_fields']:
-                fid = open_fid(fname_rh.replace('M09', 'M09land').encode('UTF-8'), WRITE)
-                fwrite(rh_total, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
-                fclose(fid)
+                OUT_M09 = to_numpy(rh_total, SPARSE_N)
+                OUT_M09.tofile(fname_rh.replace('M09', 'M09land'))
             if 'NEE' in config['model']['output_fields']:
-                fid = open_fid(fname_nee.replace('M09', 'M09land').encode('UTF-8'), WRITE)
-                fwrite(nee, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
-                fclose(fid)
+                OUT_M09 = to_numpy(nee, SPARSE_N)
+                OUT_M09.tofile(fname_nee.replace('M09', 'M09land'))
         else:
             if 'RH' in config['model']['output_fields']:
                 write_inflated(fname_rh.encode('UTF-8'), to_numpy(rh_total, SPARSE_N))

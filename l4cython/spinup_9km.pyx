@@ -48,7 +48,6 @@ cdef float ANNUAL_NPP[SPARSE_N]
 
 # Python arrays that want heap allocations must be global; this one is reused
 #   for any array that needs to be written to disk (using NumPy)
-OUT_M09 = np.full((SPARSE_N,), np.nan, dtype = np.float32)
 OUT_M09_DOUBLE = np.full((SPARSE_N,), np.nan, dtype = np.float64)
 
 # L4_C BPLUT Version 6 (Vv6042, Vv6040, Nature Run v9.1)
