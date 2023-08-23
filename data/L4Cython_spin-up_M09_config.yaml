@@ -9,13 +9,14 @@ data:
       /anx_lagr4/SMAP/L4SM/OL7000/climatology/OL7000_climate_smsf_M09land_0001%s.flt32
     tsoil: >- # Soil temperature [deg K]
       /anx_lagr4/SMAP/L4SM/OL7000/climatology/OL7000_climate_tsoil_M09land_0001%s.flt32
-    GPP: /media/arthur.endsley/raid/TCF/L4C_V7_mdl_GPP/L4_C_mdl_2017%s_V7.flt32
+    GPP: >- # Daily GPP [g C m-2 day-1]; currently, using an arbitrary year
+      /media/arthur.endsley/raid/TCF/L4C_V7_mdl_GPP/L4_C_mdl_2017%s_V7.flt32
 model:
   output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230823
   accelerated: true # Use accelerated decomposition?
   ad_rate: # Accelerated decomposition (AD) rates
     - 1 # AD rate for SOC pool 0
     - 1 # AD rate for SOC pool 1
-    - 1 # AD rate for SOC pool 2
+    - 100 # AD rate for SOC pool 2
 max_iter: 10 # Maximum number of climatological cycles before stopping
 min_pixels: 10000 # Minimum number of pixels yet to meet tolerance, otherwise stop

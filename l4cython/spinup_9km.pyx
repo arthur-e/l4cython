@@ -293,6 +293,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         Py_ssize_t doy
         int iter, pft, success
         int tol_count # Number of pixels with tolerance, for calculating...
+        int do_daily_npp # Flag indicating daily NPP should be calculated
         float tol_mean # ...Overall mean tolerance
         float tol_sum # Sum of all tolerances
         float w_mult, t_mult, k_mult
@@ -306,8 +307,9 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         float* param_smsf0 # Vectorized parameter values
         float* param_smsf1
         float* param_tsoil
-        float* gpp # Annual GPP sum
-        float* ra_total # Annual autotrophic respiration (RA) sum
+        float* cue # Carbon use efficiency
+        float* gpp # Daily (climatological) GPP
+        float* npp_total # Keeps track of total annual NPP if do_daily_npp
         float* rh_total # Annual heterotrophic respiration (RH) sum
         float* nee_sum # Annual NEE sum
         float* nee_last_year # Last year's annual NEE sum
@@ -323,13 +325,21 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     param_smsf0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     param_smsf1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     param_tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    cue = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    ra_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    npp_total = <float*> PyMem_Malloc(sizeof(float) * 1)
     rh_total = <float*> PyMem_Malloc(sizeof(float) * 1)
     nee_sum = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     nee_last_year = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     delta = <double*> PyMem_Malloc(sizeof(double) * 3)
     tolerance = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
+
+    # Option to use daily (climatological) GPP as the source of
+    #   litterfall instead of a fraction of the annual NPP sum
+    do_daily_npp = 0
+    if config['data']['NPP_annual_sum'] == '':
+        do_daily_npp = 1
+
     # Pre-allocate the decay rate, CUE, and f_met, f_str arrays
     for i in range(SPARSE_N):
         pft = int(PFT[i])
@@ -340,9 +350,9 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         param_smsf0[i] = PARAMS.smsf0[pft]
         param_smsf1[i] = PARAMS.smsf1[pft]
         param_tsoil[i] = PARAMS.tsoil[pft]
-        # Calculate annual GPP sum as (NPP / CUE)
-        gpp[i] = (365 * AVAIL_NPP[i]) / PARAMS.cue[pft]
-        ra_total[i] = gpp[i] - (365 * AVAIL_NPP[i])
+        # Will calculate daily NPP, so record each pixel's CUE
+        if do_daily_npp > 0:
+            cue[i] = PARAMS.cue[pft]
         k0[i] = PARAMS.decay_rate[0][pft]
         k1[i] = PARAMS.decay_rate[1][pft]
         k2[i] = PARAMS.decay_rate[2][pft]
@@ -352,6 +362,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
             k1[i] = k1[i] * config['model']['ad_rate'][1]
             k2[i] = k2[i] * config['model']['ad_rate'][2]
         tolerance[i] = 0
+
     print('Beginning numerical spin-up...')
     iter = 1
     success = 0
@@ -363,6 +374,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         success = 1
         tol_sum = 0.0
         tol_count = 0
+
         # For each day of the climatological year
         for doy in tqdm(range(1, 366)):
             jday = str(doy).zfill(3)
@@ -374,6 +386,13 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
             fid = open_fid((config['data']['climatology']['tsoil'] % jday).encode('UTF-8'), READ)
             fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
             fclose(fid)
+            if do_daily_npp > 0:
+                npp_total[0] = 0 # Reset annual NPP total
+                mmdd = datetime.datetime.strptime(f'2000{jday}', '%Y%j').strftime('%m%d')
+                fid = open_fid((config['data']['climatology']['GPP'] % mmdd).encode('UTF-8'), READ)
+                fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+                fclose(fid)
+
             # Loop over pixels
             for i in prange(SPARSE_N, nogil = True):
                 pft = int(PFT[i])
@@ -387,6 +406,10 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 delta[0] = 0
                 delta[1] = 0
                 delta[2] = 0
+                # Compute daily NPP if not using the annual NPP sum
+                if do_daily_npp > 0:
+                    AVAIL_NPP[i] = gpp[i] * cue[i]
+                    npp_total[0] += AVAIL_NPP[i]
                 # Compute one daily soil decomposition step for this pixel;
                 #   note that litterfall is 1/365 of the annual NPP sum
                 w_mult = linear_constraint(
@@ -408,9 +431,12 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 #   previous year
                 if doy == 365:
                     # i.e., tolerance is the change in the Annual NEE sum:
-                    #   NEE = (RA + RH) - GPP
+                    #   NEE = (RA + RH) - GPP --> NEE = RH - NPP
                     #   DeltaNEE = NEE(t) - NEE(t-1)
-                    nee_sum[i] = (ra_total[i] + rh_total[0]) - gpp[i]
+                    if do_daily_npp > 0:
+                        nee_sum[i] = rh_total[0] - npp_total[0]
+                    else:
+                        nee_sum[i] = rh_total[0] - (365 * AVAIL_NPP[i])
                     # Jones et al. (2017) write that goal is NEE
                     #   tolerance <= 1 g C m-2 year-1
                     if iter > 0:
@@ -423,6 +449,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                             success = 0
                         tol_count += 1
                         tol_sum += tolerance[i]
+
         print('[%d/%d] Total tolerance is: %.2f' % (iter, max_iter, tol_sum))
         print('--- Pixels counted: %d' % tol_count)
         if tol_count > 0:
@@ -433,6 +460,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
             break # Quit if we're not counting valid pixels anymore
         # Increment; also a counter for the number of climatological years
         iter = iter + 1
+
     OUT_M09_DOUBLE = to_numpy_double(tolerance, SPARSE_N)
     OUT_M09_DOUBLE.tofile(
         '%s/L4Cython_numspin_tol_M09land.flt64' % config['model']['output_dir'])
@@ -446,8 +474,9 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     PyMem_Free(param_smsf0)
     PyMem_Free(param_smsf1)
     PyMem_Free(param_tsoil)
+    PyMem_Free(cue)
     PyMem_Free(gpp)
-    PyMem_Free(ra_total)
+    PyMem_Free(npp_total)
     PyMem_Free(rh_total)
     PyMem_Free(nee_sum)
     PyMem_Free(nee_last_year)
