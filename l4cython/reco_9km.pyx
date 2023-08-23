@@ -4,6 +4,10 @@
 SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
 Version 7 state and parameters, at 9-km spatial resolution.
 
+Note that if the "data/NPP_annual_sum" configuration parameter is set to the
+empty string, the model will use the daily GPP (converted to NPP) to determine
+the daily NPP available for litterfall.
+
 Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): About 1.2s per data-day
 when producing a flat ("M09land") output.
 
@@ -89,6 +93,7 @@ def main(config_file = None):
         float* rh2
         float* rh_total
         float* gpp
+        float* npp
         float* nee
         float* w_mult
         float* t_mult
@@ -97,6 +102,7 @@ def main(config_file = None):
     rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    npp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     nee = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
@@ -127,6 +133,13 @@ def main(config_file = None):
             pft = int(PFT[i])
             if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
                 continue
+            # Compute daily NPP
+            npp[i] = gpp[i] * PARAMS.cue[pft]
+            # If no annual NPP sum was specified, litterfall must be determined
+            #   from the daily NPP
+            if config['data']['NPP_annual_sum'] != '':
+                LITTERFALL[i] = npp[i]
+            # Compute daily RH based on moisture, temperature constraints
             w_mult[i] = linear_constraint(
                 smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
             t_mult[i] = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
@@ -141,9 +154,8 @@ def main(config_file = None):
             SOC0[i] += (LITTERFALL[i] * PARAMS.f_metabolic[pft]) - rh0[i]
             SOC1[i] += (LITTERFALL[i] * (1 - PARAMS.f_metabolic[pft])) - rh1[i]
             SOC2[i] += (PARAMS.f_structural[pft] * rh1[i]) - rh2[i]
-            # NEE is equivalent to RH - NPP; can be an expensive calculation
-            if 'NEE' in config['model']['output_fields']:
-                nee[i] = rh_total[i] - (gpp[i] * PARAMS.cue[pft])
+            # NEE is equivalent to RH - NPP
+            nee[i] = rh_total[i] - npp[i]
         # Write datasets to disk
         fname_rh  = '%s/L4Cython_RH_%s_M09.flt32' % (config['model']['output_dir'], date)
         fname_nee = '%s/L4Cython_NEE_%s_M09.flt32' % (config['model']['output_dir'], date)
@@ -202,8 +214,9 @@ def load_state(config):
     fclose(fid)
     # NOTE: Calculating litterfall as average daily NPP (constant fraction of
     #   the annual NPP sum)
-    fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
-    fread(LITTERFALL, sizeof(float), <size_t>n_bytes, fid)
-    fclose(fid)
-    for i in range(SPARSE_N):
-        LITTERFALL[i] = LITTERFALL[i] / 365
+    if config['data']['NPP_annual_sum'] != '':
+        fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
+        fread(LITTERFALL, sizeof(float), <size_t>n_bytes, fid)
+        fclose(fid)
+        for i in range(SPARSE_N):
+            LITTERFALL[i] = LITTERFALL[i] / 365
