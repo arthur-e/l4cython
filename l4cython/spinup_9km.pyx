@@ -42,15 +42,14 @@ from l4cython.utils cimport open_fid, to_numpy, to_numpy_double
 from l4cython.utils.fixtures import READ
 from tqdm import tqdm
 
-# Number of grid cells in sparse ("land") arrays
-DEF SPARSE_N = 1664040
-
-# Additional Tsoil parameter (fixed for all PFTs)
-cdef float TSOIL1 = 66.02 # deg K
-cdef float TSOIL2 = 227.13 # deg K
-# Additional SOC decay parameters (fixed for all PFTs)
-cdef float KSTRUCT = 0.4 # Muliplier *against* base decay rate
-cdef float KRECAL = 0.0093
+cdef:
+    int SPARSE_N = 1664040 # Number of grid cells in sparse ("land") arrays
+    # Additional Tsoil parameter (fixed for all PFTs)
+    float TSOIL1 = 66.02 # deg K
+    float TSOIL2 = 227.13 # deg K
+    # Additional SOC decay parameters (fixed for all PFTs)
+    float KSTRUCT = 0.4 # Muliplier *against* base decay rate
+    float KRECAL = 0.0093
 
 # The PFT map
 cdef:
