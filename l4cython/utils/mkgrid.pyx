@@ -21,7 +21,7 @@ def deflate_file(filename, grid = 'M09'):
     '''
     Converts a gridded (2D), binary file to a deflated (1D or "sparse land")
     representation of the global EASE-Grid 2.0. The output file is written to
-    the same directory as the input file.
+    the same directory as the input file. Chokes on 64-bit floating point.
 
     Parameters
     ----------
@@ -37,14 +37,6 @@ def deflate_file(filename, grid = 'M09'):
     cdef:
         unsigned char* grid_array
 
-    # Assume 9-km grid, this also helps avoid warnings when compiling
-    in_bytes = sizeof(float) * NCOL9KM * NROW9KM
-    out_bytes = sizeof(float) * SPARSE_M09_N
-    if grid == 'M01':
-        in_bytes = sizeof(float) * NCOL1KM * NROW1KM
-        out_bytes = sizeof(float) * SPARSE_M09_N * 81
-    grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-
     # Convert the unicode filename to a C string
     filename_byte_string = filename.encode('UTF-8')
     cdef char* fname = filename_byte_string
@@ -52,10 +44,24 @@ def deflate_file(filename, grid = 'M09'):
     # Infer data type by file extension, e.g., *.flt32, *.int32, etc.
     ext = filename_byte_string.decode('UTF-8').split('.').pop()
     data_type = DFNT_FLOAT32
-    if ext == 'int32':
+    bs = sizeof(float)
+    if ext == 'flt64':
+        data_type = DFNT_FLOAT64
+        bs = sizeof(double)
+    elif ext == 'int32':
         data_type = DFNT_INT32
+        bs = sizeof(long)
     elif ext == 'uint16':
         data_type = DFNT_UINT16
+        bs = sizeof(short)
+
+    # Assume 9-km grid, this also helps avoid warnings when compiling
+    in_bytes = bs * NCOL9KM * NROW9KM
+    out_bytes = bs * SPARSE_M09_N
+    if grid == 'M01':
+        in_bytes = bs * NCOL1KM * NROW1KM
+        out_bytes = bs * SPARSE_M09_N * 81
+    grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
 
     # Read in the inflated array
     fid = fopen(fname, 'rb')
@@ -90,7 +96,7 @@ def inflate_file(filename, grid = 'M09'):
     '''
     Converts a flat (1D or "land" format), binary file to an inflated (2D)
     representation of the global EASE-Grid 2.0. The output file is written to
-    the same directory as the input file.
+    the same directory as the input file. Chokes on 64-bit floating point.
 
     Note that the inflation code in spland.c can mess up NoData values; values
     like -9999 become much larger (more negative). This may be because it
@@ -111,14 +117,6 @@ def inflate_file(filename, grid = 'M09'):
     cdef:
         unsigned char* flat_array
 
-    # Assume 9-km grid, this also helps avoid warnings when compiling
-    in_bytes = sizeof(float) * SPARSE_M09_N
-    out_bytes = sizeof(float) * NCOL9KM * NROW9KM
-    if grid == 'M01':
-        in_bytes = sizeof(float) * SPARSE_M09_N * 81
-        out_bytes = sizeof(float) * NCOL1KM * NROW1KM
-    flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-
     # Convert the unicode filename to a C string
     filename_byte_string = filename.encode('UTF-8')
     cdef char* fname = filename_byte_string
@@ -126,10 +124,24 @@ def inflate_file(filename, grid = 'M09'):
     # Infer data type by file extension, e.g., *.flt32, *.int32, etc.
     ext = filename_byte_string.decode('UTF-8').split('.').pop()
     data_type = DFNT_FLOAT32
-    if ext == 'int32':
+    bs = sizeof(float)
+    if ext == 'flt64':
+        data_type = DFNT_FLOAT64
+        bs = sizeof(double)
+    elif ext == 'int32':
         data_type = DFNT_INT32
+        bs = sizeof(long)
     elif ext == 'uint16':
         data_type = DFNT_UINT16
+        bs = sizeof(short)
+
+    # Assume 9-km grid, this also helps avoid warnings when compiling
+    in_bytes = bs * SPARSE_M09_N
+    out_bytes = bs * NCOL9KM * NROW9KM
+    if grid == 'M01':
+        in_bytes = bs * SPARSE_M09_N * 81
+        out_bytes = bs * NCOL1KM * NROW1KM
+    flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
 
     # Read in the deflated array
     fid = fopen(fname, 'rb')

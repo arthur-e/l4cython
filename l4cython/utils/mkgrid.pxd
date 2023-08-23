@@ -1,7 +1,7 @@
 # cython: language_level=3
 
 from libc.stdlib cimport calloc
-from l4cython.utils.fixtures import SPARSE_M09_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM
+from l4cython.utils.fixtures import SPARSE_M09_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32
 
 cdef inline unsigned char* deflate(unsigned char* grid_array, unsigned short data_type, bytes grid):
     '''
@@ -27,11 +27,17 @@ cdef inline unsigned char* deflate(unsigned char* grid_array, unsigned short dat
         unsigned char* flat_array
 
     # Assume 9-km grid, this also helps avoid warnings when compiling
-    in_bytes = sizeof(float) * NCOL9KM * NROW9KM
-    out_bytes = sizeof(float) * SPARSE_M09_N
+    if data_type == DFNT_FLOAT64:
+        bs = sizeof(double)
+    elif data_type == DFNT_INT32:
+        bs = sizeof(long)
+    elif data_type == DFNT_UINT16:
+        bs = sizeof(short)
+    in_bytes = bs * NCOL9KM * NROW9KM
+    out_bytes = bs * SPARSE_M09_N
     if grid.decode('UTF-8') == 'M01':
-        in_bytes = sizeof(float) * NCOL1KM * NROW1KM
-        out_bytes = sizeof(float) * SPARSE_M09_N * 81
+        in_bytes = bs * NCOL1KM * NROW1KM
+        out_bytes = bs * SPARSE_M09_N * 81
 
     flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
     # NOTE: Using 9-km row/col for both 9-km and 1-km nested grids
@@ -78,11 +84,17 @@ cdef inline unsigned char* inflate(unsigned char* flat_array, unsigned short dat
         unsigned char* grid_array
 
     # Assume 9-km grid, this also helps avoid warnings when compiling
-    in_bytes = sizeof(float) * SPARSE_M09_N
-    out_bytes = sizeof(float) * NCOL9KM * NROW9KM
+    if data_type == DFNT_FLOAT64:
+        bs = sizeof(double)
+    elif data_type == DFNT_INT32:
+        bs = sizeof(long)
+    elif data_type == DFNT_UINT16:
+        bs = sizeof(short)
+    in_bytes = bs * SPARSE_M09_N
+    out_bytes = bs * NCOL9KM * NROW9KM
     if grid.decode('UTF-8') == 'M01':
-        in_bytes = sizeof(float) * SPARSE_M09_N * 81
-        out_bytes = sizeof(float) * NCOL1KM * NROW1KM
+        in_bytes = bs * SPARSE_M09_N * 81
+        out_bytes = bs * NCOL1KM * NROW1KM
 
     grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
     # NOTE: Using 9-km row/col for both 9-km and 1-km nested grids
