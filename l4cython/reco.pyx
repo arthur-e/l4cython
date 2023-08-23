@@ -32,7 +32,7 @@ Possible improvements:
 
 import cython
 import datetime
-import json
+import yaml
 import numpy as np
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from cython.parallel import prange
@@ -131,9 +131,9 @@ def main(config_file = None):
 
     # Read in configuration file, then load state data
     if config_file is None:
-        config_file = '../data/L4Cython_RECO_M01_config.json'
-    with open(config_file) as file:
-        config = json.load(file)
+        config_file = '../data/L4Cython_RECO_M01_config.yaml'
+    with open(config_file, 'r') as file:
+        config = yaml.safe_load(file)
 
     load_state(config)
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')

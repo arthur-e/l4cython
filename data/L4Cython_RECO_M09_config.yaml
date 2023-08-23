@@ -1,0 +1,24 @@
+BPLUT: >-
+  /anx_lagr3/arthur.endsley/SMAP_L4C/calibration/v7_Y2022/SMAP_BPLUT_V7_rev_20220728.csv
+origin_date: '2015-03-31'
+daily_steps: 1
+data:
+  porosity: >-
+    /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4_SM_lmc_00000000T000000_Vv7032_001.h5
+  PFT_map: >- # Map of plant functional types (PFT)
+    /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4C_PFT_map_M09land.uint8
+  SOC: # List of three (3) soil organic carbon (SOC) pools
+    - /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_C0_M09land_0002089.flt32
+    - /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_C1_M09land_0002089.flt32
+    - /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_C2_M09land_0002089.flt32
+  NPP_annual_sum: >- # Map of annual NPP sum [g C m-2 year-1] for each pixel
+    /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_npp_sum_M09land.flt32
+  drivers:
+    smsf: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_smsf_M09land_%s.flt32 # Surface soil wetness (%) on [0,100]
+    tsoil: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_tsoil_M09land_%s.flt32 # Soil temperature [deg K]
+    GPP: /media/arthur.endsley/raid/TCF/L4C_V7_mdl_GPP/L4_C_mdl_%s_V7.flt32 # Only used to calculate NEE
+model:
+  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230822
+  output_fields: # Valid output fields include: "RH", "NEE"
+    - RH
+  output_format: M09land # "M09land" for flat (1D) output

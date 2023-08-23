@@ -20,7 +20,7 @@ Required daily driver data:
 
 import cython
 import datetime
-import json
+import yaml
 import numpy as np
 from libc.stdio cimport FILE, fread, fclose
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
@@ -109,9 +109,9 @@ def main(config_file = None):
 
     # Read in configuration file, then load state data
     if config_file is None:
-        config_file = '../data/L4Cython_RECO_M09_config.json'
-    with open(config_file) as file:
-        config = json.load(file)
+        config_file = '../data/L4Cython_RECO_M09_config.yaml'
+    with open(config_file, 'r') as file:
+        config = yaml.safe_load(file)
 
     load_state(config) # Load PFT map, SOC state, etc.
 
@@ -196,27 +196,24 @@ def load_state(config):
         The configuration data dictionary
     '''
     # Allocate space, read in 1-km PFT map
-    n_bytes = sizeof(unsigned char)*SPARSE_N
     fid = open_fid(config['data']['PFT_map'].encode('UTF-8'), READ)
-    fread(PFT, sizeof(unsigned char), <size_t>n_bytes, fid)
+    fread(PFT, sizeof(unsigned char), <size_t>sizeof(unsigned char)*SPARSE_N, fid)
     fclose(fid)
-    # Allocate space for floating-point state datasets
-    n_bytes = sizeof(float)*SPARSE_N
     # Read in SOC datasets
     fid = open_fid(config['data']['SOC'][0].encode('UTF-8'), READ)
-    fread(SOC0, sizeof(float), <size_t>n_bytes, fid)
+    fread(SOC0, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
     fclose(fid)
     fid = open_fid(config['data']['SOC'][1].encode('UTF-8'), READ)
-    fread(SOC1, sizeof(float), <size_t>n_bytes, fid)
+    fread(SOC1, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
     fclose(fid)
     fid = open_fid(config['data']['SOC'][2].encode('UTF-8'), READ)
-    fread(SOC2, sizeof(float), <size_t>n_bytes, fid)
+    fread(SOC2, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
     fclose(fid)
     # NOTE: Calculating litterfall as average daily NPP (constant fraction of
     #   the annual NPP sum)
     if config['data']['NPP_annual_sum'] != '':
         fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
-        fread(LITTERFALL, sizeof(float), <size_t>n_bytes, fid)
+        fread(LITTERFALL, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
         fclose(fid)
         for i in range(SPARSE_N):
             LITTERFALL[i] = LITTERFALL[i] / 365

@@ -31,7 +31,7 @@ Required data:
 
 import cython
 import datetime
-import json
+import yaml
 import numpy as np
 from libc.math cimport isnan, fabs
 from libc.stdio cimport FILE, fread, fclose
@@ -96,9 +96,9 @@ def main(config_file = None):
     soc2 = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
     # Read in configuration file, then load state data
     if config_file is None:
-        config_file = '../data/L4Cython_spin-up_M09_config.json'
-    with open(config_file) as file:
-        config = json.load(file)
+        config_file = '../data/L4Cython_spin-up_M09_config.yaml'
+    with open(config_file, 'r') as file:
+        config = yaml.safe_load(file)
     load_state(config)
     # Step 1: Analytical spin-up; note that soc0, soc1, soc2 are both
     #   inputs and outputs of the spin-up functions (K&R-style)

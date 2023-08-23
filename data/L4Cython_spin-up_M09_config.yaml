@@ -1,0 +1,21 @@
+BPLUT: null
+data:
+  PFT_map: >- # Map of plant functional types (PFT)
+    /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4C_PFT_map_M09land.uint8
+  NPP_annual_sum: >- # Map of annual NPP sum [g C m-2 year-1] for each pixel
+    /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_natv91_npp_sum_M09land.flt32
+  climatology: # Each of these files should represent a 365-day annual climatology
+    smsf: >- # Surface soil wetness (%) on [0,100]
+      /anx_lagr4/SMAP/L4SM/OL7000/climatology/OL7000_climate_smsf_M09land_0001%s.flt32
+    tsoil: >- # Soil temperature [deg K]
+      /anx_lagr4/SMAP/L4SM/OL7000/climatology/OL7000_climate_tsoil_M09land_0001%s.flt32
+    GPP: /media/arthur.endsley/raid/TCF/L4C_V7_mdl_GPP/L4_C_mdl_2017%s_V7.flt32
+model:
+  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230823
+  accelerated: true # Use accelerated decomposition?
+  ad_rate: # Accelerated decomposition (AD) rates
+    - 1 # AD rate for SOC pool 0
+    - 1 # AD rate for SOC pool 1
+    - 1 # AD rate for SOC pool 2
+max_iter: 10 # Maximum number of climatological cycles before stopping
+min_pixels: 10000 # Minimum number of pixels yet to meet tolerance, otherwise stop
