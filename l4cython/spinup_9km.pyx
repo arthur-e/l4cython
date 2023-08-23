@@ -356,6 +356,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     print('Beginning numerical spin-up...')
     iter = 1
     success = 0
+    tol_count = SPARSE_N # Initially, no pixels have met tolerance
     max_iter = config['max_iter']
     min_pixels = config['min_pixels'] # Minimum number of pixels remaining
     while success != 1 and iter <= max_iter and tol_count >= min_pixels:
