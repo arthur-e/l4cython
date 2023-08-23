@@ -20,7 +20,8 @@ empty string, the model will use the daily GPP (converted to NPP) to determine
 the daily NPP available for litterfall.
 
 Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): 15 secs for analytical
-spin-up, 36 min for numerical spin-up.
+spin-up, 25-30 min for the first climatological year in numerical spin-up. It
+should get faster for each successive climatological year.
 
 Required data:
 
@@ -268,6 +269,8 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
     PyMem_Free(t_mult)
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     '''
     Numerical SOC spin-up; the steady-state condition is defined by the inter-
@@ -289,20 +292,21 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     cdef:
         Py_ssize_t i
         Py_ssize_t doy
-        int iter
-        int pft
-        int success
+        int iter, pft, success
         int tol_count # Number of pixels with tolerance, for calculating...
         float tol_mean # ...Overall mean tolerance
         float tol_sum # Sum of all tolerances
-        float w_mult
-        float t_mult
-        float* k_mult
+        float w_mult, t_mult, k_mult
+        float* smsf
+        float* tsoil
         float* k0
         float* k1
         float* k2
         float* f_met
         float* f_str
+        float* param_smsf0 # Vectorized parameter values
+        float* param_smsf1
+        float* param_tsoil
         float* gpp # Annual GPP sum
         float* ra_total # Annual autotrophic respiration (RA) sum
         float* rh_total # Annual heterotrophic respiration (RH) sum
@@ -310,12 +314,16 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         float* nee_last_year # Last year's annual NEE sum
         double* delta # 3-element, recycling vector: diff. in each pool
         double* tolerance # Tolerance at each pixel
-    k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     f_met = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     f_str = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    param_smsf0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    param_smsf1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    param_tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     ra_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     rh_total = <float*> PyMem_Malloc(sizeof(float) * 1)
@@ -330,6 +338,9 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
             continue
         f_met[i] = PARAMS.f_metabolic[pft]
         f_str[i] = PARAMS.f_structural[pft]
+        param_smsf0[i] = PARAMS.smsf0[pft]
+        param_smsf1[i] = PARAMS.smsf1[pft]
+        param_tsoil[i] = PARAMS.tsoil[pft]
         # Calculate annual GPP sum as (NPP / CUE)
         gpp[i] = (365 * AVAIL_NPP[i]) / PARAMS.cue[pft]
         ra_total[i] = gpp[i] - (365 * AVAIL_NPP[i])
@@ -346,7 +357,8 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     iter = 1
     success = 0
     max_iter = config['max_iter']
-    while success != 1 and iter <= max_iter:
+    min_pixels = config['min_pixels'] # Minimum number of pixels remaining
+    while success != 1 and iter <= max_iter and tol_count >= min_pixels:
         # Assume that we have fully equilibrated
         success = 1
         tol_sum = 0.0
@@ -354,21 +366,14 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         # For each day of the climatological year
         for doy in tqdm(range(1, 366)):
             jday = str(doy).zfill(3)
-            # Pre-compute k_mult
             # NOTE: For compatibility with TCF, the SMSF data are already in
             #   percentage units, i.e., on [0,100]
-            smsf = np.fromfile(
-                config['data']['climatology']['smsf'] % jday, dtype = np.float32)
-            tsoil = np.fromfile(
-                config['data']['climatology']['tsoil'] % jday, dtype = np.float32)
-            for i in range(SPARSE_N):
-                pft = int(PFT[i])
-                if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
-                    continue
-                w_mult = linear_constraint(
-                    smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
-                t_mult = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
-                k_mult[i] = w_mult * t_mult
+            fid = open_fid((config['data']['climatology']['smsf'] % jday).encode('UTF-8'), READ)
+            fread(smsf, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+            fclose(fid)
+            fid = open_fid((config['data']['climatology']['tsoil'] % jday).encode('UTF-8'), READ)
+            fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+            fclose(fid)
             # Loop over pixels
             for i in prange(SPARSE_N, nogil = True):
                 pft = int(PFT[i])
@@ -384,8 +389,12 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 delta[2] = 0
                 # Compute one daily soil decomposition step for this pixel;
                 #   note that litterfall is 1/365 of the annual NPP sum
+                w_mult = linear_constraint(
+                    smsf[i], param_smsf0[i], param_smsf1[i], 0)
+                t_mult = arrhenius(tsoil[i], param_tsoil[i], TSOIL1, TSOIL2)
+                k_mult = w_mult * t_mult
                 numerical_step(
-                    delta, rh_total, AVAIL_NPP[i], k_mult[i], f_met[i],
+                    delta, rh_total, AVAIL_NPP[i], k_mult, f_met[i],
                     f_str[i], k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
                 # Compute change in SOC storage as SOC + dSOC, it's unclear
                 #   why, but we absolutely MUST test for NaNs here, not upstream
@@ -427,12 +436,16 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     OUT_M09_DOUBLE = to_numpy_double(tolerance, SPARSE_N)
     OUT_M09_DOUBLE.tofile(
         '%s/L4Cython_numspin_tol_M09land.flt64' % config['model']['output_dir'])
-    PyMem_Free(k_mult)
+    PyMem_Free(smsf)
+    PyMem_Free(tsoil)
     PyMem_Free(k0)
     PyMem_Free(k1)
     PyMem_Free(k2)
     PyMem_Free(f_met)
     PyMem_Free(f_str)
+    PyMem_Free(param_smsf0)
+    PyMem_Free(param_smsf1)
+    PyMem_Free(param_tsoil)
     PyMem_Free(gpp)
     PyMem_Free(ra_total)
     PyMem_Free(rh_total)

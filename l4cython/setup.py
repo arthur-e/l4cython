@@ -8,7 +8,11 @@ MACROS = [ # Avoids warning "Using deprecated NumPy API"
 ] # https://stackoverflow.com/questions/52749662/using-deprecated-numpy-api
 
 reco_9km = Extension(
-    name = 'reco_9km', sources = ['reco_9km.pyx'], define_macros = MACROS
+    name = 'reco_9km',
+    sources = ['reco_9km.pyx'],
+    define_macros = MACROS,
+    # -g1 : See: https://docs.cython.org/en/latest/src/userguide/faq.html#how-do-i-speed-up-the-c-compilation
+    extra_compile_args = ['-g1']
 )
 
 reco = Extension(
@@ -18,7 +22,7 @@ reco = Extension(
     libraries = ['dfalt'],
     include_dirs = ['/usr/include', '/usr/include/hdf', './utils'],
     extra_compile_args = [
-        '-fopenmp', '-DHAVE_HDF4', '-ldfalt', '-Wno-maybe-uninitialized'
+        '-fopenmp', '-DHAVE_HDF4', '-ldfalt', '-Wno-maybe-uninitialized', '-g1'
     ],
     extra_link_args = ['-fopenmp']
 )
@@ -27,7 +31,7 @@ spinup = Extension(
     name = 'spinup',
     sources = ['spinup_9km.pyx'],
     define_macros = MACROS,
-    extra_compile_args = ['-fopenmp'],
+    extra_compile_args = ['-fopenmp', '-g1'],
     extra_link_args = ['-fopenmp']
 )
 

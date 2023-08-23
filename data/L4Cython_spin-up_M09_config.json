@@ -17,6 +17,7 @@
     "ad_rate": [1, 1, 1]
   },
 
-  "max_iter": 10
+  "max_iter": 10,
+  "min_pixels": 10000
 
 }
