@@ -388,8 +388,8 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
             fclose(fid)
             if do_daily_npp > 0:
                 npp_total[0] = 0 # Reset annual NPP total
-                mmdd = datetime.datetime.strptime(f'2000{jday}', '%Y%j').strftime('%m%d')
-                fid = open_fid((config['data']['climatology']['GPP'] % mmdd).encode('UTF-8'), READ)
+                ymd = datetime.datetime.strptime(f'2017{jday}', '%Y%j').strftime('%Y%m%d')
+                fid = open_fid((config['data']['climatology']['GPP'] % ymd).encode('UTF-8'), READ)
                 fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
                 fclose(fid)
 
