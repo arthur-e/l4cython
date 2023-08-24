@@ -1,4 +1,5 @@
 # cython: language_level=3
+# cython: linetrace=True
 
 '''
 Soil organic carbon (SOC) spin-up for SMAP Level 4 Carbon (L4C) model, based
@@ -18,6 +19,11 @@ unstable pixels in the steady-state image.
 Note that if the "data/NPP_annual_sum" configuration parameter is set to the
 empty string, the model will use the daily GPP (converted to NPP) to determine
 the daily NPP available for litterfall.
+
+Note that if the "model/ending_day_of_year" configuration parameter is set to
+anything less than 365 (December 31), the model will run an additional
+climatological cycle, up to and ending on the day of year (DOY) specified, in
+order to align with the desired the seasonal cycle.
 
 Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): 15 secs for analytical
 spin-up, 25-30 min for the first climatological year in numerical spin-up. It
@@ -119,26 +125,29 @@ def main(config_file = None):
         '%s/L4Cython_Cana2_M09land.flt64' % config['model']['output_dir'])
     # Step 2: Numerical spin-up
     numerical_spinup(config, soc0, soc1, soc2)
+    output_dir = config['model']['output_dir']
+    end_doy = str(config['model']['ending_day_of_year']).zfill(3)
     OUT_M09_DOUBLE = to_numpy_double(soc0, SPARSE_N)
     if config['model']['accelerated']:
         OUT_M09_DOUBLE *= config['model']['ad_rate'][0]
     OUT_M09_DOUBLE.tofile(
-        '%s/L4Cython_Cnum0_M09land.flt64' % config['model']['output_dir'])
+        f'{output_dir}/L4Cython_Cnum0_M09land_DOY{end_doy}.flt64')
     OUT_M09_DOUBLE = to_numpy_double(soc1, SPARSE_N)
     if config['model']['accelerated']:
         OUT_M09_DOUBLE *= config['model']['ad_rate'][1]
     OUT_M09_DOUBLE.tofile(
-        '%s/L4Cython_Cnum1_M09land.flt64' % config['model']['output_dir'])
+        f'{output_dir}/L4Cython_Cnum1_M09land_DOY{end_doy}.flt64')
     OUT_M09_DOUBLE = to_numpy_double(soc2, SPARSE_N)
     if config['model']['accelerated']:
         OUT_M09_DOUBLE *= config['model']['ad_rate'][2]
     OUT_M09_DOUBLE.tofile(
-        '%s/L4Cython_Cnum2_M09land.flt64' % config['model']['output_dir'])
+        f'{output_dir}/L4Cython_Cnum2_M09land_DOY{end_doy}.flt64')
     PyMem_Free(soc0)
     PyMem_Free(soc1)
     PyMem_Free(soc2)
 
 
+@cython.profile(False)
 cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
     '''
     Analytical SOC spin-up: the initial soil C states are found by solving
@@ -366,6 +375,9 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     print('Beginning numerical spin-up...')
     iter = 1
     success = 0
+    end_doy = 366 # Normally, we run a full climatological year
+    # This is where we want to end up in the seasonal cycle:
+    projected_end_doy = config['model']['ending_day_of_year']
     tol_count = SPARSE_N # Initially, no pixels have met tolerance
     max_iter = config['max_iter']
     min_pixels = config['min_pixels'] # Minimum number of pixels remaining
@@ -376,7 +388,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         tol_count = 0
 
         # For each day of the climatological year
-        for doy in tqdm(range(1, 366)):
+        for doy in tqdm(range(1, end_doy)):
             jday = str(doy).zfill(3)
             # NOTE: For compatibility with TCF, the SMSF data are already in
             #   percentage units, i.e., on [0,100]
@@ -437,18 +449,27 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                         nee_sum[i] = rh_total[0] - npp_total[0]
                     else:
                         nee_sum[i] = rh_total[0] - (365 * AVAIL_NPP[i])
-                    # Jones et al. (2017) write that goal is NEE
-                    #   tolerance <= 1 g C m-2 year-1
                     if iter > 0:
                         tolerance[i] = nee_last_year[i] - nee_sum[i]
                     else:
                         tolerance[i] = nee_sum[i]
                     nee_last_year[i] = nee_sum[i]
                     if not isnan(tolerance[i]):
+                        # Jones et al. (2017) write that goal is NEE
+                        #   tolerance <= 1 g C m-2 year-1
                         if fabs(tolerance[i]) > 1:
                             success = 0
                         tol_count += 1
                         tol_sum += tolerance[i]
+
+            # If there's a stopping criterion that's met, make sure we wind up
+            #   at the right part of the seasonal cycle
+            if success == 1 or iter >= max_iter or tol_count <= min_pixels:
+                # This is only important if we didn't intend to end on
+                #   December 31
+                if projected_end_doy < 365:
+                    end_doy = projected_end_doy + 1
+                    continue
 
         print('[%d/%d] Total tolerance is: %.2f' % (iter, max_iter, tol_sum))
         print('--- Pixels counted: %d' % tol_count)
@@ -484,6 +505,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     PyMem_Free(tolerance)
 
 
+@cython.profile(False)
 cdef void numerical_step(
         double* delta, float* rh_total, float litter, float k_mult,
         float f_met, float f_str, float k0, float k1, float k2,
@@ -508,6 +530,7 @@ cdef void numerical_step(
     rh_total[0] = rh0 + rh1 + rh2
 
 
+@cython.profile(False)
 def load_state(config):
     '''
     Populates global state variables with data.

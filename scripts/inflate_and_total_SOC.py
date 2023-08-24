@@ -6,6 +6,8 @@ import warnings
 import fire
 import numpy as np
 from l4cython.utils.mkgrid import inflate_file
+from l4cython.utils.fixtures import NROW9KM, NCOL9KM, NROW1KM, NCOL1KM
+from matplotlib import pyplot
 
 def main(file_pattern, grid = 'M09'):
     '''
@@ -29,6 +31,14 @@ def main(file_pattern, grid = 'M09'):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         print(np.nanpercentile(stack, (1, 10, 50, 90, 99), axis = 1).T.round(0))
+
+    if grid == 'M09':
+        total = stack.sum(axis = 0).reshape((NROW9KM, NCOL9KM))
+    else:
+        total = stack.sum(axis = 0).reshape((NROW1KM, NCOL1KM))
+    pyplot.imshow(total, interpolation = 'nearest')
+    pyplot.colorbar()
+    pyplot.show()
 
 
 if __name__ == '__main__':

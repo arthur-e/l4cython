@@ -13,6 +13,7 @@ data:
       /media/arthur.endsley/raid/TCF/L4C_V7_mdl_GPP/L4_C_mdl_2017%s_V7.flt32
 model:
   output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230823
+  ending_day_of_year: 365 # Day of year we want simulation to end on, to align the seasonal cycle
   accelerated: true # Use accelerated decomposition?
   ad_rate: # Accelerated decomposition (AD) rates
     - 1 # AD rate for SOC pool 0
