@@ -1,5 +1,4 @@
 # cython: language_level=3
-# cython: linetrace=True
 
 '''
 Soil organic carbon (SOC) spin-up for SMAP Level 4 Carbon (L4C) model, based
@@ -147,7 +146,6 @@ def main(config_file = None):
     PyMem_Free(soc2)
 
 
-@cython.profile(False)
 cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
     '''
     Analytical SOC spin-up: the initial soil C states are found by solving
@@ -305,7 +303,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         int do_daily_npp # Flag indicating daily NPP should be calculated
         float tol_mean # ...Overall mean tolerance
         float tol_sum # Sum of all tolerances
-        float w_mult, t_mult, k_mult
+        float w_mult, t_mult
         float* smsf
         float* tsoil
         float* k0
@@ -427,9 +425,8 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 w_mult = linear_constraint(
                     smsf[i], param_smsf0[i], param_smsf1[i], 0)
                 t_mult = arrhenius(tsoil[i], param_tsoil[i], TSOIL1, TSOIL2)
-                k_mult = w_mult * t_mult
                 numerical_step(
-                    delta, rh_total, AVAIL_NPP[i], k_mult, f_met[i],
+                    delta, rh_total, AVAIL_NPP[i], w_mult * t_mult, f_met[i],
                     f_str[i], k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
                 # Compute change in SOC storage as SOC + dSOC, it's unclear
                 #   why, but we absolutely MUST test for NaNs here, not upstream
@@ -505,8 +502,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     PyMem_Free(tolerance)
 
 
-@cython.profile(False)
-cdef void numerical_step(
+cdef inline void numerical_step(
         double* delta, float* rh_total, float litter, float k_mult,
         float f_met, float f_str, float k0, float k1, float k2,
         double c0, double c1, double c2) nogil:
@@ -530,7 +526,6 @@ cdef void numerical_step(
     rh_total[0] = rh0 + rh1 + rh2
 
 
-@cython.profile(False)
 def load_state(config):
     '''
     Populates global state variables with data.

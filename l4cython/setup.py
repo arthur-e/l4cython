@@ -5,8 +5,9 @@ from Cython.Build import cythonize
 
 MACROS = [ # Avoids warning "Using deprecated NumPy API"
     ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION'), # https://stackoverflow.com/questions/52749662/using-deprecated-numpy-api
-    ('CYTHON_TRACE', '1') # https://cython.readthedocs.io/en/latest/src/tutorial/profiling_tutorial.html
 ]
+# NOTE: For profile, add the following to MACROS:
+#   ('CYTHON_NOGIL_TRACE', '1') # https://cython.readthedocs.io/en/latest/src/tutorial/profiling_tutorial.html
 
 reco_9km = Extension(
     name = 'reco_9km',
