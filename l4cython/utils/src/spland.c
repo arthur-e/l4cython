@@ -219,10 +219,10 @@ void set_fillval_UUTA(void *vDest_p, const int32 dataType,
     dst_p->aUint64_p[i] = (unsigned long)1.8446e19;
     break;
   case isFloat32:
-    dst_p->aFlt32_p[i] = (float)-9.999e9;
+    dst_p->aFlt32_p[i] = (float)-9.999e3; // NOTE: Changed from official mkgrid
     break;
   case isFloat64:
-    dst_p->aFlt64_p[i] = (double)-9.999e9;
+    dst_p->aFlt64_p[i] = (double)-9.999e3; // NOTE: Changed from official mkgrid
     break;
   } // end switch on datatype
 }
