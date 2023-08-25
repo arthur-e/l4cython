@@ -4,7 +4,7 @@ L4C-Cython
 A Cython implementation of the Terrestrial Carbon Flux (TCF) model, which is
 the basis for the Soil Moisture Active Passive (SMAP) Level 4 Carbon (L4C) model.
 
-- [x] PFT map in sparse, binary format
+- [ ] Single place for constants, e.g., `DFNT_FLOAT32`
 - [ ] Routine to read-in BPLUT
 - https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html?highlight=packaging#distributing-cython-modules
 

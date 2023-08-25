@@ -45,6 +45,32 @@
 #define   MXSTRLEN                 500
 #define   FILLVAL                -9999       /*Fill values*/        
 
+// From hntdfs.h, HDF4 library
+#define   DFNT_FLOAT32  5
+#define   DFNT_FLOAT64  6
+#define   DFNT_INT8     20
+#define   DFNT_UINT8    21
+#define   DFNT_INT16    22
+#define   DFNT_UINT16   23
+#define   DFNT_INT32    24
+#define   DFNT_UINT32   25
+#define   DFNT_INT64    26
+#define   DFNT_UINT64   27
+#define   SIZE_FLOAT32  4
+#define   SIZE_FLOAT64  8
+#define   SIZE_INT8     1
+#define   SIZE_UINT8    1
+#define   SIZE_INT16    2
+#define   SIZE_UINT16   2
+#define   SIZE_INT32    4
+#define   SIZE_UINT32   4
+#define   SIZE_INT64    8
+#define   SIZE_UINT64   8
+#define   SIZE_CHAR8    1
+#define   SIZE_CHAR     1
+#define   SIZE_UCHAR8   1
+#define   SIZE_UCHAR    1
+
 // SERIALIZATION OFFSETS 
 // 2D offsets: y is outermost, x is innermost (fastest varying) term
 #define M_2D_B0(x,y,n_y) (((x)*n_y)+(y))
@@ -61,6 +87,7 @@ typedef struct {
 } spland_ref_struct;
 
 int spland_load_9km_rc(spland_ref_struct *SPLAND);
+int size_in_bytes(int32 number_type);
 
 void spland_deflate_9km(spland_ref_struct SPLAND, void *src_p, void *dest_p, const unsigned int dataType);
 void spland_deflate_1km(spland_ref_struct SPLAND, void *src_p, void *dest_p, const unsigned int dataType);

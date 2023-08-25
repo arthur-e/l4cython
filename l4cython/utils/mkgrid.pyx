@@ -1,5 +1,5 @@
 # cython: language_level=3
-# distutils: sources = ["src/spland.c"]
+# distutils: sources = ["src/spland.c", "src/uuta.c"]
 # distutils: include_dirs = ["src/"]
 
 '''
@@ -44,23 +44,19 @@ def deflate_file(filename, grid = 'M09'):
     # Infer data type by file extension, e.g., *.flt32, *.int32, etc.
     ext = filename_byte_string.decode('UTF-8').split('.').pop()
     data_type = DFNT_FLOAT32
-    bs = sizeof(float)
     if ext == 'flt64':
         data_type = DFNT_FLOAT64
-        bs = sizeof(double)
     elif ext == 'int32':
         data_type = DFNT_INT32
-        bs = sizeof(long)
     elif ext == 'uint16':
         data_type = DFNT_UINT16
-        bs = sizeof(short)
 
     # Assume 9-km grid, this also helps avoid warnings when compiling
-    in_bytes = bs * NCOL9KM * NROW9KM
-    out_bytes = bs * SPARSE_M09_N
+    in_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
+    out_bytes = size_in_bytes(data_type) * SPARSE_M09_N
     if grid == 'M01':
-        in_bytes = bs * NCOL1KM * NROW1KM
-        out_bytes = bs * SPARSE_M09_N * 81
+        in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
+        out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
     grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
 
     # Read in the inflated array
@@ -124,23 +120,19 @@ def inflate_file(filename, grid = 'M09'):
     # Infer data type by file extension, e.g., *.flt32, *.int32, etc.
     ext = filename_byte_string.decode('UTF-8').split('.').pop()
     data_type = DFNT_FLOAT32
-    bs = sizeof(float)
     if ext == 'flt64':
         data_type = DFNT_FLOAT64
-        bs = sizeof(double)
     elif ext == 'int32':
         data_type = DFNT_INT32
-        bs = sizeof(long)
     elif ext == 'uint16':
         data_type = DFNT_UINT16
-        bs = sizeof(short)
 
     # Assume 9-km grid, this also helps avoid warnings when compiling
-    in_bytes = bs * SPARSE_M09_N
-    out_bytes = bs * NCOL9KM * NROW9KM
+    in_bytes = size_in_bytes(data_type) * SPARSE_M09_N
+    out_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
     if grid == 'M01':
-        in_bytes = bs * SPARSE_M09_N * 81
-        out_bytes = bs * NCOL1KM * NROW1KM
+        in_bytes = size_in_bytes(data_type) * SPARSE_M01_N
+        out_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
     flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
 
     # Read in the deflated array
