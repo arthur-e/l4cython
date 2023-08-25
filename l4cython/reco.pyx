@@ -41,14 +41,15 @@ from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint
 from l4cython.utils cimport open_fid, to_numpy
 from l4cython.utils.mkgrid cimport inflate
 from l4cython.utils.mkgrid import write_inflated
-from l4cython.utils.fixtures import NCOL9KM, NROW9KM, DFNT_FLOAT32, READ, WRITE
+from l4cython.utils.fixtures import READ, WRITE, DFNT_FLOAT32, NCOL9KM, NROW9KM
+from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 from tqdm import tqdm
 
 # EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
 #   can't be Python numbers)
 cdef:
     int  M01_NESTED_IN_M09 = 9 * 9
-    long SPARSE_M09_N = 1664040 # Number of grid cells in sparse ("land") arrays
+    long SPARSE_M09_N = PY_SPARSE_M09_N # Number of grid cells in sparse ("land") arrays
     long SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
     # Additional Tsoil parameter (fixed for all PFTs)
     float TSOIL1 = 66.02 # deg K

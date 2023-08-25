@@ -27,11 +27,8 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint
 from l4cython.utils cimport open_fid, to_numpy
 from l4cython.utils.mkgrid import write_inflated
-from l4cython.utils.fixtures import READ
+from l4cython.utils.fixtures import READ, SPARSE_M09_N
 from tqdm import tqdm
-
-# Number of grid cells in sparse ("land") arrays
-SPARSE_N = 1664040
 
 # Additional Tsoil parameter (fixed for all PFTs)
 cdef float TSOIL1 = 66.02 # deg K
@@ -47,15 +44,15 @@ cdef:
     float* SOC1
     float* SOC2
     float* LITTERFALL
-PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_N)
-SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-LITTERFALL = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M09_N)
+SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+LITTERFALL = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
 
 # Python arrays that want heap allocations must be global; this one is reused
 #   for any array that needs to be written to disk (using NumPy)
-OUT_M09 = np.full((SPARSE_N,), np.nan, dtype = np.float32)
+OUT_M09 = np.full((SPARSE_M09_N,), np.nan, dtype = np.float32)
 
 # L4_C BPLUT Version 7 (Vv7042, Vv7040, Nature Run v10)
 # NOTE: BPLUT is initialized here because we *need* it to be a C struct and
@@ -97,15 +94,15 @@ def main(config_file = None):
         float* nee
         float* w_mult
         float* t_mult
-    rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    npp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    nee = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    npp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    nee = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
 
     # Read in configuration file, then load state data
     if config_file is None:
@@ -126,10 +123,10 @@ def main(config_file = None):
             config['data']['drivers']['tsoil'] % date, dtype = np.float32)
         # Read in the GPP data
         fid = open_fid((config['data']['drivers']['GPP'] % date).encode('UTF-8'), READ)
-        fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+        fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
 
-        for i in range(0, SPARSE_N):
+        for i in range(0, SPARSE_M09_N):
             pft = int(PFT[i])
             if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
                 continue
@@ -161,16 +158,16 @@ def main(config_file = None):
         fname_nee = '%s/L4Cython_NEE_%s_M09.flt32' % (config['model']['output_dir'], date)
         if config['model']['output_format'] == 'M09land':
             if 'RH' in config['model']['output_fields']:
-                OUT_M09 = to_numpy(rh_total, SPARSE_N)
+                OUT_M09 = to_numpy(rh_total, SPARSE_M09_N)
                 OUT_M09.tofile(fname_rh.replace('M09', 'M09land'))
             if 'NEE' in config['model']['output_fields']:
-                OUT_M09 = to_numpy(nee, SPARSE_N)
+                OUT_M09 = to_numpy(nee, SPARSE_M09_N)
                 OUT_M09.tofile(fname_nee.replace('M09', 'M09land'))
         else:
             if 'RH' in config['model']['output_fields']:
-                write_inflated(fname_rh.encode('UTF-8'), to_numpy(rh_total, SPARSE_N))
+                write_inflated(fname_rh.encode('UTF-8'), to_numpy(rh_total, SPARSE_M09_N))
             if 'NEE' in config['model']['output_fields']:
-                write_inflated(fname_rh.encode('UTF-8'), to_numpy(nee, SPARSE_N))
+                write_inflated(fname_rh.encode('UTF-8'), to_numpy(nee, SPARSE_M09_N))
     PyMem_Free(PFT)
     PyMem_Free(SOC0)
     PyMem_Free(SOC1)
@@ -197,23 +194,23 @@ def load_state(config):
     '''
     # Allocate space, read in 1-km PFT map
     fid = open_fid(config['data']['PFT_map'].encode('UTF-8'), READ)
-    fread(PFT, sizeof(unsigned char), <size_t>sizeof(unsigned char)*SPARSE_N, fid)
+    fread(PFT, sizeof(unsigned char), <size_t>sizeof(unsigned char)*SPARSE_M09_N, fid)
     fclose(fid)
     # Read in SOC datasets
     fid = open_fid(config['data']['SOC'][0].encode('UTF-8'), READ)
-    fread(SOC0, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+    fread(SOC0, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
     fclose(fid)
     fid = open_fid(config['data']['SOC'][1].encode('UTF-8'), READ)
-    fread(SOC1, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+    fread(SOC1, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
     fclose(fid)
     fid = open_fid(config['data']['SOC'][2].encode('UTF-8'), READ)
-    fread(SOC2, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+    fread(SOC2, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
     fclose(fid)
     # NOTE: Calculating litterfall as average daily NPP (constant fraction of
     #   the annual NPP sum)
     if config['data']['NPP_annual_sum'] != '':
         fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
-        fread(LITTERFALL, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+        fread(LITTERFALL, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
-        for i in range(SPARSE_N):
+        for i in range(SPARSE_M09_N):
             LITTERFALL[i] = LITTERFALL[i] / 365

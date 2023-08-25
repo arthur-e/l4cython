@@ -24,9 +24,10 @@ anything less than 365 (December 31), the model will run an additional
 climatological cycle, up to and ending on the day of year (DOY) specified, in
 order to align with the desired the seasonal cycle.
 
-Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): 15 secs for analytical
-spin-up, 25-30 min for the first climatological year in numerical spin-up. It
-should get faster for each successive climatological year.
+Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): 10-50 secs (depending on
+NFS latency) for analytical spin-up, 25-30 min for the first climatological
+year in numerical spin-up. It should get faster for each successive
+climatological year.
 
 Required data:
 
@@ -44,11 +45,11 @@ from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint
 from l4cython.utils cimport open_fid, to_numpy, to_numpy_double
-from l4cython.utils.fixtures import READ
+from l4cython.utils.fixtures import READ, SPARSE_M09_N
 from tqdm import tqdm
 
 cdef:
-    int SPARSE_N = 1664040 # Number of grid cells in sparse ("land") arrays
+    int SPARSE_N = SPARSE_M09_N # Number of grid cells in sparse ("land") arrays
     # Additional Tsoil parameter (fixed for all PFTs)
     float TSOIL1 = 66.02 # deg K
     float TSOIL2 = 227.13 # deg K
@@ -162,14 +163,10 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
     cdef:
         Py_ssize_t i
         Py_ssize_t doy
-        int pft
+        int accelerated, pft
+        float ad_rate[3]
         float* smsf
         float* tsoil
-        float* f_met
-        float* f_str
-        float* param_smsf0
-        float* param_smsf1
-        float* param_tsoil
         float* k0 # Decay rates of each pool
         float* k1
         float* k2
@@ -179,17 +176,20 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
         float denom0, denom1
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    f_met = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    f_str = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    param_smsf0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    param_smsf1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    param_tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+
+    # Accommodate accelerated decomposition
+    accelerated = 0
+    if config['model']['accelerated']:
+        accelerated = 1
+        for i in range(3):
+            ad_rate[i] = config['model']['ad_rate'][i]
+
     print('Beginning analytical spin-up...')
     # Analytical spin-up calculation has a closed form, so this outer loop,
     #   for each day of the climatological year, pre-computes annual sums
@@ -206,9 +206,9 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
         fid = open_fid((config['data']['climatology']['tsoil'] % jday).encode('UTF-8'), READ)
         fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
         fclose(fid)
-        # Vectorization: This loop initializes arrays that represent the
-        #   parameter values for each pixel, to allow use in "nogil"
-        for i in range(SPARSE_N):
+
+        # Pre-compute the k_mult sum for each pixel
+        for i in prange(SPARSE_N, nogil = True):
             pft = int(PFT[i])
             if pft == 0 or pft > 8:
                 continue
@@ -220,25 +220,16 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
                 k0[i] = PARAMS.decay_rate[0][pft]
                 k1[i] = PARAMS.decay_rate[1][pft]
                 k2[i] = PARAMS.decay_rate[2][pft]
-                if config['model']['accelerated']:
-                    k0[i] = k0[i] * config['model']['ad_rate'][0]
-                    k1[i] = k1[i] * config['model']['ad_rate'][1]
-                    k2[i] = k2[i] * config['model']['ad_rate'][2]
-                f_met[i] = PARAMS.f_metabolic[pft]
-                f_str[i] = PARAMS.f_structural[pft]
-                param_smsf0[i] = PARAMS.smsf0[pft]
-                param_smsf1[i] = PARAMS.smsf1[pft]
-                param_tsoil[i] = PARAMS.tsoil[pft]
-        # Pre-compute the k_mult sum for each pixel
-        for i in prange(SPARSE_N, nogil = True):
-            pft = int(PFT[i])
-            if pft == 0 or pft > 8:
-                continue
+                if accelerated:
+                    k0[i] = k0[i] * ad_rate[0]
+                    k1[i] = k1[i] * ad_rate[1]
+                    k2[i] = k2[i] * ad_rate[2]
             # Compute and increment annual k_mult sum
             w_mult[i] = linear_constraint(
-                smsf[i], param_smsf0[i], param_smsf1[i], 0)
-            t_mult[i] = arrhenius(tsoil[i], param_tsoil[i], TSOIL1, TSOIL2)
-            k_mult[i] = k_mult[i] + (w_mult[i] * t_mult[i])
+                smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
+            t_mult[i] = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
+            k_mult[i] += (w_mult[i] * t_mult[i])
+
     # Outside of the daily loop, but for each pixel...
     for i in prange(SPARSE_N, nogil = True):
         pft = int(PFT[i])
@@ -247,26 +238,21 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
         # Calculate analytical steady-state of SOC
         denom0 = (k_mult[i] * k0[i])
         if denom0 > 0:
-            soc0[i] = <double>(365 * AVAIL_NPP[i] * f_met[i]) / denom0
+            soc0[i] = <double>(365 * AVAIL_NPP[i] * PARAMS.f_metabolic[pft]) / denom0
         else:
             soc0[i] = 0
         denom1 = (k_mult[i] * k1[i])
         if denom1 > 0:
-            soc1[i] = <double>(365 * AVAIL_NPP[i] * (1 - f_met[i])) / denom1
+            soc1[i] = <double>(365 * AVAIL_NPP[i] * (1 - PARAMS.f_metabolic[pft])) / denom1
         else:
             soc1[i] = 0
         # Guard against division by zero
         if k2[i] > 0:
-            soc2[i] = <double>(f_str[i] * k1[i] * soc1[i]) / k2[i]
+            soc2[i] = <double>(PARAMS.f_structural[pft] * k1[i] * soc1[i]) / k2[i]
         else:
             soc2[i] = 0
     PyMem_Free(smsf)
     PyMem_Free(tsoil)
-    PyMem_Free(f_met)
-    PyMem_Free(f_str)
-    PyMem_Free(param_smsf0)
-    PyMem_Free(param_smsf1)
-    PyMem_Free(param_tsoil)
     PyMem_Free(k0)
     PyMem_Free(k1)
     PyMem_Free(k2)
@@ -334,7 +320,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     param_tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     cue = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    npp_total = <float*> PyMem_Malloc(sizeof(float) * 1)
+    npp_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     rh_total = <float*> PyMem_Malloc(sizeof(float) * 1)
     nee_sum = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     nee_last_year = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
@@ -385,6 +371,9 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         tol_sum = 0.0
         tol_count = 0
 
+        for i in range(SPARSE_N):
+            npp_total[i] = 0 # Reset annual NPP total
+
         # For each day of the climatological year
         for doy in tqdm(range(1, end_doy)):
             jday = str(doy).zfill(3)
@@ -397,7 +386,6 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
             fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
             fclose(fid)
             if do_daily_npp > 0:
-                npp_total[0] = 0 # Reset annual NPP total
                 ymd = datetime.datetime.strptime(f'2017{jday}', '%Y%j').strftime('%Y%m%d')
                 fid = open_fid((config['data']['climatology']['GPP'] % ymd).encode('UTF-8'), READ)
                 fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
@@ -419,7 +407,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 # Compute daily NPP if not using the annual NPP sum
                 if do_daily_npp > 0:
                     AVAIL_NPP[i] = gpp[i] * cue[i]
-                    npp_total[0] += AVAIL_NPP[i]
+                    npp_total[i] += AVAIL_NPP[i]
                 # Compute one daily soil decomposition step for this pixel;
                 #   note that litterfall is 1/365 of the annual NPP sum
                 w_mult = linear_constraint(
