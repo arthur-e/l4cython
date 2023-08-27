@@ -30,13 +30,15 @@ def main(file_pattern, grid = 'M09'):
     stack[stack < 0] = np.nan
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        print(np.nanpercentile(stack, (1, 10, 50, 90, 99), axis = 1).T.round(0))
+        ptiles = np.nanpercentile(stack, (1, 10, 50, 90, 99), axis = 1).T.round(0)
+        print(ptiles)
 
     if grid == 'M09':
         total = stack.sum(axis = 0).reshape((NROW9KM, NCOL9KM))
     else:
         total = stack.sum(axis = 0).reshape((NROW1KM, NCOL1KM))
-    pyplot.imshow(total, interpolation = 'nearest')
+    # Show up to the 99th percentile of the highest-storage SOC pool
+    pyplot.imshow(total, interpolation = 'nearest', vmax = ptiles[2,4])
     pyplot.colorbar()
     pyplot.show()
 

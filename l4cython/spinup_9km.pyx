@@ -167,6 +167,8 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
         float ad_rate[3]
         float* smsf
         float* tsoil
+        float* gpp # Daily GPP
+        float* npp_total # Annual total NPP
         float* k0 # Decay rates of each pool
         float* k1
         float* k2
@@ -176,6 +178,8 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
         float denom0, denom1
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    npp_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
@@ -189,6 +193,12 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
         accelerated = 1
         for i in range(3):
             ad_rate[i] = config['model']['ad_rate'][i]
+
+    # Option to use daily (climatological) GPP as the source of
+    #   litterfall instead of a fraction of the annual NPP sum
+    do_daily_npp = 0
+    if config['data']['NPP_annual_sum'] == '':
+        do_daily_npp = 1
 
     print('Beginning analytical spin-up...')
     # Analytical spin-up calculation has a closed form, so this outer loop,
@@ -207,6 +217,12 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
         fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
         fclose(fid)
 
+        if do_daily_npp > 0:
+            ymd = datetime.datetime.strptime(f'2017{jday}', '%Y%j').strftime('%Y%m%d')
+            fid = open_fid((config['data']['climatology']['GPP'] % ymd).encode('UTF-8'), READ)
+            fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+            fclose(fid)
+
         # Pre-compute the k_mult sum for each pixel
         for i in prange(SPARSE_N, nogil = True):
             pft = int(PFT[i])
@@ -214,6 +230,7 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
                 continue
             # Just once for each pixel
             if doy == 1:
+                npp_total[i] = 0
                 # Initialize k_mult sum at zero; set base decay rates and
                 #   allocation factors
                 k_mult[i] = 0
@@ -224,6 +241,12 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
                     k0[i] = k0[i] * ad_rate[0]
                     k1[i] = k1[i] * ad_rate[1]
                     k2[i] = k2[i] * ad_rate[2]
+            # Compute daily NPP if not using "NPP_annual_sum"
+            if do_daily_npp > 0:
+                AVAIL_NPP[i] = gpp[i] * PARAMS.cue[pft]
+            # Total annual NPP; if "NPP_annual_sum" file was specified, this
+            #   is just a sum of 365 equal increments
+            npp_total[i] += AVAIL_NPP[i]
             # Compute and increment annual k_mult sum
             w_mult[i] = linear_constraint(
                 smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
@@ -238,12 +261,12 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
         # Calculate analytical steady-state of SOC
         denom0 = (k_mult[i] * k0[i])
         if denom0 > 0:
-            soc0[i] = <double>(365 * AVAIL_NPP[i] * PARAMS.f_metabolic[pft]) / denom0
+            soc0[i] = <double>(365 * npp_total[i] * PARAMS.f_metabolic[pft]) / denom0
         else:
             soc0[i] = 0
         denom1 = (k_mult[i] * k1[i])
         if denom1 > 0:
-            soc1[i] = <double>(365 * AVAIL_NPP[i] * (1 - PARAMS.f_metabolic[pft])) / denom1
+            soc1[i] = <double>(365 * npp_total[i] * (1 - PARAMS.f_metabolic[pft])) / denom1
         else:
             soc1[i] = 0
         # Guard against division by zero
@@ -376,10 +399,12 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 delta[0] = 0
                 delta[1] = 0
                 delta[2] = 0
-                # Compute daily NPP if not using the annual NPP sum
+                # Compute daily NPP if not using "NPP_annual_sum"
                 if do_daily_npp > 0:
                     AVAIL_NPP[i] = gpp[i] * PARAMS.cue[pft]
-                    npp_total[i] += AVAIL_NPP[i]
+                # Total annual NPP; if "NPP_annual_sum" file was specified, this
+                #   is just a sum of 365 equal increments
+                npp_total[i] += AVAIL_NPP[i]
                 # Compute one daily soil decomposition step for this pixel;
                 #   note that litterfall is 1/365 of the annual NPP sum
                 w_mult = linear_constraint(
@@ -405,10 +430,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                     # i.e., tolerance is the change in the Annual NEE sum:
                     #   NEE = (RA + RH) - GPP --> NEE = RH - NPP
                     #   DeltaNEE = NEE(t) - NEE(t-1)
-                    if do_daily_npp > 0:
-                        nee_sum[i] = rh_total[0] - npp_total[0]
-                    else:
-                        nee_sum[i] = rh_total[0] - (365 * AVAIL_NPP[i])
+                    nee_sum[i] = rh_total[0] - npp_total[i]
                     if iter > 0:
                         tolerance[i] = nee_last_year[i] - nee_sum[i]
                     else:
