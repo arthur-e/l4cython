@@ -284,23 +284,15 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     cdef:
         Py_ssize_t i
         Py_ssize_t doy
-        int iter, pft, success
+        int accelerated, iter, pft, success
         int tol_count # Number of pixels with tolerance, for calculating...
         int do_daily_npp # Flag indicating daily NPP should be calculated
         float tol_mean # ...Overall mean tolerance
         float tol_sum # Sum of all tolerances
         float w_mult, t_mult
+        float ad_rate[3]
         float* smsf
         float* tsoil
-        float* k0
-        float* k1
-        float* k2
-        float* f_met
-        float* f_str
-        float* param_smsf0 # Vectorized parameter values
-        float* param_smsf1
-        float* param_tsoil
-        float* cue # Carbon use efficiency
         float* gpp # Daily (climatological) GPP
         float* npp_total # Keeps track of total annual NPP if do_daily_npp
         float* rh_total # Annual heterotrophic respiration (RH) sum
@@ -310,15 +302,6 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         double* tolerance # Tolerance at each pixel
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    k0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    k1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    k2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    f_met = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    f_str = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    param_smsf0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    param_smsf1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    param_tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    cue = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     npp_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     rh_total = <float*> PyMem_Malloc(sizeof(float) * 1)
@@ -327,33 +310,21 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     delta = <double*> PyMem_Malloc(sizeof(double) * 3)
     tolerance = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
 
+    # Accommodate accelerated decomposition
+    for i in range(3):
+        if config['model']['accelerated']:
+            ad_rate[i] = config['model']['ad_rate'][i]
+        else:
+            ad_rate[i] = 1
+
     # Option to use daily (climatological) GPP as the source of
     #   litterfall instead of a fraction of the annual NPP sum
     do_daily_npp = 0
     if config['data']['NPP_annual_sum'] == '':
         do_daily_npp = 1
 
-    # Pre-allocate the decay rate, CUE, and f_met, f_str arrays
+    # Pre-allocate tolerance array
     for i in range(SPARSE_N):
-        pft = int(PFT[i])
-        if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
-            continue
-        f_met[i] = PARAMS.f_metabolic[pft]
-        f_str[i] = PARAMS.f_structural[pft]
-        param_smsf0[i] = PARAMS.smsf0[pft]
-        param_smsf1[i] = PARAMS.smsf1[pft]
-        param_tsoil[i] = PARAMS.tsoil[pft]
-        # Will calculate daily NPP, so record each pixel's CUE
-        if do_daily_npp > 0:
-            cue[i] = PARAMS.cue[pft]
-        k0[i] = PARAMS.decay_rate[0][pft]
-        k1[i] = PARAMS.decay_rate[1][pft]
-        k2[i] = PARAMS.decay_rate[2][pft]
-        # If accelerated decomposition is used
-        if config['model']['accelerated']:
-            k0[i] = k0[i] * config['model']['ad_rate'][0]
-            k1[i] = k1[i] * config['model']['ad_rate'][1]
-            k2[i] = k2[i] * config['model']['ad_rate'][2]
         tolerance[i] = 0
 
     print('Beginning numerical spin-up...')
@@ -385,6 +356,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
             fid = open_fid((config['data']['climatology']['tsoil'] % jday).encode('UTF-8'), READ)
             fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
             fclose(fid)
+
             if do_daily_npp > 0:
                 ymd = datetime.datetime.strptime(f'2017{jday}', '%Y%j').strftime('%Y%m%d')
                 fid = open_fid((config['data']['climatology']['GPP'] % ymd).encode('UTF-8'), READ)
@@ -406,16 +378,19 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 delta[2] = 0
                 # Compute daily NPP if not using the annual NPP sum
                 if do_daily_npp > 0:
-                    AVAIL_NPP[i] = gpp[i] * cue[i]
+                    AVAIL_NPP[i] = gpp[i] * PARAMS.cue[pft]
                     npp_total[i] += AVAIL_NPP[i]
                 # Compute one daily soil decomposition step for this pixel;
                 #   note that litterfall is 1/365 of the annual NPP sum
                 w_mult = linear_constraint(
-                    smsf[i], param_smsf0[i], param_smsf1[i], 0)
-                t_mult = arrhenius(tsoil[i], param_tsoil[i], TSOIL1, TSOIL2)
+                    smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
+                t_mult = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
                 numerical_step(
-                    delta, rh_total, AVAIL_NPP[i], w_mult * t_mult, f_met[i],
-                    f_str[i], k0[i], k1[i], k2[i], soc0[i], soc1[i], soc2[i])
+                    delta, rh_total, AVAIL_NPP[i], w_mult * t_mult,
+                    PARAMS.f_metabolic[pft], PARAMS.f_structural[pft],
+                    PARAMS.decay_rate[0][pft], PARAMS.decay_rate[1][pft],
+                    PARAMS.decay_rate[2][pft], soc0[i], soc1[i], soc2[i],
+                    ad_rate)
                 # Compute change in SOC storage as SOC + dSOC, it's unclear
                 #   why, but we absolutely MUST test for NaNs here, not upstream
                 if not isnan(delta[0]):
@@ -472,15 +447,6 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         '%s/L4Cython_numspin_tol_M09land.flt64' % config['model']['output_dir'])
     PyMem_Free(smsf)
     PyMem_Free(tsoil)
-    PyMem_Free(k0)
-    PyMem_Free(k1)
-    PyMem_Free(k2)
-    PyMem_Free(f_met)
-    PyMem_Free(f_str)
-    PyMem_Free(param_smsf0)
-    PyMem_Free(param_smsf1)
-    PyMem_Free(param_tsoil)
-    PyMem_Free(cue)
     PyMem_Free(gpp)
     PyMem_Free(npp_total)
     PyMem_Free(rh_total)
@@ -493,15 +459,16 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
 cdef inline void numerical_step(
         double* delta, float* rh_total, float litter, float k_mult,
         float f_met, float f_str, float k0, float k1, float k2,
-        double c0, double c1, double c2) nogil:
+        double c0, double c1, double c2, float[3] ad_rate) nogil:
     'A single daily soil decomposition step (for a single pixel)'
     cdef:
         float rh0
         float rh1
         float rh2
-    rh0 = k_mult * k0 * c0
-    rh1 = k_mult * k1 * c1
-    rh2 = k_mult * k2 * c2
+    # If not using accelerated decomposition, ad_rate[p] would be ==1
+    rh0 = k_mult * k0 * c0 * ad_rate[0]
+    rh1 = k_mult * k1 * c1 * ad_rate[1]
+    rh2 = k_mult * k2 * c2 * ad_rate[2]
     # Calculate change in C pools (g C m-2 units)
     if litter < 0:
         litter = 0
