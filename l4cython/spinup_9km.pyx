@@ -307,7 +307,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     cdef:
         Py_ssize_t i
         Py_ssize_t doy
-        int accelerated, iter, pft, success
+        int iter, pft
         int tol_count # Number of pixels with tolerance, for calculating...
         int do_daily_npp # Flag indicating daily NPP should be calculated
         float tol_mean # ...Overall mean tolerance
@@ -351,23 +351,30 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         tolerance[i] = 0
 
     print('Beginning numerical spin-up...')
-    iter = 1
-    success = 0
     end_doy = 366 # Normally, we run a full climatological year
     # This is where we want to end up in the seasonal cycle:
     projected_end_doy = config['model']['ending_day_of_year']
-    tol_count = SPARSE_N # Initially, no pixels have met tolerance
-    max_iter = config['max_iter']
     min_pixels = config['min_pixels'] # Minimum number of pixels remaining
-    while success != 1 and iter <= max_iter and tol_count >= min_pixels:
-        # Assume that we have fully equilibrated
-        success = 1
-        tol_sum = 0.0
-        tol_count = 0
+    max_iter = config['max_iter']
+    iter = 1
+    equilibrating = True
+    while equilibrating:
+        # If there's a stopping criterion that's met, make sure we wind up
+        #   at the right part of the seasonal cycle; criteria are:
+        #   1) Performed the maximum number of climatological cycles (iter)
+        #   2) Number of pixels that meet tolerance is less than the minimum
+        if iter > 1 and (iter >= max_iter or tol_count <= min_pixels):
+            # We do this check here so that the while loop runs one more time
+            #   after successful equilibration, to align seasonal cycle
+            equilibrating = False
+            # But we can quit now if we intended to end on December 31
+            if projected_end_doy == 365:
+                break
+            else:
+                end_doy = projected_end_doy + 1
 
-        for i in range(SPARSE_N):
-            npp_total[i] = 0 # Reset annual NPP total
-
+        tol_sum = 0.0 # Reset sum (for calculating average) of tolerance
+        tol_count = 0 # Reset count of pixels that have yet to equilibrate
         # For each day of the climatological year
         for doy in tqdm(range(1, end_doy)):
             jday = str(doy).zfill(3)
@@ -393,8 +400,12 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                     continue
                 # Skip pixels that have already equilibrated
                 if iter > 1 and not isnan(tolerance[i]):
+                    # Jones et al. (2017) write that goal is NEE
+                    #   tolerance <= 1 g C m-2 year-1
                     if fabs(tolerance[i]) < 1:
                         continue
+                if doy == 1:
+                    npp_total[i] = 0 # Reset annual NPP total
                 # Reset the annual delta-SOC arrays
                 delta[0] = 0
                 delta[1] = 0
@@ -418,11 +429,9 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                     ad_rate)
                 # Compute change in SOC storage as SOC + dSOC, it's unclear
                 #   why, but we absolutely MUST test for NaNs here, not upstream
-                if not isnan(delta[0]):
+                if not isnan(delta[0] + delta[1] + delta[2]):
                     soc0[i] += delta[0]
-                if not isnan(delta[1]):
                     soc1[i] += delta[1]
-                if not isnan(delta[2]):
                     soc2[i] += delta[2]
                 # At end of year, calculate change in Delta-NEE relative to
                 #   previous year
@@ -437,30 +446,14 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                         tolerance[i] = nee_sum[i]
                     nee_last_year[i] = nee_sum[i]
                     if not isnan(tolerance[i]):
-                        # Jones et al. (2017) write that goal is NEE
-                        #   tolerance <= 1 g C m-2 year-1
-                        if fabs(tolerance[i]) > 1:
-                            success = 0
                         tol_count += 1
                         tol_sum += tolerance[i]
-
-            # If there's a stopping criterion that's met, make sure we wind up
-            #   at the right part of the seasonal cycle
-            if success == 1 or iter >= max_iter or tol_count <= min_pixels:
-                # This is only important if we didn't intend to end on
-                #   December 31
-                if projected_end_doy < 365:
-                    end_doy = projected_end_doy + 1
-                    continue
 
         print('[%d/%d] Total tolerance is: %.2f' % (iter, max_iter, tol_sum))
         print('--- Pixels counted: %d' % tol_count)
         if tol_count > 0:
             tol_mean = (tol_sum / tol_count)
             print('--- Mean tolerance is: %.2f' % tol_mean)
-        else:
-            print('QUIT early due to zero pixel count in tolerance calculation')
-            break # Quit if we're not counting valid pixels anymore
         # Increment; also a counter for the number of climatological years
         iter = iter + 1
 
@@ -492,9 +485,7 @@ cdef inline void numerical_step(
     rh1 = k_mult * k1 * c1 * ad_rate[1]
     rh2 = k_mult * k2 * c2 * ad_rate[2]
     # Calculate change in C pools (g C m-2 units)
-    if litter < 0:
-        litter = 0
-    else:
+    if litter >= 0:
         delta[0] = <double>(litter * f_met) - rh0
         delta[1] = <double>(litter * (1 - f_met)) - rh1
         delta[2] = <double>(f_str * rh1) - rh2
