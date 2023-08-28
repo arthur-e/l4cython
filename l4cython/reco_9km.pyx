@@ -24,8 +24,8 @@ import yaml
 import numpy as np
 from libc.stdio cimport FILE, fread, fclose
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
-from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint
-from l4cython.utils cimport open_fid, to_numpy
+from l4cython.respiration cimport arrhenius, linear_constraint
+from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.mkgrid import write_inflated
 from l4cython.utils.fixtures import READ, SPARSE_M09_N
 from tqdm import tqdm

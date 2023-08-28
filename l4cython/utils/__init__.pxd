@@ -1,6 +1,16 @@
 import numpy as np
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 
+cdef struct BPLUT:
+    float smsf0[9] # wetness [0-100%]
+    float smsf1[9] # wetness [0-100%]
+    float tsoil[9] # deg K
+    float cue[9]
+    float f_metabolic[9]
+    float f_structural[9]
+    float decay_rate[3][9]
+    
+
 cdef inline FILE* open_fid(bytes filename_byte_string, bytes mode):
     '''
     Open a file using a filename given as a Python byte string.

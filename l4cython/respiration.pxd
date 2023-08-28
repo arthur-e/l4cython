@@ -1,16 +1,6 @@
 import numpy as np
 from libc.math cimport exp
 
-cdef struct BPLUT:
-    float smsf0[9] # wetness [0-100%]
-    float smsf1[9] # wetness [0-100%]
-    float tsoil[9] # deg K
-    float cue[9]
-    float f_metabolic[9]
-    float f_structural[9]
-    float decay_rate[3][9]
-
-
 cdef inline float arrhenius(
         float tsoil, float beta0, float beta1, float beta2) nogil:
     '''
