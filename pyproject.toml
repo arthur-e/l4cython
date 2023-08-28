@@ -4,3 +4,7 @@ requires = [
     "wheel"
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.cython-lint]
+max-line-length = 88
+ignore = ['E261']

@@ -18,5 +18,5 @@ model:
     - 1 # AD rate for SOC pool 0
     - 2 # AD rate for SOC pool 1
     - 100 # AD rate for SOC pool 2
-max_iter: 2 # Maximum number of climatological cycles before stopping
+max_iter: 10 # Maximum number of climatological cycles before stopping
 min_pixels: 10 # Minimum number of pixels yet to meet tolerance, otherwise stop

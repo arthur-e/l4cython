@@ -1,0 +1,4 @@
+- repo: https://bitbucket.org/ntsg_annex/l4cython/
+  rev: v0.1.0.dev
+  hooks:
+  - id: cython-lint

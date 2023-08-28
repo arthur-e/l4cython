@@ -44,7 +44,7 @@ from libc.stdio cimport FILE, fread, fclose
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from l4cython.respiration cimport BPLUT, arrhenius, linear_constraint
-from l4cython.utils cimport open_fid, to_numpy, to_numpy_double
+from l4cython.utils cimport open_fid, to_numpy_double
 from l4cython.utils.fixtures import READ, SPARSE_M09_N
 from tqdm import tqdm
 
@@ -210,16 +210,19 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
         #   element one-at-a-time (as in load_state())
         # NOTE: For compatibility with TCF, the SMSF data are already in
         #   percentage units, i.e., on [0,100]
-        fid = open_fid((config['data']['climatology']['smsf'] % jday).encode('UTF-8'), READ)
+        fid = open_fid(
+            (config['data']['climatology']['smsf'] % jday).encode('UTF-8'), READ)
         fread(smsf, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
         fclose(fid)
-        fid = open_fid((config['data']['climatology']['tsoil'] % jday).encode('UTF-8'), READ)
+        fid = open_fid(
+            (config['data']['climatology']['tsoil'] % jday).encode('UTF-8'), READ)
         fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
         fclose(fid)
 
         if do_daily_npp > 0:
             ymd = datetime.datetime.strptime(f'2017{jday}', '%Y%j').strftime('%Y%m%d')
-            fid = open_fid((config['data']['climatology']['GPP'] % ymd).encode('UTF-8'), READ)
+            fid = open_fid(
+                (config['data']['climatology']['GPP'] % ymd).encode('UTF-8'), READ)
             fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
             fclose(fid)
 
@@ -380,16 +383,20 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
             jday = str(doy).zfill(3)
             # NOTE: For compatibility with TCF, the SMSF data are already in
             #   percentage units, i.e., on [0,100]
-            fid = open_fid((config['data']['climatology']['smsf'] % jday).encode('UTF-8'), READ)
+            fid = open_fid(
+                (config['data']['climatology']['smsf'] % jday).encode('UTF-8'), READ)
             fread(smsf, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
             fclose(fid)
-            fid = open_fid((config['data']['climatology']['tsoil'] % jday).encode('UTF-8'), READ)
+            fid = open_fid(
+                (config['data']['climatology']['tsoil'] % jday).encode('UTF-8'), READ)
             fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
             fclose(fid)
 
             if do_daily_npp > 0:
-                ymd = datetime.datetime.strptime(f'2017{jday}', '%Y%j').strftime('%Y%m%d')
-                fid = open_fid((config['data']['climatology']['GPP'] % ymd).encode('UTF-8'), READ)
+                ymd = datetime.datetime.strptime(f'2017{jday}', '%Y%j')\
+                    .strftime('%Y%m%d')
+                fid = open_fid(
+                    (config['data']['climatology']['GPP'] % ymd).encode('UTF-8'), READ)
                 fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
                 fclose(fid)
 
