@@ -261,12 +261,12 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
         # Calculate analytical steady-state of SOC
         denom0 = (k_mult[i] * k0[i])
         if denom0 > 0:
-            soc0[i] = <double>(365 * npp_total[i] * PARAMS.f_metabolic[pft]) / denom0
+            soc0[i] = <double>(npp_total[i] * PARAMS.f_metabolic[pft]) / denom0
         else:
             soc0[i] = 0
         denom1 = (k_mult[i] * k1[i])
         if denom1 > 0:
-            soc1[i] = <double>(365 * npp_total[i] * (1 - PARAMS.f_metabolic[pft])) / denom1
+            soc1[i] = <double>(npp_total[i] * (1 - PARAMS.f_metabolic[pft])) / denom1
         else:
             soc1[i] = 0
         # Guard against division by zero
@@ -416,11 +416,11 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                 # Total annual NPP; if "NPP_annual_sum" file was specified, this
                 #   is just a sum of 365 equal increments
                 npp_total[i] += AVAIL_NPP[i]
-                # Compute one daily soil decomposition step for this pixel;
-                #   note that litterfall is 1/365 of the annual NPP sum
                 w_mult = linear_constraint(
                     smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
                 t_mult = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
+                # Compute one daily soil decomposition step for this pixel;
+                #   note that AVAIL_NPP[i] is the daily litterfall
                 numerical_step(
                     delta, rh_total, AVAIL_NPP[i], w_mult * t_mult,
                     PARAMS.f_metabolic[pft], PARAMS.f_structural[pft],
