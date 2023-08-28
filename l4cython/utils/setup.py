@@ -17,7 +17,7 @@ mkgrid = Extension(
     libraries = ['dfalt', 'mfhdfalt'],
     include_dirs = ['/usr/include', '/usr/include/hdf', '/usr/lib'],
     extra_compile_args = [
-        '-g', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
+        '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
         '-ldfalt', '-lmfhdfalt', '-lz', '-lsz', '-luuid', '-lm', '-lutil'
     ]
 )

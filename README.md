@@ -5,7 +5,6 @@ A Cython implementation of the Terrestrial Carbon Flux (TCF) model, which is
 the basis for the Soil Moisture Active Passive (SMAP) Level 4 Carbon (L4C) model.
 
 - [ ] Single place for constants, e.g., `DFNT_FLOAT32`
-- [ ] Routine to read-in BPLUT
 - https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html?highlight=packaging#distributing-cython-modules
 
 
@@ -182,4 +181,49 @@ they had all equilibrated); no AD:
     [ 31.  66. 118. 202. 285.]
     [ 28.  63. 120. 247. 378.]
     [ 606. 1248. 2194. 3900. 5472.]
+```
+
+A typical spin-up using the default configuration:
+
+```
+Beginning analytical spin-up...
+100%|█████████████████████████████████████████████████████| 365/365 [00:09<00:00, 37.81it/s]
+Beginning numerical spin-up...
+100%|█████████████████████████████████████████████████████| 365/365 [38:20<00:00,  6.30s/it]
+[1/10] Total tolerance is: 955233280.00
+--- Pixels counted: 1354898
+--- Mean tolerance is: 705.02
+100%|█████████████████████████████████████████████████████| 365/365 [36:44<00:00,  6.04s/it]
+[2/10] Total tolerance is: 1019234.62
+--- Pixels counted: 1354867
+--- Mean tolerance is: 0.75
+100%|█████████████████████████████████████████████████████| 365/365 [15:49<00:00,  2.60s/it]
+[3/10] Total tolerance is: 51874.89
+--- Pixels counted: 582358
+--- Mean tolerance is: 0.09
+100%|█████████████████████████████████████████████████████| 365/365 [05:41<00:00,  1.07it/s]
+[4/10] Total tolerance is: 10989.23
+--- Pixels counted: 172253
+--- Mean tolerance is: 0.06
+100%|█████████████████████████████████████████████████████| 365/365 [01:31<00:00,  4.00it/s]
+[5/10] Total tolerance is: -8208.76
+--- Pixels counted: 37396
+--- Mean tolerance is: -0.22
+100%|█████████████████████████████████████████████████████| 365/365 [01:10<00:00,  5.14it/s]
+[6/10] Total tolerance is: -45208.36
+--- Pixels counted: 25337
+--- Mean tolerance is: -1.78
+100%|█████████████████████████████████████████████████████| 365/365 [00:36<00:00,  9.88it/s]
+[7/10] Total tolerance is: -22261.44
+--- Pixels counted: 10704
+--- Mean tolerance is: -2.08
+100%|█████████████████████████████████████████████████████| 365/365 [00:26<00:00, 13.82it/s]
+[8/10] Total tolerance is: -19491.58
+--- Pixels counted: 7200
+--- Mean tolerance is: -2.71
+100%|███████████████████████████████████████████████████████| 89/89 [00:04<00:00, 21.92it/s]
+[9/10] Total tolerance is: 0.00
+--- Pixels counted: 0
+None
+
 ```

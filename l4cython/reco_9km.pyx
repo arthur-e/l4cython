@@ -27,18 +27,15 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from l4cython.respiration cimport arrhenius, linear_constraint
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.mkgrid import write_inflated
-from l4cython.utils.fixtures import READ, SPARSE_M09_N
+from l4cython.utils.fixtures import READ, SPARSE_M09_N, N_PFT, load_parameters_table
 from tqdm import tqdm
-
-# Additional Tsoil parameter (fixed for all PFTs)
-cdef float TSOIL1 = 66.02 # deg K
-cdef float TSOIL2 = 227.13 # deg K
-# Additional SOC decay parameters (fixed for all PFTs)
-cdef float KSTRUCT = 0.4 # Muliplier *against* base decay rate
-cdef float KRECAL = 0.0093
 
 cdef:
     FILE* fid
+    BPLUT PARAMS
+    # Additional Tsoil parameter (fixed for all PFTs)
+    float TSOIL1 = 66.02 # deg K
+    float TSOIL2 = 227.13 # deg K
     unsigned char* PFT # The PFT map
     float* SOC0
     float* SOC1
@@ -53,26 +50,6 @@ LITTERFALL = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
 # Python arrays that want heap allocations must be global; this one is reused
 #   for any array that needs to be written to disk (using NumPy)
 OUT_M09 = np.full((SPARSE_M09_N,), np.nan, dtype = np.float32)
-
-# L4_C BPLUT Version 7 (Vv7042, Vv7040, Nature Run v10)
-# NOTE: BPLUT is initialized here because we *need* it to be a C struct and
-#   1) It cannot be a C struct if it is imported from a *.pyx file (it gets
-#   converted to a dict); 2) If imported as a Python dictionary and coerced
-#   to a BPLUT struct, it's still (inexplicably) a dictionary; and 3) We can't
-#   initalize the C struct's state if it is in a *.pxd file
-cdef BPLUT PARAMS
-# NOTE: Must have an (arbitrary) value in 0th position to avoid overflow of
-#   indexing (as PFT=0 is not used and C starts counting at 0)
-PARAMS.smsf0[:] = [0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-PARAMS.smsf1[:] = [0, 25.0, 94.0, 42.3, 35.8, 44.9, 52.9, 25.0, 25.0]
-PARAMS.tsoil[:] = [0, 238.17, 422.77, 233.94, 246.48, 154.91, 366.14, 242.47, 265.06]
-PARAMS.cue[:] = [0, 0.687, 0.469, 0.755, 0.799, 0.649, 0.572, 0.708, 0.705]
-PARAMS.f_metabolic[:] = [0, 0.49, 0.71, 0.67, 0.67, 0.62, 0.76, 0.78, 0.78]
-PARAMS.f_structural[:] = [0, 0.3, 0.3, 0.7, 0.3, 0.35, 0.55, 0.5, 0.8]
-PARAMS.decay_rate[0] = [0, 0.020, 0.022, 0.030, 0.029, 0.012, 0.026, 0.018, 0.031]
-for p in range(1, 9):
-    PARAMS.decay_rate[1][p] = PARAMS.decay_rate[0][p] * KSTRUCT
-    PARAMS.decay_rate[2][p] = PARAMS.decay_rate[0][p] * KRECAL
 
 
 @cython.boundscheck(False)
@@ -110,8 +87,19 @@ def main(config_file = None):
     with open(config_file, 'r') as file:
         config = yaml.safe_load(file)
 
-    load_state(config) # Load PFT map, SOC state, etc.
+    params = load_parameters_table(config['BPLUT'].encode('UTF-8'))
+    for p in range(1, N_PFT + 1):
+        PARAMS.smsf0[p] = params['smsf0'][0][p]
+        PARAMS.smsf1[p] = params['smsf1'][0][p]
+        PARAMS.tsoil[p] = params['tsoil'][0][p]
+        PARAMS.cue[p] = params['CUE'][0][p]
+        PARAMS.f_metabolic[p] = params['f_metabolic'][0][p]
+        PARAMS.f_structural[p] = params['f_structural'][0][p]
+        PARAMS.decay_rate[0][p] = params['decay_rate'][0][p]
+        PARAMS.decay_rate[1][p] = params['decay_rate'][1][p]
+        PARAMS.decay_rate[2][p] = params['decay_rate'][2][p]
 
+    load_state(config) # Load global state variables
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
     num_steps = int(config['daily_steps'])
     for step in tqdm(range(num_steps)):

@@ -9,7 +9,7 @@ cdef struct BPLUT:
     float f_metabolic[9]
     float f_structural[9]
     float decay_rate[3][9]
-    
+
 
 cdef inline FILE* open_fid(bytes filename_byte_string, bytes mode):
     '''
