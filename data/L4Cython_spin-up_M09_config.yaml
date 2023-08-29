@@ -1,4 +1,5 @@
-BPLUT: null
+BPLUT: >-
+  /anx_lagr3/arthur.endsley/SMAP_L4C/calibration/v7_Y2022/SMAP_BPLUT_V7_rev_20220728.csv
 data:
   PFT_map: >- # Map of plant functional types (PFT)
     /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4C_PFT_map_M09land.uint8
@@ -12,12 +13,12 @@ data:
     GPP: >- # Daily GPP [g C m-2 day-1]; currently, using an arbitrary year
       /media/arthur.endsley/raid/TCF/L4C_V7_mdl_GPP/L4_C_mdl_2017%s_V7.flt32
 model:
-  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230829
+  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230830
   ending_day_of_year: 89 # Day of year we want simulation to end on, to align the seasonal cycle
   accelerated: true # Use accelerated decomposition?
   ad_rate: # Accelerated decomposition (AD) rates
     - 1 # AD rate for SOC pool 0
-    - 2 # AD rate for SOC pool 1
-    - 100 # AD rate for SOC pool 2
+    - 1 # AD rate for SOC pool 1
+    - 1 # AD rate for SOC pool 2
 max_iter: 10 # Maximum number of climatological cycles before stopping
 min_pixels: 10000 # Minimum number of pixels yet to meet tolerance, otherwise stop

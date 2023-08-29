@@ -14,7 +14,7 @@ test:
 	python3 -c "from reco_9km import main; print(main())"
 
 test-spinup:
-	python3 -c "from spinup import main;print(main('../data/L4Cython_spin-up_test_config.yaml'))"
+	python3 -c "from spinup import main;print(main('../tests/data/L4Cython_spin-up_test_config.yaml'))"
 
 timeit:
 	python3 -m timeit -s "from reco_9km import main" "print(main())"

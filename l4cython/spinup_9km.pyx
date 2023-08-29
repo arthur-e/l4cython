@@ -68,7 +68,7 @@ OUT_M09_DOUBLE = np.full((SPARSE_N,), np.nan, dtype = np.float64)
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def main(config_file = None):
+def main(config_file = None, verbose = True):
     '''
     Soil organic carbon (SOC) spin-up; will write out a file for each soil
     pool after the analytical spin-up ("Cana") and after the numerical
@@ -105,7 +105,7 @@ def main(config_file = None):
 
     # Step 1: Analytical spin-up; note that soc0, soc1, soc2 are both
     #   inputs and outputs of the spin-up functions (K&R-style)
-    analytical_spinup(config, soc0, soc1, soc2)
+    analytical_spinup(config, soc0, soc1, soc2, 1 if verbose else 0)
     # If accelerated decomposition is used
     if config['model']['accelerated']:
         for i in range(SPARSE_N):
@@ -121,8 +121,9 @@ def main(config_file = None):
     OUT_M09_DOUBLE = to_numpy_double(soc2, SPARSE_N)
     OUT_M09_DOUBLE.tofile(
         '%s/L4Cython_Cana2_M09land.flt64' % config['model']['output_dir'])
+
     # Step 2: Numerical spin-up
-    numerical_spinup(config, soc0, soc1, soc2)
+    numerical_spinup(config, soc0, soc1, soc2, 1 if verbose else 0)
     output_dir = config['model']['output_dir']
     end_doy = str(config['model']['ending_day_of_year']).zfill(3)
     OUT_M09_DOUBLE = to_numpy_double(soc0, SPARSE_N)
@@ -145,7 +146,7 @@ def main(config_file = None):
     PyMem_Free(soc2)
 
 
-cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
+cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2, int verbose):
     '''
     Analytical SOC spin-up: the initial soil C states are found by solving
     the differential equations that describe inputs, transfers, and decay
@@ -157,6 +158,7 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
     double*: soc0
     double*: soc1
     double*: soc2
+    int : verbose
     '''
     cdef:
         Py_ssize_t i
@@ -198,10 +200,11 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
     if config['data']['NPP_annual_sum'] == '':
         do_daily_npp = 1
 
-    print('Beginning analytical spin-up...')
+    if verbose == 1:
+        print('Beginning analytical spin-up...')
     # Analytical spin-up calculation has a closed form, so this outer loop,
     #   for each day of the climatological year, pre-computes annual sums
-    for doy in tqdm(range(1, 366)):
+    for doy in tqdm(range(1, 366), disable = verbose == 0):
         jday = str(doy).zfill(3)
         # NOTE: It will ALWAYS be faster to read these all-at-once rather than
         #   to initialize them with heap allocations, then extract each
@@ -287,7 +290,8 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
+cdef numerical_spinup(
+        config, double* soc0, double* soc1, double* soc2, int verbose):
     '''
     Numerical SOC spin-up; the steady-state condition is defined by the inter-
     annual change in NEE (Delta-NEE) approaching zero. The near-zero condition
@@ -351,7 +355,8 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
     for i in range(SPARSE_N):
         tolerance[i] = 0
 
-    print('Beginning numerical spin-up...')
+    if verbose == 1:
+        print('Beginning numerical spin-up...')
     end_doy = 366 # Normally, we run a full climatological year
     # This is where we want to end up in the seasonal cycle:
     projected_end_doy = config['model']['ending_day_of_year']
@@ -377,7 +382,7 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
         tol_sum = 0.0 # Reset sum (for calculating average) of tolerance
         tol_count = 0 # Reset count of pixels that have yet to equilibrate
         # For each day of the climatological year
-        for doy in tqdm(range(1, end_doy)):
+        for doy in tqdm(range(1, end_doy), disable = verbose == 0):
             jday = str(doy).zfill(3)
             # NOTE: For compatibility with TCF, the SMSF data are already in
             #   percentage units, i.e., on [0,100]
@@ -454,11 +459,13 @@ cdef numerical_spinup(config, double* soc0, double* soc1, double* soc2):
                         tol_count += 1
                         tol_sum += tolerance[i]
 
-        print('[%d/%d] Total tolerance is: %.2f' % (iter, max_iter, tol_sum))
-        print('--- Pixels counted: %d' % tol_count)
+        if verbose == 1:
+            print('[%d/%d] Total tolerance is: %.2f' % (iter, max_iter, tol_sum))
+            print('--- Pixels counted: %d' % tol_count)
         if tol_count > 0:
             tol_mean = (tol_sum / tol_count)
-            print('--- Mean tolerance is: %.2f' % tol_mean)
+            if verbose == 1:
+                print('--- Mean tolerance is: %.2f' % tol_mean)
         # Increment; also a counter for the number of climatological years
         iter = iter + 1
 

@@ -225,5 +225,4 @@ Beginning numerical spin-up...
 [9/10] Total tolerance is: 0.00
 --- Pixels counted: 0
 None
-
 ```
