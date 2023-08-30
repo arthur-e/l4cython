@@ -1,0 +1,23 @@
+BPLUT: L4C_Version7_BPLUT.csv
+origin_date: '2015-03-31'
+daily_steps: 1
+debug: false
+data:
+  PFT_map: >- # Map of plant functional types (PFT)
+    driver_land-cover_map_M09land.uint8
+  SOC: # List of three (3) soil organic carbon (SOC) pools
+    - state_SOC_C0_M09land_DOY089.flt32
+    - state_SOC_C1_M09land_DOY089.flt32
+    - state_SOC_C2_M09land_DOY089.flt32
+  NPP_annual_sum: >- # Map of annual NPP sum [g C m-2 year-1] for each pixel
+    driver_annual_NPP_sum_M09land.flt32
+  drivers:
+    smsf: driver_climate_SMSF_M09land_%s.flt32 # Surface soil wetness (%) on [0,100]
+    tsoil: driver_climate_Tsoil_M09land_%s.flt32 # Soil temperature [deg K]
+    GPP: L4_C_mdl_V7_GPP_%s_M09land.flt32
+model:
+  output_dir: .
+  output_fields: # Valid output fields include: "RH", "NEE"
+    - RH
+    - NEE
+  output_format: M09land # "M09land" for flat (1D) output

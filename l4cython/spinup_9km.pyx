@@ -68,11 +68,16 @@ OUT_M09_DOUBLE = np.full((SPARSE_N,), np.nan, dtype = np.float64)
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def main(config_file = None, verbose = True):
+def main(config = None, verbose = True):
     '''
     Soil organic carbon (SOC) spin-up; will write out a file for each soil
     pool after the analytical spin-up ("Cana") and after the numerical
     spin-up ("Cnum"), in addition to a final tolerance file.
+
+    Parameters
+    ----------
+    config : str or dict
+    verbose : bool
     '''
     cdef:
         int i
@@ -83,10 +88,11 @@ def main(config_file = None, verbose = True):
     soc1 = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
     soc2 = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
     # Read in configuration file, then load state data
-    if config_file is None:
-        config_file = '../data/L4Cython_spin-up_M09_config.yaml'
-    with open(config_file, 'r') as file:
-        config = yaml.safe_load(file)
+    if config is None:
+        config = '../data/L4Cython_spin-up_M09_config.yaml'
+    if isinstance(config, str):
+        with open(config, 'r') as file:
+            config = yaml.safe_load(file)
 
     params = load_parameters_table(config['BPLUT'].encode('UTF-8'))
     for p in range(1, N_PFT + 1):

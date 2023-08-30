@@ -73,11 +73,15 @@ OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def main(config_file = None):
+def main(config = None):
     '''
     Forward run of the L4C soil decomposition and heterotrophic respiration
-    algorithm. Starts on March 31, 2015 and continues for the specified
-    number of time steps.
+    algorithm. Starts on "origin_date" and continues for the specified number
+    of time steps.
+
+    Parameters
+    ----------
+    config : str or dict
     '''
     cdef:
         Py_ssize_t i
@@ -106,10 +110,11 @@ def main(config_file = None):
     soc_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
     # Read in configuration file, then load state data
-    if config_file is None:
-        config_file = '../data/L4Cython_RECO_M01_config.yaml'
-    with open(config_file, 'r') as file:
-        config = yaml.safe_load(file)
+    if config is None:
+        config = '../data/L4Cython_RECO_M01_config.yaml'
+    if isinstance(config, str):
+        with open(config, 'r') as file:
+            config = yaml.safe_load(file)
 
     params = load_parameters_table(config['BPLUT'].encode('UTF-8'))
     for p in range(1, N_PFT + 1):

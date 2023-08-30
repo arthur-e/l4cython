@@ -18,7 +18,7 @@ data:
   drivers:
     smsf: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_smsf_M09land_%s.flt32 # Surface soil wetness (%) on [0,100]
     tsoil: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_tsoil_M09land_%s.flt32 # Soil temperature [deg K]
-    GPP: /media/arthur.endsley/raid/TCF/L4C_V7_mdl_GPP/L4_C_mdl_%s_V7.flt32 # Only used to calculate NEE
+    GPP: /media/arthur.endsley/raid/TCF/L4C_V7_mdl_GPP/L4_C_mdl_GPP_%s_V7.flt32 # Only used to calculate NEE
 model:
   output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230830
   output_fields: # Valid output fields include: "RH", "NEE"
