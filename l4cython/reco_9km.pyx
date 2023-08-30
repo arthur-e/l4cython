@@ -156,6 +156,17 @@ def main(config_file = None):
                 write_inflated(fname_rh.encode('UTF-8'), to_numpy(rh_total, SPARSE_M09_N))
             if 'NEE' in config['model']['output_fields']:
                 write_inflated(fname_rh.encode('UTF-8'), to_numpy(nee, SPARSE_M09_N))
+    # Finally, write out the final SOC state, if we're in debug mode
+    if config['debug']:
+        fname_soc = '%s/L4Cython_SOC_C{i}_M09.flt32' % config['model']['output_dir']
+        if config['model']['output_format'] == 'M09land':
+            fname_soc = fname_soc.replace('M09', 'M09land')
+        OUT_M09 = to_numpy(SOC0, SPARSE_M09_N)
+        OUT_M09.tofile(fname_soc.format(i = 0))
+        OUT_M09 = to_numpy(SOC1, SPARSE_M09_N)
+        OUT_M09.tofile(fname_soc.format(i = 1))
+        OUT_M09 = to_numpy(SOC2, SPARSE_M09_N)
+        OUT_M09.tofile(fname_soc.format(i = 2))
     PyMem_Free(PFT)
     PyMem_Free(SOC0)
     PyMem_Free(SOC1)
