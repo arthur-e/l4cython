@@ -33,7 +33,7 @@ def test_spinup_9km():
     if not Path(config['data']['PFT_map']).exists():
         pytest.skip('Required input files not found')
 
-    main(CONFIG_FILE, verbose = False)
+    main(config, verbose = False)
     for pool in range(0, 3):
         filename = Path(output_dir, f'L4Cython_Cana{pool}_M09land.flt64')
         soc = np.fromfile(filename, np.float64)[0:1000]

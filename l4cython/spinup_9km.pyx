@@ -80,7 +80,8 @@ def main(config = None, verbose = True):
     verbose : bool
     '''
     cdef:
-        int i
+        int i, n_periods
+        float* litter_rate # Fraction of litterfall allocated
         double* soc0
         double* soc1
         double* soc2
@@ -106,12 +107,24 @@ def main(config = None, verbose = True):
         PARAMS.decay_rate[1][p] = params['decay_rate'][1][p]
         PARAMS.decay_rate[2][p] = params['decay_rate'][2][p]
 
-    # Load global state variables
+    # Load global state variables, including litterfall rate and schedule
     load_state(config)
+    n_periods = config['model']['litterfall']['periods']
+    litter_rate = <float*> PyMem_Malloc(sizeof(float) * n_periods * SPARSE_N)
+
+    # Option to schedule the rate at which litterfall enters SOC pools
+    if config['model']['litterfall']['scheduled']:
+        fid = open_fid(
+            (config['data']['litterfall_schedule']).encode('UTF-8'), READ)
+        fread(
+            litter_rate, sizeof(float),
+            <size_t>sizeof(float)*n_periods*SPARSE_N, fid)
+        fclose(fid)
 
     # Step 1: Analytical spin-up; note that soc0, soc1, soc2 are both
     #   inputs and outputs of the spin-up functions (K&R-style)
-    analytical_spinup(config, soc0, soc1, soc2, 1 if verbose else 0)
+    analytical_spinup(
+        config, soc0, soc1, soc2, litter_rate, 1 if verbose else 0)
     # If accelerated decomposition is used
     if config['model']['accelerated']:
         for i in range(SPARSE_N):
@@ -147,12 +160,15 @@ def main(config = None, verbose = True):
         OUT_M09_DOUBLE *= config['model']['ad_rate'][2]
     OUT_M09_DOUBLE.tofile(
         f'{output_dir}/L4Cython_Cnum2_M09land_DOY{end_doy}.flt64')
+    PyMem_Free(litter_rate)
     PyMem_Free(soc0)
     PyMem_Free(soc1)
     PyMem_Free(soc2)
 
 
-cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2, int verbose):
+cdef analytical_spinup(
+        config, double* soc0, double* soc1, double* soc2, float* litter_rate,
+        int verbose):
     '''
     Analytical SOC spin-up: the initial soil C states are found by solving
     the differential equations that describe inputs, transfers, and decay
@@ -161,10 +177,11 @@ cdef analytical_spinup(config, double* soc0, double* soc1, double* soc2, int ver
     Parameters
     ----------
     config : dict
-    double*: soc0
-    double*: soc1
-    double*: soc2
-    int : verbose
+    soc0 : double*
+    soc1 : double*
+    soc2 : double*
+    litter_rate : float*
+    verbose : int
     '''
     cdef:
         Py_ssize_t i
