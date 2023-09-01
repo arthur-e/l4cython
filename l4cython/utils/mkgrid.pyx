@@ -50,6 +50,8 @@ def deflate_file(filename, grid = 'M09'):
         data_type = DFNT_INT32
     elif ext == 'uint8':
         data_type = DFNT_UINT8
+    elif ext == 'int16':
+        data_type = DFNT_INT16
     elif ext == 'uint16':
         data_type = DFNT_UINT16
 
@@ -82,6 +84,8 @@ def deflate_file(filename, grid = 'M09'):
 
     # Write the output file
     fid = fopen(ofname, 'wb')
+    if fid == NULL:
+        raise FileNotFoundError('Could not find path: %s' % ofname)
     fwrite(flat_array, sizeof(unsigned char), <size_t>out_bytes, fid)
     fclose(fid)
     free(flat_array)
@@ -128,6 +132,8 @@ def inflate_file(filename, grid = 'M09'):
         data_type = DFNT_INT32
     elif ext == 'uint8':
         data_type = DFNT_UINT8
+    elif ext == 'int16':
+        data_type = DFNT_INT16
     elif ext == 'uint16':
         data_type = DFNT_UINT16
 
@@ -160,6 +166,8 @@ def inflate_file(filename, grid = 'M09'):
 
     # Write the output file
     fid = fopen(ofname, 'wb')
+    if fid == NULL:
+        raise FileNotFoundError('Could not find path: %s' % ofname)
     fwrite(grid_array, sizeof(unsigned char), <size_t>out_bytes, fid)
     fclose(fid)
     free(flat_array)
