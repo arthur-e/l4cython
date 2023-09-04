@@ -39,7 +39,7 @@ import cython
 import datetime
 import yaml
 import numpy as np
-from libc.math cimport isnan, fabs
+from libc.math cimport isnan, fabs, fmax
 from libc.stdio cimport FILE, fread, fclose
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
@@ -80,8 +80,7 @@ def main(config = None, verbose = True):
     verbose : bool
     '''
     cdef:
-        int i, n_periods
-        float* litter_rate # Fraction of litterfall allocated
+        int i
         double* soc0
         double* soc1
         double* soc2
@@ -107,24 +106,12 @@ def main(config = None, verbose = True):
         PARAMS.decay_rate[1][p] = params['decay_rate'][1][p]
         PARAMS.decay_rate[2][p] = params['decay_rate'][2][p]
 
-    # Load global state variables, including litterfall rate and schedule
+    # Load global state variables
     load_state(config)
-    n_periods = config['model']['litterfall']['periods']
-    litter_rate = <float*> PyMem_Malloc(sizeof(float) * n_periods * SPARSE_N)
-
-    # Option to schedule the rate at which litterfall enters SOC pools
-    if config['model']['litterfall']['scheduled']:
-        fid = open_fid(
-            (config['data']['litterfall_schedule']).encode('UTF-8'), READ)
-        fread(
-            litter_rate, sizeof(float),
-            <size_t>sizeof(float)*n_periods*SPARSE_N, fid)
-        fclose(fid)
 
     # Step 1: Analytical spin-up; note that soc0, soc1, soc2 are both
     #   inputs and outputs of the spin-up functions (K&R-style)
-    analytical_spinup(
-        config, soc0, soc1, soc2, litter_rate, 1 if verbose else 0)
+    analytical_spinup(config, soc0, soc1, soc2, 1 if verbose else 0)
     # If accelerated decomposition is used
     if config['model']['accelerated']:
         for i in range(SPARSE_N):
@@ -160,15 +147,13 @@ def main(config = None, verbose = True):
         OUT_M09_DOUBLE *= config['model']['ad_rate'][2]
     OUT_M09_DOUBLE.tofile(
         f'{output_dir}/L4Cython_Cnum2_M09land_DOY{end_doy}.flt64')
-    PyMem_Free(litter_rate)
     PyMem_Free(soc0)
     PyMem_Free(soc1)
     PyMem_Free(soc2)
 
 
 cdef analytical_spinup(
-        config, double* soc0, double* soc1, double* soc2, float* litter_rate,
-        int verbose):
+        config, double* soc0, double* soc1, double* soc2, int verbose):
     '''
     Analytical SOC spin-up: the initial soil C states are found by solving
     the differential equations that describe inputs, transfers, and decay
@@ -180,7 +165,6 @@ cdef analytical_spinup(
     soc0 : double*
     soc1 : double*
     soc2 : double*
-    litter_rate : float*
     verbose : int
     '''
     cdef:
@@ -191,7 +175,8 @@ cdef analytical_spinup(
         float* smsf
         float* tsoil
         float* gpp # Daily GPP
-        float* npp_total # Annual total NPP
+        float* litter # Usually, this is annual total NPP
+        float* litter_rate # Fraction of litterfall allocated
         float* k0 # Decay rates of each pool
         float* k1
         float* k2
@@ -202,7 +187,8 @@ cdef analytical_spinup(
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    npp_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    litter = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    litter_rate = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
@@ -223,31 +209,51 @@ cdef analytical_spinup(
     if config['data']['NPP_annual_sum'] == '':
         do_daily_npp = 1
 
+    # Option to schedule the rate at which litterfall enters SOC pools; if no
+    #   schedule is used, an equal daily fraction of available NPP allocated
+    if config['model']['litterfall']['scheduled']:
+        n_periods = config['model']['litterfall']['periods']
+        periods = np.array([[i] * 8 for i in range(1, n_periods+1)]).ravel()
+    else:
+        for i in prange(0, SPARSE_N, nogil = True):
+            litter_rate[i] = 1/365.0 # Allocate equal daily fraction
+
     if verbose == 1:
         print('Beginning analytical spin-up...')
     # Analytical spin-up calculation has a closed form, so this outer loop,
     #   for each day of the climatological year, pre-computes annual sums
     for doy in tqdm(range(1, 366), disable = verbose == 0):
+
         jday = str(doy).zfill(3)
         # NOTE: It will ALWAYS be faster to read these all-at-once rather than
         #   to initialize them with heap allocations, then extract each
         #   element one-at-a-time (as in load_state())
+        fid = open_fid(
+            (config['data']['climatology']['tsoil'] % jday).encode('UTF-8'), READ)
+        fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+        fclose(fid)
         # NOTE: For compatibility with TCF, the SMSF data are already in
         #   percentage units, i.e., on [0,100]
         fid = open_fid(
             (config['data']['climatology']['smsf'] % jday).encode('UTF-8'), READ)
         fread(smsf, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
         fclose(fid)
-        fid = open_fid(
-            (config['data']['climatology']['tsoil'] % jday).encode('UTF-8'), READ)
-        fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
-        fclose(fid)
 
+        # Option to use daily NPP as source litterfall
         if do_daily_npp > 0:
             ymd = datetime.datetime.strptime(f'2017{jday}', '%Y%j').strftime('%Y%m%d')
             fid = open_fid(
                 (config['data']['climatology']['GPP'] % ymd).encode('UTF-8'), READ)
             fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+            fclose(fid)
+
+        # Option to schedule the rate at which litterfall enters SOC pools
+        if config['model']['litterfall']['scheduled']:
+            # Get the file covering the 8-day period in which this DOY falls
+            filename = config['data']['litterfall_schedule']\
+                % str(periods[doy-1]).zfill(2)
+            fid = open_fid(filename.encode('UTF-8'), READ)
+            fread(litter_rate, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
             fclose(fid)
 
         # Pre-compute the k_mult sum for each pixel
@@ -257,7 +263,7 @@ cdef analytical_spinup(
                 continue
             # Just once for each pixel
             if doy == 1:
-                npp_total[i] = 0
+                litter[i] = 0
                 # Initialize k_mult sum at zero; set base decay rates and
                 #   allocation factors
                 k_mult[i] = 0
@@ -273,7 +279,7 @@ cdef analytical_spinup(
                 AVAIL_NPP[i] = gpp[i] * PARAMS.cue[pft]
             # Total annual NPP; if "NPP_annual_sum" file was specified, this
             #   is just a sum of 365 equal increments
-            npp_total[i] += AVAIL_NPP[i]
+            litter[i] += (AVAIL_NPP[i] * fmax(0, litter_rate[i]))
             # Compute and increment annual k_mult sum
             w_mult[i] = linear_constraint(
                 smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
@@ -288,12 +294,12 @@ cdef analytical_spinup(
         # Calculate analytical steady-state of SOC
         denom0 = (k_mult[i] * k0[i])
         if denom0 > 0:
-            soc0[i] = <double>(npp_total[i] * PARAMS.f_metabolic[pft]) / denom0
+            soc0[i] = <double>(litter[i] * PARAMS.f_metabolic[pft]) / denom0
         else:
             soc0[i] = 0
         denom1 = (k_mult[i] * k1[i])
         if denom1 > 0:
-            soc1[i] = <double>(npp_total[i] * (1 - PARAMS.f_metabolic[pft])) / denom1
+            soc1[i] = <double>(litter[i] * (1 - PARAMS.f_metabolic[pft])) / denom1
         else:
             soc1[i] = 0
         # Guard against division by zero
@@ -303,6 +309,9 @@ cdef analytical_spinup(
             soc2[i] = 0
     PyMem_Free(smsf)
     PyMem_Free(tsoil)
+    PyMem_Free(gpp)
+    PyMem_Free(litter)
+    PyMem_Free(litter_rate)
     PyMem_Free(k0)
     PyMem_Free(k1)
     PyMem_Free(k2)
@@ -345,7 +354,8 @@ cdef numerical_spinup(
         float* smsf
         float* tsoil
         float* gpp # Daily (climatological) GPP
-        float* npp_total # Keeps track of total annual NPP if do_daily_npp
+        float* litter # Keeps track of total annual NPP if do_daily_npp
+        float* litter_rate # Fraction of litterfall allocated
         float* rh_total # Annual heterotrophic respiration (RH) sum
         float* nee_sum # Annual NEE sum
         float* nee_last_year # Last year's annual NEE sum
@@ -354,7 +364,8 @@ cdef numerical_spinup(
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    npp_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    litter = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
+    litter_rate = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     rh_total = <float*> PyMem_Malloc(sizeof(float) * 1)
     nee_sum = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     nee_last_year = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
@@ -373,6 +384,15 @@ cdef numerical_spinup(
     do_daily_npp = 0
     if config['data']['NPP_annual_sum'] == '':
         do_daily_npp = 1
+
+    # Option to schedule the rate at which litterfall enters SOC pools; if no
+    #   schedule is used, an equal daily fraction of available NPP allocated
+    if config['model']['litterfall']['scheduled']:
+        n_periods = config['model']['litterfall']['periods']
+        periods = np.array([[i] * 8 for i in range(1, n_periods+1)]).ravel()
+    else:
+        for i in prange(0, SPARSE_N, nogil = True):
+            litter_rate[i] = 1/365.0 # Allocate equal daily fraction
 
     # Pre-allocate tolerance array
     for i in range(SPARSE_N):
@@ -418,12 +438,22 @@ cdef numerical_spinup(
             fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
             fclose(fid)
 
+            # Option to use daily NPP as source litterfall
             if do_daily_npp > 0:
                 ymd = datetime.datetime.strptime(f'2017{jday}', '%Y%j')\
                     .strftime('%Y%m%d')
                 fid = open_fid(
                     (config['data']['climatology']['GPP'] % ymd).encode('UTF-8'), READ)
                 fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
+                fclose(fid)
+
+            # Option to schedule the rate at which litterfall enters SOC pools
+            if config['model']['litterfall']['scheduled']:
+                # Get the file covering the 8-day period in which this DOY falls
+                filename = config['data']['litterfall_schedule']\
+                    % str(periods[doy-1]).zfill(2)
+                fid = open_fid(filename.encode('UTF-8'), READ)
+                fread(litter_rate, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
                 fclose(fid)
 
             # Loop over pixels
@@ -438,7 +468,7 @@ cdef numerical_spinup(
                     if fabs(tolerance[i]) < 1:
                         continue
                 if doy == 1:
-                    npp_total[i] = 0 # Reset annual NPP total
+                    litter[i] = 0 # Reset annual NPP total
                 # Reset the annual delta-SOC arrays
                 delta[0] = 0
                 delta[1] = 0
@@ -448,7 +478,7 @@ cdef numerical_spinup(
                     AVAIL_NPP[i] = gpp[i] * PARAMS.cue[pft]
                 # Total annual NPP; if "NPP_annual_sum" file was specified, this
                 #   is just a sum of 365 equal increments
-                npp_total[i] += AVAIL_NPP[i]
+                litter[i] += (AVAIL_NPP[i] * fmax(0, litter_rate[i]))
                 w_mult = linear_constraint(
                     smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
                 t_mult = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
@@ -472,7 +502,7 @@ cdef numerical_spinup(
                     # i.e., tolerance is the change in the Annual NEE sum:
                     #   NEE = (RA + RH) - GPP --> NEE = RH - NPP
                     #   DeltaNEE = NEE(t) - NEE(t-1)
-                    nee_sum[i] = rh_total[0] - npp_total[i]
+                    nee_sum[i] = rh_total[0] - litter[i]
                     if iter > 0:
                         tolerance[i] = nee_last_year[i] - nee_sum[i]
                     else:
@@ -498,7 +528,8 @@ cdef numerical_spinup(
     PyMem_Free(smsf)
     PyMem_Free(tsoil)
     PyMem_Free(gpp)
-    PyMem_Free(npp_total)
+    PyMem_Free(litter)
+    PyMem_Free(litter_rate)
     PyMem_Free(rh_total)
     PyMem_Free(nee_sum)
     PyMem_Free(nee_last_year)
@@ -538,6 +569,7 @@ def load_state(config):
     config : dict
         The configuration data dictionary
     '''
+    cdef Py_ssize_t i
     n_bytes = sizeof(unsigned char)*SPARSE_N
     fid = open_fid(config['data']['PFT_map'].encode('UTF-8'), READ)
     fread(PFT, sizeof(unsigned char), <size_t>n_bytes, fid)
@@ -546,6 +578,6 @@ def load_state(config):
         fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
         fread(AVAIL_NPP, sizeof(float), <size_t>n_bytes, fid)
         fclose(fid)
-        for i in range(SPARSE_N):
-            # Available NPP is 1/365th of the annual NPP sum
-            AVAIL_NPP[i] = AVAIL_NPP[i] / 365
+        for i in prange(SPARSE_N, nogil = True):
+            # Set any negative values (really just -9999) to zero
+            AVAIL_NPP[i] = fmax(0, AVAIL_NPP[i])
