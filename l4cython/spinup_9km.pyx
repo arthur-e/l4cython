@@ -212,8 +212,7 @@ cdef analytical_spinup(
     # Option to schedule the rate at which litterfall enters SOC pools; if no
     #   schedule is used, an equal daily fraction of available NPP allocated
     if config['model']['litterfall']['scheduled']:
-        n_periods = config['model']['litterfall']['periods']
-        periods = np.array([[i] * 8 for i in range(1, n_periods+1)]).ravel()
+        periods = np.array([[i] * 8 for i in range(1, 47)]).ravel()
     else:
         for i in prange(0, SPARSE_N, nogil = True):
             litter_rate[i] = 1/365.0 # Allocate equal daily fraction
@@ -388,8 +387,7 @@ cdef numerical_spinup(
     # Option to schedule the rate at which litterfall enters SOC pools; if no
     #   schedule is used, an equal daily fraction of available NPP allocated
     if config['model']['litterfall']['scheduled']:
-        n_periods = config['model']['litterfall']['periods']
-        periods = np.array([[i] * 8 for i in range(1, n_periods+1)]).ravel()
+        periods = np.array([[i] * 8 for i in range(1, 47)]).ravel()
     else:
         for i in prange(0, SPARSE_N, nogil = True):
             litter_rate[i] = 1/365.0 # Allocate equal daily fraction
@@ -483,9 +481,9 @@ cdef numerical_spinup(
                     smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
                 t_mult = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
                 # Compute one daily soil decomposition step for this pixel;
-                #   note that AVAIL_NPP[i] is the daily litterfall
+                #   note that litter[i] is the daily litterfall
                 numerical_step(
-                    delta, rh_total, AVAIL_NPP[i], w_mult * t_mult,
+                    delta, rh_total, litter[i], w_mult * t_mult,
                     PARAMS.f_metabolic[pft], PARAMS.f_structural[pft],
                     PARAMS.decay_rate[0][pft], PARAMS.decay_rate[1][pft],
                     PARAMS.decay_rate[2][pft], soc0[i], soc1[i], soc2[i],
