@@ -24,5 +24,6 @@ model:
     - 1 # AD rate for SOC pool 2
   litterfall:
     scheduled: true
+    interval_days: 8 # Number of days represented by litterfall rate
 max_iter: 10 # Maximum number of climatological cycles before stopping
 min_pixels: 10000 # Minimum number of pixels yet to meet tolerance, otherwise stop

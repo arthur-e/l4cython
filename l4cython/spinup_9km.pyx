@@ -33,6 +33,10 @@ Required data:
 
 - Surface soil wetness ("SMSF"), in percentage units [0,100]
 - Soil temperature, in degrees K
+
+TODO:
+
+- [ ] Remove the option to use daily NPP, as this doesn't work well
 '''
 
 import cython
@@ -170,7 +174,7 @@ cdef analytical_spinup(
     cdef:
         Py_ssize_t i
         Py_ssize_t doy
-        int accelerated, pft
+        int accelerated, pft, n_litter_days
         float ad_rate[3]
         float* smsf
         float* tsoil
@@ -212,8 +216,13 @@ cdef analytical_spinup(
     # Option to schedule the rate at which litterfall enters SOC pools; if no
     #   schedule is used, an equal daily fraction of available NPP allocated
     if config['model']['litterfall']['scheduled']:
-        periods = np.array([[i] * 8 for i in range(1, 47)]).ravel()
+        n_litter_days = config['model']['litterfall']['interval_days']
+        n_litter_periods = np.ceil(365 / n_litter_days)
+        periods = np.array([
+            [i] * n_litter_days for i in range(1, n_litter_periods + 1)
+        ]).ravel()
     else:
+        n_litter_days = 1
         for i in prange(0, SPARSE_N, nogil = True):
             litter_rate[i] = 1/365.0 # Allocate equal daily fraction
 
@@ -276,9 +285,10 @@ cdef analytical_spinup(
             # Compute daily NPP if not using "NPP_annual_sum"
             if do_daily_npp > 0:
                 AVAIL_NPP[i] = gpp[i] * PARAMS.cue[pft]
-            # Total annual NPP; if "NPP_annual_sum" file was specified, this
-            #   is just a sum of 365 equal increments
-            litter[i] += (AVAIL_NPP[i] * fmax(0, litter_rate[i]))
+            # Total annual NPP; if litterfall is not scheduled, this is just
+            #   a sum of 365 equal increments
+            litter[i] += (
+                AVAIL_NPP[i] * fmax(0, litter_rate[i] / n_litter_days))
             # Compute and increment annual k_mult sum
             w_mult[i] = linear_constraint(
                 smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
@@ -343,7 +353,7 @@ cdef numerical_spinup(
     cdef:
         Py_ssize_t i
         Py_ssize_t doy
-        int iter, pft
+        int iter, pft, n_litter_days
         int tol_count # Number of pixels with tolerance, for calculating...
         int do_daily_npp # Flag indicating daily NPP should be calculated
         float tol_mean # ...Overall mean tolerance
@@ -387,8 +397,13 @@ cdef numerical_spinup(
     # Option to schedule the rate at which litterfall enters SOC pools; if no
     #   schedule is used, an equal daily fraction of available NPP allocated
     if config['model']['litterfall']['scheduled']:
-        periods = np.array([[i] * 8 for i in range(1, 47)]).ravel()
+        n_litter_days = config['model']['litterfall']['interval_days']
+        n_litter_periods = np.ceil(365 / n_litter_days)
+        periods = np.array([
+            [i] * n_litter_days for i in range(1, n_litter_periods + 1)
+        ]).ravel()
     else:
+        n_litter_days = 1
         for i in prange(0, SPARSE_N, nogil = True):
             litter_rate[i] = 1/365.0 # Allocate equal daily fraction
 
@@ -474,9 +489,10 @@ cdef numerical_spinup(
                 # Compute daily NPP if not using "NPP_annual_sum"
                 if do_daily_npp > 0:
                     AVAIL_NPP[i] = gpp[i] * PARAMS.cue[pft]
-                # Total annual NPP; if "NPP_annual_sum" file was specified, this
-                #   is just a sum of 365 equal increments
-                litter[i] += (AVAIL_NPP[i] * fmax(0, litter_rate[i]))
+                # Total annual NPP; if litterfall is not scheduled, this is just
+                #   a sum of 365 equal increments
+                litter[i] += (
+                    AVAIL_NPP[i] * fmax(0, litter_rate[i] / n_litter_days))
                 w_mult = linear_constraint(
                     smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
                 t_mult = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
