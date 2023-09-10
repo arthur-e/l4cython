@@ -12,7 +12,6 @@ data:
       /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/test_cert/profiling_inputs/OL7000_climate_smsf_M09land_0001%s.flt32
     tsoil: >- # Soil temperature [deg K]
       /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/test_cert/profiling_inputs/OL7000_climate_tsoil_M09land_0001%s.flt32
-    GPP:
 model:
   output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/test_cert/profiling_outputs
   ending_day_of_year: 365 # Day of year we want simulation to end on, to align the seasonal cycle

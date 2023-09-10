@@ -15,10 +15,6 @@ accelerated decomposition:
 Accelerated decomposition rate coefficients of more than 100 tend to create
 unstable pixels in the steady-state image.
 
-Note that if the "data/NPP_annual_sum" configuration parameter is set to the
-empty string, the model will use the daily GPP (converted to NPP) to determine
-the daily NPP available for litterfall.
-
 Note that if the "model/ending_day_of_year" configuration parameter is set to
 anything less than 365 (December 31), the model will run an additional
 climatological cycle, up to and ending on the day of year (DOY) specified, in
@@ -178,7 +174,6 @@ cdef analytical_spinup(
         float ad_rate[3]
         float* smsf
         float* tsoil
-        float* gpp # Daily GPP
         float* litter # Usually, this is annual total NPP
         float* litter_rate # Fraction of litterfall allocated
         float* k0 # Decay rates of each pool
@@ -190,7 +185,6 @@ cdef analytical_spinup(
         float denom0, denom1
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     litter = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     litter_rate = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     k0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
@@ -206,12 +200,6 @@ cdef analytical_spinup(
         accelerated = 1
         for i in range(3):
             ad_rate[i] = config['model']['ad_rate'][i]
-
-    # Option to use daily (climatological) GPP as the source of
-    #   litterfall instead of a fraction of the annual NPP sum
-    do_daily_npp = 0
-    if config['data']['NPP_annual_sum'] == '':
-        do_daily_npp = 1
 
     # Option to schedule the rate at which litterfall enters SOC pools; if no
     #   schedule is used, an equal daily fraction of available NPP allocated
@@ -247,14 +235,6 @@ cdef analytical_spinup(
         fread(smsf, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
         fclose(fid)
 
-        # Option to use daily NPP as source litterfall
-        if do_daily_npp > 0:
-            ymd = datetime.datetime.strptime(f'2017{jday}', '%Y%j').strftime('%Y%m%d')
-            fid = open_fid(
-                (config['data']['climatology']['GPP'] % ymd).encode('UTF-8'), READ)
-            fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
-            fclose(fid)
-
         # Option to schedule the rate at which litterfall enters SOC pools
         if config['model']['litterfall']['scheduled']:
             # Get the file covering the 8-day period in which this DOY falls
@@ -282,9 +262,6 @@ cdef analytical_spinup(
                     k0[i] = k0[i] * ad_rate[0]
                     k1[i] = k1[i] * ad_rate[1]
                     k2[i] = k2[i] * ad_rate[2]
-            # Compute daily NPP if not using "NPP_annual_sum"
-            if do_daily_npp > 0:
-                AVAIL_NPP[i] = gpp[i] * PARAMS.cue[pft]
             # Total annual NPP; if litterfall is not scheduled, this is just
             #   a sum of 365 equal increments
             litter[i] += (
@@ -318,7 +295,6 @@ cdef analytical_spinup(
             soc2[i] = 0
     PyMem_Free(smsf)
     PyMem_Free(tsoil)
-    PyMem_Free(gpp)
     PyMem_Free(litter)
     PyMem_Free(litter_rate)
     PyMem_Free(k0)
@@ -355,15 +331,13 @@ cdef numerical_spinup(
         Py_ssize_t doy
         int iter, pft, n_litter_days
         int tol_count # Number of pixels with tolerance, for calculating...
-        int do_daily_npp # Flag indicating daily NPP should be calculated
         float tol_mean # ...Overall mean tolerance
         float tol_sum # Sum of all tolerances
         float w_mult, t_mult
         float ad_rate[3]
         float* smsf
         float* tsoil
-        float* gpp # Daily (climatological) GPP
-        float* litter # Keeps track of total annual NPP if do_daily_npp
+        float* litter # Keeps track of total annual NPP
         float* litter_rate # Fraction of litterfall allocated
         float* rh_total # Annual heterotrophic respiration (RH) sum
         float* nee_sum # Annual NEE sum
@@ -372,7 +346,6 @@ cdef numerical_spinup(
         double* tolerance # Tolerance at each pixel
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     litter = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     litter_rate = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     rh_total = <float*> PyMem_Malloc(sizeof(float) * 1)
@@ -387,12 +360,6 @@ cdef numerical_spinup(
             ad_rate[i] = config['model']['ad_rate'][i]
         else:
             ad_rate[i] = 1
-
-    # Option to use daily (climatological) GPP as the source of
-    #   litterfall instead of a fraction of the annual NPP sum
-    do_daily_npp = 0
-    if config['data']['NPP_annual_sum'] == '':
-        do_daily_npp = 1
 
     # Option to schedule the rate at which litterfall enters SOC pools; if no
     #   schedule is used, an equal daily fraction of available NPP allocated
@@ -451,15 +418,6 @@ cdef numerical_spinup(
             fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
             fclose(fid)
 
-            # Option to use daily NPP as source litterfall
-            if do_daily_npp > 0:
-                ymd = datetime.datetime.strptime(f'2017{jday}', '%Y%j')\
-                    .strftime('%Y%m%d')
-                fid = open_fid(
-                    (config['data']['climatology']['GPP'] % ymd).encode('UTF-8'), READ)
-                fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_N, fid)
-                fclose(fid)
-
             # Option to schedule the rate at which litterfall enters SOC pools
             if config['model']['litterfall']['scheduled']:
                 # Get the file covering the 8-day period in which this DOY falls
@@ -486,9 +444,6 @@ cdef numerical_spinup(
                 delta[0] = 0
                 delta[1] = 0
                 delta[2] = 0
-                # Compute daily NPP if not using "NPP_annual_sum"
-                if do_daily_npp > 0:
-                    AVAIL_NPP[i] = gpp[i] * PARAMS.cue[pft]
                 # Total annual NPP; if litterfall is not scheduled, this is just
                 #   a sum of 365 equal increments
                 litter[i] += (
@@ -541,7 +496,6 @@ cdef numerical_spinup(
         '%s/L4Cython_numspin_tol_M09land.flt64' % config['model']['output_dir'])
     PyMem_Free(smsf)
     PyMem_Free(tsoil)
-    PyMem_Free(gpp)
     PyMem_Free(litter)
     PyMem_Free(litter_rate)
     PyMem_Free(rh_total)
@@ -588,10 +542,9 @@ def load_state(config):
     fid = open_fid(config['data']['PFT_map'].encode('UTF-8'), READ)
     fread(PFT, sizeof(unsigned char), <size_t>n_bytes, fid)
     fclose(fid)
-    if config['data']['NPP_annual_sum'] != '':
-        fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
-        fread(AVAIL_NPP, sizeof(float), <size_t>n_bytes, fid)
-        fclose(fid)
-        for i in prange(SPARSE_N, nogil = True):
-            # Set any negative values (really just -9999) to zero
-            AVAIL_NPP[i] = fmax(0, AVAIL_NPP[i])
+    fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
+    fread(AVAIL_NPP, sizeof(float), <size_t>n_bytes, fid)
+    fclose(fid)
+    for i in prange(SPARSE_N, nogil = True):
+        # Set any negative values (really just -9999) to zero
+        AVAIL_NPP[i] = fmax(0, AVAIL_NPP[i])
