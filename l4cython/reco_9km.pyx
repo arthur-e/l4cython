@@ -22,6 +22,7 @@ import cython
 import datetime
 import yaml
 import numpy as np
+from libc.math cimport fmax
 from libc.stdio cimport FILE, fread, fclose
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from l4cython.respiration cimport arrhenius, linear_constraint
@@ -67,6 +68,10 @@ def main(config = None, verbose = True):
     '''
     cdef:
         Py_ssize_t i
+        Py_ssize_t doy # Day of year, on [1,365]
+        int n_litter_days
+        float* litter # Usually, this is annual total NPP
+        float* litter_rate # Fraction of litterfall allocated
         float* rh0
         float* rh1
         float* rh2
@@ -76,6 +81,8 @@ def main(config = None, verbose = True):
         float* nee
         float* w_mult
         float* t_mult
+    litter = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    litter_rate = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -105,20 +112,44 @@ def main(config = None, verbose = True):
         PARAMS.decay_rate[1][p] = params['decay_rate'][1][p]
         PARAMS.decay_rate[2][p] = params['decay_rate'][2][p]
 
+    # Option to schedule the rate at which litterfall enters SOC pools; if no
+    #   schedule is used, an equal daily fraction of available NPP allocated
+    if config['model']['litterfall']['scheduled']:
+        n_litter_days = config['model']['litterfall']['interval_days']
+        n_litter_periods = np.ceil(365 / n_litter_days)
+        periods = np.array([
+            [i] * n_litter_days for i in range(1, n_litter_periods + 1)
+        ]).ravel()
+    else:
+        n_litter_days = 1
+        for i in range(0, SPARSE_M09_N):
+            litter_rate[i] = 1/365.0 # Allocate equal daily fraction
+
     load_state(config) # Load global state variables
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
     num_steps = int(config['daily_steps'])
     for step in tqdm(range(num_steps), disable = not verbose):
         date = date_start + datetime.timedelta(days = step)
-        date = date.strftime('%Y%m%d')
+        date_str = date.strftime('%Y%m%d')
+        doy = int(date.strftime('%j'))
         smsf = np.fromfile(
-            config['data']['drivers']['smsf'] % date, dtype = np.float32)
+            config['data']['drivers']['smsf'] % date_str, dtype = np.float32)
         tsoil = np.fromfile(
-            config['data']['drivers']['tsoil'] % date, dtype = np.float32)
+            config['data']['drivers']['tsoil'] % date_str, dtype = np.float32)
         # Read in the GPP data
-        fid = open_fid((config['data']['drivers']['GPP'] % date).encode('UTF-8'), READ)
+        fid = open_fid((config['data']['drivers']['GPP'] % date_str)\
+            .encode('UTF-8'), READ)
         fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
+
+        # Option to schedule the rate at which litterfall enters SOC pools
+        if config['model']['litterfall']['scheduled']:
+            # Get the file covering the 8-day period in which this DOY falls
+            filename = config['data']['litterfall_schedule']\
+                % str(periods[doy-1]).zfill(2)
+            fid = open_fid(filename.encode('UTF-8'), READ)
+            fread(litter_rate, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+            fclose(fid)
 
         for i in range(0, SPARSE_M09_N):
             pft = int(PFT[i])
@@ -129,7 +160,9 @@ def main(config = None, verbose = True):
             # If no annual NPP sum was specified, litterfall must be determined
             #   from the daily NPP
             if config['data']['NPP_annual_sum'] != '':
-                LITTERFALL[i] = npp[i]
+                litter[i] = npp[i] * (litter_rate[i] / n_litter_days)
+            else:
+                litter[i] = LITTERFALL[i] * (litter_rate[i] / n_litter_days)
             # Compute daily RH based on moisture, temperature constraints
             w_mult[i] = linear_constraint(
                 smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
@@ -142,14 +175,16 @@ def main(config = None, verbose = True):
             rh1[i] = rh1[i] * (1 - PARAMS.f_structural[pft])
             rh_total[i] = rh0[i] + rh1[i] + rh2[i]
             # Calculate change in SOC pools
-            SOC0[i] += (LITTERFALL[i] * PARAMS.f_metabolic[pft]) - rh0[i]
-            SOC1[i] += (LITTERFALL[i] * (1 - PARAMS.f_metabolic[pft])) - rh1[i]
+            SOC0[i] += (litter[i] * PARAMS.f_metabolic[pft]) - rh0[i]
+            SOC1[i] += (litter[i] * (1 - PARAMS.f_metabolic[pft])) - rh1[i]
             SOC2[i] += (PARAMS.f_structural[pft] * rh1[i]) - rh2[i]
             # NEE is equivalent to RH - NPP
             nee[i] = rh_total[i] - npp[i]
         # Write datasets to disk
-        fname_rh  = '%s/L4Cython_RH_%s_M09.flt32' % (config['model']['output_dir'], date)
-        fname_nee = '%s/L4Cython_NEE_%s_M09.flt32' % (config['model']['output_dir'], date)
+        fname_rh  = '%s/L4Cython_RH_%s_M09.flt32' % (
+            config['model']['output_dir'], date_str)
+        fname_nee = '%s/L4Cython_NEE_%s_M09.flt32' % (
+            config['model']['output_dir'], date_str)
         if config['model']['output_format'] == 'M09land':
             if 'RH' in config['model']['output_fields']:
                 OUT_M09 = to_numpy(rh_total, SPARSE_M09_N)
@@ -173,6 +208,8 @@ def main(config = None, verbose = True):
         OUT_M09.tofile(fname_soc.format(i = 1))
         OUT_M09 = to_numpy(SOC2, SPARSE_M09_N)
         OUT_M09.tofile(fname_soc.format(i = 2))
+    PyMem_Free(litter)
+    PyMem_Free(litter_rate)
     PyMem_Free(PFT)
     PyMem_Free(SOC0)
     PyMem_Free(SOC1)
@@ -211,11 +248,10 @@ def load_state(config):
     fid = open_fid(config['data']['SOC'][2].encode('UTF-8'), READ)
     fread(SOC2, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
     fclose(fid)
-    # NOTE: Calculating litterfall as average daily NPP (constant fraction of
-    #   the annual NPP sum)
     if config['data']['NPP_annual_sum'] != '':
         fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
         fread(LITTERFALL, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
         for i in range(SPARSE_M09_N):
-            LITTERFALL[i] = LITTERFALL[i] / 365
+            # Set any negative values (really just -9999) to zero
+            LITTERFALL[i] = fmax(0, LITTERFALL[i])

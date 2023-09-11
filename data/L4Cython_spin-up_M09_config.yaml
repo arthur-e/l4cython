@@ -15,7 +15,7 @@ data:
 model:
   output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230908
   ending_day_of_year: 89 # Day of year we want simulation to end on, to align the seasonal cycle
-  accelerated: true # Use accelerated decomposition?
+  accelerated: false # Use accelerated decomposition?
   ad_rate: # Accelerated decomposition (AD) rates
     - 1 # AD rate for SOC pool 0
     - 1 # AD rate for SOC pool 1

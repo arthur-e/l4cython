@@ -29,10 +29,6 @@ Required data:
 
 - Surface soil wetness ("SMSF"), in percentage units [0,100]
 - Soil temperature, in degrees K
-
-TODO:
-
-- [ ] Remove the option to use daily NPP, as this doesn't work well
 '''
 
 import cython
@@ -333,11 +329,11 @@ cdef numerical_spinup(
         int tol_count # Number of pixels with tolerance, for calculating...
         float tol_mean # ...Overall mean tolerance
         float tol_sum # Sum of all tolerances
+        float litterfall
         float w_mult, t_mult
         float ad_rate[3]
         float* smsf
         float* tsoil
-        float* litter # Keeps track of total annual NPP
         float* litter_rate # Fraction of litterfall allocated
         float* rh_total # Annual heterotrophic respiration (RH) sum
         float* nee_sum # Annual NEE sum
@@ -346,7 +342,6 @@ cdef numerical_spinup(
         double* tolerance # Tolerance at each pixel
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
-    litter = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     litter_rate = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
     rh_total = <float*> PyMem_Malloc(sizeof(float) * 1)
     nee_sum = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
@@ -438,15 +433,13 @@ cdef numerical_spinup(
                     #   tolerance <= 1 g C m-2 year-1
                     if fabs(tolerance[i]) < 1:
                         continue
-                if doy == 1:
-                    litter[i] = 0 # Reset annual NPP total
                 # Reset the annual delta-SOC arrays
                 delta[0] = 0
                 delta[1] = 0
                 delta[2] = 0
-                # Total annual NPP; if litterfall is not scheduled, this is just
-                #   a sum of 365 equal increments
-                litter[i] += (
+                # Calculate the litterfall input this time step: a certain
+                #   fraction of the annual NPP sum
+                litterfall = (
                     AVAIL_NPP[i] * fmax(0, litter_rate[i] / n_litter_days))
                 w_mult = linear_constraint(
                     smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
@@ -454,7 +447,7 @@ cdef numerical_spinup(
                 # Compute one daily soil decomposition step for this pixel;
                 #   note that litter[i] is the daily litterfall
                 numerical_step(
-                    delta, rh_total, litter[i], w_mult * t_mult,
+                    delta, rh_total, litterfall, w_mult * t_mult,
                     PARAMS.f_metabolic[pft], PARAMS.f_structural[pft],
                     PARAMS.decay_rate[0][pft], PARAMS.decay_rate[1][pft],
                     PARAMS.decay_rate[2][pft], soc0[i], soc1[i], soc2[i],
@@ -471,7 +464,7 @@ cdef numerical_spinup(
                     # i.e., tolerance is the change in the Annual NEE sum:
                     #   NEE = (RA + RH) - GPP --> NEE = RH - NPP
                     #   DeltaNEE = NEE(t) - NEE(t-1)
-                    nee_sum[i] = rh_total[0] - litter[i]
+                    nee_sum[i] = rh_total[0] - AVAIL_NPP[i]
                     if iter > 0:
                         tolerance[i] = nee_last_year[i] - nee_sum[i]
                     else:
@@ -496,7 +489,6 @@ cdef numerical_spinup(
         '%s/L4Cython_numspin_tol_M09land.flt64' % config['model']['output_dir'])
     PyMem_Free(smsf)
     PyMem_Free(tsoil)
-    PyMem_Free(litter)
     PyMem_Free(litter_rate)
     PyMem_Free(rh_total)
     PyMem_Free(nee_sum)
