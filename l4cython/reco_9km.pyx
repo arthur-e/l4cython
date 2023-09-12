@@ -196,7 +196,7 @@ def main(config = None, verbose = True):
             if 'RH' in config['model']['output_fields']:
                 write_inflated(fname_rh.encode('UTF-8'), to_numpy(rh_total, SPARSE_M09_N))
             if 'NEE' in config['model']['output_fields']:
-                write_inflated(fname_rh.encode('UTF-8'), to_numpy(nee, SPARSE_M09_N))
+                write_inflated(fname_nee.encode('UTF-8'), to_numpy(nee, SPARSE_M09_N))
     # Finally, write out the final SOC state, if we're in debug mode
     if config['debug']:
         fname_soc = '%s/L4Cython_SOC_C{i}_M09.flt32' % config['model']['output_dir']
