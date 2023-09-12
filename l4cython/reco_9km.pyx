@@ -4,10 +4,6 @@
 SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
 Version 7 state and parameters, at 9-km spatial resolution.
 
-Note that if the "data/NPP_annual_sum" configuration parameter is set to the
-empty string, the model will use the daily GPP (converted to NPP) to determine
-the daily NPP available for litterfall.
-
 Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): About 1.2s per data-day
 when producing a flat ("M09land") output.
 
@@ -70,7 +66,7 @@ def main(config = None, verbose = True):
         Py_ssize_t i
         Py_ssize_t doy # Day of year, on [1,365]
         int n_litter_days
-        float* litter # Usually, this is annual total NPP
+        float litter # Amount of litterfall entering SOC pools
         float* litter_rate # Fraction of litterfall allocated
         float* rh0
         float* rh1
@@ -81,7 +77,7 @@ def main(config = None, verbose = True):
         float* nee
         float* w_mult
         float* t_mult
-    litter = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+        float* soil_organic_carbon
     litter_rate = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -92,6 +88,7 @@ def main(config = None, verbose = True):
     nee = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    soil_organic_carbon = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
 
     # Read in configuration file, then load state data
     if config is None:
@@ -157,12 +154,8 @@ def main(config = None, verbose = True):
                 continue
             # Compute daily NPP
             npp[i] = gpp[i] * PARAMS.cue[pft]
-            # If no annual NPP sum was specified, litterfall must be determined
-            #   from the daily NPP
-            if config['data']['NPP_annual_sum'] != '':
-                litter[i] = npp[i] * (litter_rate[i] / n_litter_days)
-            else:
-                litter[i] = LITTERFALL[i] * (litter_rate[i] / n_litter_days)
+            # Compute daily fraction of litterfall entering SOC pools
+            litter = LITTERFALL[i] * (fmax(0, litter_rate[i]) / n_litter_days)
             # Compute daily RH based on moisture, temperature constraints
             w_mult[i] = linear_constraint(
                 smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
@@ -175,28 +168,36 @@ def main(config = None, verbose = True):
             rh1[i] = rh1[i] * (1 - PARAMS.f_structural[pft])
             rh_total[i] = rh0[i] + rh1[i] + rh2[i]
             # Calculate change in SOC pools
-            SOC0[i] += (litter[i] * PARAMS.f_metabolic[pft]) - rh0[i]
-            SOC1[i] += (litter[i] * (1 - PARAMS.f_metabolic[pft])) - rh1[i]
+            SOC0[i] += (litter * PARAMS.f_metabolic[pft]) - rh0[i]
+            SOC1[i] += (litter * (1 - PARAMS.f_metabolic[pft])) - rh1[i]
             SOC2[i] += (PARAMS.f_structural[pft] * rh1[i]) - rh2[i]
             # NEE is equivalent to RH - NPP
             nee[i] = rh_total[i] - npp[i]
         # Write datasets to disk
-        fname_rh  = '%s/L4Cython_RH_%s_M09.flt32' % (
-            config['model']['output_dir'], date_str)
-        fname_nee = '%s/L4Cython_NEE_%s_M09.flt32' % (
+        fname = '%s/L4Cython_{what}_%s_M09.flt32' % (
             config['model']['output_dir'], date_str)
         if config['model']['output_format'] == 'M09land':
             if 'RH' in config['model']['output_fields']:
                 OUT_M09 = to_numpy(rh_total, SPARSE_M09_N)
-                OUT_M09.tofile(fname_rh.replace('M09', 'M09land'))
+                OUT_M09.tofile(
+                    fname.format(what = 'RH').replace('M09', 'M09land'))
             if 'NEE' in config['model']['output_fields']:
                 OUT_M09 = to_numpy(nee, SPARSE_M09_N)
-                OUT_M09.tofile(fname_nee.replace('M09', 'M09land'))
+                OUT_M09.tofile(
+                    fname.format(what = 'NEE').replace('M09', 'M09land'))
+            if 'SOC' in config['model']['output_fields']:
+                for i in range(0, SPARSE_M09_N):
+                    soil_organic_carbon[i] = SOC0[i] + SOC1[i] + SOC2[i]
+                OUT_M09 = to_numpy(soil_organic_carbon, SPARSE_M09_N)
+                OUT_M09.tofile(
+                    fname.format(what = 'SOC').replace('M09', 'M09land'))
         else:
             if 'RH' in config['model']['output_fields']:
-                write_inflated(fname_rh.encode('UTF-8'), to_numpy(rh_total, SPARSE_M09_N))
+                write_inflated(
+                    fname.format(what = 'RH').encode('UTF-8'), to_numpy(rh_total, SPARSE_M09_N))
             if 'NEE' in config['model']['output_fields']:
-                write_inflated(fname_nee.encode('UTF-8'), to_numpy(nee, SPARSE_M09_N))
+                write_inflated(
+                    fname.format(what = 'NEE').encode('UTF-8'), to_numpy(nee, SPARSE_M09_N))
     # Finally, write out the final SOC state, if we're in debug mode
     if config['debug']:
         fname_soc = '%s/L4Cython_SOC_C{i}_M09.flt32' % config['model']['output_dir']
@@ -208,7 +209,6 @@ def main(config = None, verbose = True):
         OUT_M09.tofile(fname_soc.format(i = 1))
         OUT_M09 = to_numpy(SOC2, SPARSE_M09_N)
         OUT_M09.tofile(fname_soc.format(i = 2))
-    PyMem_Free(litter)
     PyMem_Free(litter_rate)
     PyMem_Free(PFT)
     PyMem_Free(SOC0)
@@ -223,6 +223,7 @@ def main(config = None, verbose = True):
     PyMem_Free(nee)
     PyMem_Free(w_mult)
     PyMem_Free(t_mult)
+    PyMem_Free(soil_organic_carbon)
 
 
 def load_state(config):
@@ -248,10 +249,12 @@ def load_state(config):
     fid = open_fid(config['data']['SOC'][2].encode('UTF-8'), READ)
     fread(SOC2, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
     fclose(fid)
-    if config['data']['NPP_annual_sum'] != '':
-        fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
-        fread(LITTERFALL, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
-        for i in range(SPARSE_M09_N):
-            # Set any negative values (really just -9999) to zero
-            LITTERFALL[i] = fmax(0, LITTERFALL[i])
+    fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
+    fread(LITTERFALL, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+    fclose(fid)
+    for i in range(SPARSE_M09_N):
+        # Set any negative values (really just -9999) to zero
+        SOC0[i] = fmax(0, SOC0[i])
+        SOC1[i] = fmax(0, SOC1[i])
+        SOC2[i] = fmax(0, SOC2[i])
+        LITTERFALL[i] = fmax(0, LITTERFALL[i])
