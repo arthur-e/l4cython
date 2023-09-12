@@ -175,7 +175,7 @@ def inflate_file(filename, grid = 'M09'):
 
 
 def write_deflated(
-        output_filename, grid_numpy_array, data_type = DFNT_FLOAT32):
+        output_filename, grid_numpy_array, data_type = DFNT_FLOAT32, grid = 'M09'):
     '''
     Given a gridded (2D) array as a NumPy array, deflates the array to the
     flat (1D or "sparse land") format and writes to a file. This function
@@ -184,38 +184,26 @@ def write_deflated(
     deflate the file and write to disk. This is necessary because `deflate()`
     only works for C arrays.
 
-    For now, only NumPy arrays with 1-km elements should be passed.
-
     Parameters
     ----------
     output_filename : str
     grid_numpy_array : numpy.ndarray
     data_type : int
         Defaults to `DFNT_FLOAT32`
+    grid : str
     '''
     cdef:
         char* fname
         char* ofname
         unsigned char* grid_array
         unsigned char* deflated_array
-    if data_type == DFNT_FLOAT32:
-        sz = sizeof(float)
-    elif data_type == DFNT_FLOAT64:
-        sz = sizeof(double)
-    elif data_type == DFNT_INT8:
-        sz = sizeof(char)
-    elif data_type == DFNT_UINT8:
-        sz = sizeof(unsigned char)
-    elif data_type == DFNT_INT16:
-        sz = sizeof(signed short)
-    elif data_type == DFNT_UINT16:
-        sz = sizeof(unsigned short)
-    elif data_type == DFNT_INT32:
-        sz = sizeof(signed int)
-    elif data_type == DFNT_UINT32:
-        sz = sizeof(unsigned int)
-    in_bytes = sz * NCOL1KM * NROW1KM
-    out_bytes = sz * SPARSE_M01_N
+
+    # Assume 9-km grid, this also helps avoid warnings when compiling
+    in_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
+    out_bytes = size_in_bytes(data_type) * SPARSE_M09_N
+    if grid == 'M01':
+        in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
+        out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
     grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
     deflated_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
 
@@ -231,7 +219,7 @@ def write_deflated(
     fclose(fid)
 
     # Inflate to a 2D grid, then write to file
-    deflated_array = deflate(grid_array, data_type, 'M01'.encode('UTF-8'))
+    deflated_array = deflate(grid_array, data_type, grid.encode('UTF-8'))
     ofname = output_filename
     fid = open_fid(ofname, WRITE)
     fwrite(deflated_array, sizeof(unsigned char), <size_t>out_bytes, fid)
@@ -241,7 +229,7 @@ def write_deflated(
 
 
 def write_inflated(
-        output_filename, flat_numpy_array, data_type = DFNT_FLOAT32):
+        output_filename, flat_numpy_array, data_type = DFNT_FLOAT32, grid = 'M09'):
     '''
     Given a flat (1D or "sparse land") array as a NumPy array, inflates the
     array to the global grid and writes to a file. This function works by
@@ -249,9 +237,6 @@ def write_inflated(
     `fread()` read back the array as bytes. Then, we can properly inflate the
     file and write to disk. This is necessary because `inflate()` only works
     for C arrays.
-
-    For now, only NumPy arrays with 9-km elements should be passed; there is
-    no support implemented for writing inflated 1-km arrays.
 
     NOTE: `output_filename` is expected as bytes, not a string; if starting
     with a string, use:
@@ -264,30 +249,20 @@ def write_inflated(
     flat_numpy_array : numpy.ndarray
     data_type : int
         Defaults to `DFNT_FLOAT32`
+    grid : str
     '''
     cdef:
         char* fname
         char* ofname
         unsigned char* flat_array
         unsigned char* inflated_array
-    if data_type == DFNT_FLOAT32:
-        sz = sizeof(float)
-    elif data_type == DFNT_FLOAT64:
-        sz = sizeof(double)
-    elif data_type == DFNT_INT8:
-        sz = sizeof(char)
-    elif data_type == DFNT_UINT8:
-        sz = sizeof(unsigned char)
-    elif data_type == DFNT_INT16:
-        sz = sizeof(signed short)
-    elif data_type == DFNT_UINT16:
-        sz = sizeof(unsigned short)
-    elif data_type == DFNT_INT32:
-        sz = sizeof(signed int)
-    elif data_type == DFNT_UINT32:
-        sz = sizeof(unsigned int)
-    in_bytes = sz * NCOL1KM * NROW1KM
-    out_bytes = sz * SPARSE_M01_N
+
+    # Assume 9-km grid, this also helps avoid warnings when compiling
+    in_bytes = size_in_bytes(data_type) * SPARSE_M09_N
+    out_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
+    if grid == 'M01':
+        in_bytes = size_in_bytes(data_type) * SPARSE_M01_N
+        out_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
     flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
     inflated_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
 
@@ -304,7 +279,7 @@ def write_inflated(
 
     # Inflate to a 2D grid, then write to file
     inflated_array = inflate(
-        flat_array, DFNT_FLOAT32, 'M09'.encode('UTF-8'))
+        flat_array, DFNT_FLOAT32, grid.encode('UTF-8'))
     ofname = output_filename
     fid = open_fid(ofname, WRITE)
     fwrite(inflated_array, sizeof(unsigned char), <size_t>out_bytes, fid)
