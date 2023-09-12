@@ -16,6 +16,9 @@ data:
     tsoil: driver_climate_Tsoil_M09land_%s.flt32 # Soil temperature [deg K]
     GPP: L4_C_mdl_V7_GPP_%s_M09land.flt32
 model:
+  litterfall:
+    scheduled: false
+    interval_days: 8
   output_dir: .
   output_fields: # Valid output fields include: "RH", "NEE"
     - RH

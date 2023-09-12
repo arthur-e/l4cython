@@ -2,6 +2,9 @@
 Tests forward model runs, including:
 
     l4cython.reco_9km.main()
+
+This has to be done in a separate file, for some reason, because it would
+otherwise cause a Segmentation Fault.
 '''
 
 import os
@@ -16,13 +19,16 @@ from l4cython.reco_9km import main
 PROJECT_ROOT = Path(l4cython.__path__[0]).parent
 CONFIG_FILE = Path(PROJECT_ROOT, 'tests/data/L4Cython_RECO_test_config.yaml')
 
-def test_forward_run_9km():
-    'Tests that 9-km run produces expected RH, NEE flux'
+def test_forward_run_9km_with_litterfall_schedule():
+    'Tests that 9-km run w/ litterfall schedule produces expected RH, NEE flux'
     with open(CONFIG_FILE, 'r') as file:
         config = yaml.safe_load(file)
     # Re-write the path to the BPLUT
     config['BPLUT'] = str(Path(PROJECT_ROOT, f'data/{config["BPLUT"]}'))
     config['model']['output_dir'] = str(Path(PROJECT_ROOT, 'tests/data'))
+    config['model']['litterfall']['scheduled'] = True
+    config['model']['litterfall']['interval_days'] = 8
+    config['data']['litterfall_schedule'] = 'L4Cython_litterfall_allocation_clim_2012-2021_M09land_P%s.flt32'
     for key in config['data'].keys():
         # It's a file path (as a string)
         if isinstance(config['data'][key], str):
