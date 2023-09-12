@@ -1,6 +1,4 @@
 # cython: language_level=3
-# distutils: sources = ["utils/src/spland.c"]
-# distutils: include_dirs = ["utils/src/"]
 
 '''
 SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
@@ -172,21 +170,26 @@ def main(config = None):
                 soc_total[k] = SOC0[k] + SOC1[k] + SOC2[k]
 
         # If averaging from 1-km to 9-km resolution is requested...
+        out_dir = config['model']['output_dir']
         if config['model']['output_format'] in ('M09', 'M09land'):
             fmt = config['model']['output_format']
             inflated = 1 if fmt == 'M09' else 0
-            output_filename = ('%s/L4Cython_RH_%s_%s.flt32' % (config['model']['output_dir'], date, fmt))\
-                .encode('UTF-8')
-            ofname = output_filename
-            write_resampled(output_filename, rh_total, inflated)
-            output_filename = ('%s/L4Cython_SOC_%s_%s.flt32' % (config['model']['output_dir'], date, fmt))\
-                .encode('UTF-8')
-            ofname = output_filename
-            write_resampled(output_filename, soc_total, inflated)
+            if 'RH' in config['model']['output_fields']:
+                output_filename = ('%s/L4Cython_RH_%s_%s.flt32' % (out_dir, date, fmt))\
+                    .encode('UTF-8')
+                write_resampled(output_filename, rh_total, inflated)
+            if 'Tmult' in config['model']['output_fields']:
+                output_filename = ('%s/L4Cython_Tmult_%s_%s.flt32' % (out_dir, date, fmt))\
+                    .encode('UTF-8')
+                write_resampled(output_filename, t_mult, inflated)
+            if 'Tmult' in config['model']['output_fields']:
+                output_filename = ('%s/L4Cython_Wmult_%s_%s.flt32' % (out_dir, date, fmt))\
+                    .encode('UTF-8')
+                write_resampled(output_filename, w_mult, inflated)
         else:
             OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
             OUT_M01.tofile(
-                '%s/L4Cython_RH_%s_M01land.flt32' % (config['model']['output_dir'], date))
+                '%s/L4Cython_RH_%s_M01land.flt32' % (out_dir, date))
     PyMem_Free(PFT)
     PyMem_Free(SOC0)
     PyMem_Free(SOC1)
@@ -261,8 +264,9 @@ cdef void write_resampled(bytes output_filename, float* array_data, int inflated
             continue
         value /= count
         data_resampled[i] = value
+    data_resampled.tofile('/home/arthur/temp.flt32')
     # Write a flat (1D) file or inflate the file and then write
     if inflated == 0:
         data_resampled.tofile(output_filename.decode('UTF-8'))
     else:
-        write_inflated(output_filename, data_resampled)
+        write_inflated(output_filename, data_resampled, grid = 'M09')

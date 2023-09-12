@@ -191,6 +191,14 @@ def main(config = None, verbose = True):
                 OUT_M09 = to_numpy(soil_organic_carbon, SPARSE_M09_N)
                 OUT_M09.tofile(
                     fname.format(what = 'SOC').replace('M09', 'M09land'))
+            if 'Tmult' in config['model']['output_fields']:
+                OUT_M09 = to_numpy(t_mult, SPARSE_M09_N)
+                OUT_M09.tofile(
+                    fname.format(what = 'Tmult').replace('M09', 'M09land'))
+            if 'Wmult' in config['model']['output_fields']:
+                OUT_M09 = to_numpy(t_mult, SPARSE_M09_N)
+                OUT_M09.tofile(
+                    fname.format(what = 'Wmult').replace('M09', 'M09land'))
         else:
             if 'RH' in config['model']['output_fields']:
                 write_inflated(
