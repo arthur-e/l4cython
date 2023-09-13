@@ -93,6 +93,8 @@ def main(config = None, verbose = True):
     # Read in configuration file, then load state data
     if config is None:
         config = '../data/L4Cython_RECO_M09_config.yaml'
+        if verbose:
+            print(f'Using config file: {config}')
     if isinstance(config, str):
         with open(config, 'r') as file:
             config = yaml.safe_load(file)

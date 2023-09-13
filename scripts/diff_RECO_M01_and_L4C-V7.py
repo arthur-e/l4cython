@@ -12,7 +12,7 @@ from l4cython.utils.mkgrid import inflate_file
 from l4cython.utils.fixtures import NROW9KM, NCOL9KM, NROW1KM, NCOL1KM
 from matplotlib import pyplot
 
-L4C_FILE = '/media/arthur.endsley/raid/SMAP/L4_C/Vv7042/SMAP_L4_C_mdl_20150331T000000_Vv7042_001.h5'
+L4C_FILE_TPL = '/media/arthur.endsley/raid/SMAP/L4_C/Vv7042/SMAP_L4_C_mdl_{date}T000000_Vv7042_001.h5'
 FILE_RX = re.compile(r'L4Cython\_(?P<field>.*)\_(?P<date>\d{8})\_M09\.flt32')
 
 def main(filename, grid = 'M09'):
@@ -36,19 +36,24 @@ def main(filename, grid = 'M09'):
     if field in ('Tmult', 'Wmult'):
         recent *= 100
     # Open the official V7 file
-    with h5py.File(L4C_FILE, 'r') as hdf:
+    with h5py.File(L4C_FILE_TPL.format(date = date), 'r') as hdf:
         if field in ('Tmult', 'Wmult'):
             official = hdf[f'EC/{field.lower()}_mean'][:]
         else:
             official = hdf[f'{field}/{field.lower()}_mean'][:]
     official[official < 0] = np.nan
     # Statistics
-    print(f'Official V7 {field} on 2015-03-31:')
+    print(f'Official V7 {field} on {date}:')
     print('-- ', np.nanpercentile(official, (0, 10, 50, 90, 100)).round(2))
-    print(f'L4Cython {field} on 2015-03-31:')
+    print(f'L4Cython {field} on {date}:')
     print('-- ', np.nanpercentile(recent, (0, 10, 50, 90, 100)).round(2))
 
     diff = official - recent
+    if np.nanmax(np.abs(diff)) <= 1e-3 and np.nanmin(np.abs(diff)) <= 1e-3:
+        print('Zero diff within tolerance of 1e-3')
+    else:
+        print(f'Global maximum (mean) difference: {np.nanmax(np.abs(diff)).round(3)} ({np.nanmean(np.abs(diff)).round(3)})')
+
     vlimit = max(np.nanmax(diff), np.nanmin(diff))
     pyplot.imshow(
         diff, interpolation = 'nearest', cmap = 'PRGn',

@@ -71,7 +71,7 @@ OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def main(config = None):
+def main(config = None, verbose = True):
     '''
     Forward run of the L4C soil decomposition and heterotrophic respiration
     algorithm. Starts on "origin_date" and continues for the specified number
@@ -80,6 +80,7 @@ def main(config = None):
     Parameters
     ----------
     config : str or dict
+    verbose : bool
     '''
     cdef:
         Py_ssize_t i
@@ -110,6 +111,8 @@ def main(config = None):
     # Read in configuration file, then load state data
     if config is None:
         config = '../data/L4Cython_RECO_M01_config.yaml'
+        if verbose:
+            print(f'Using config file: {config}')
     if isinstance(config, str):
         with open(config, 'r') as file:
             config = yaml.safe_load(file)

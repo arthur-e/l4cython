@@ -6,6 +6,8 @@ the basis for the Soil Moisture Active Passive (SMAP) Level 4 Carbon (L4C) model
 
 - [ ] Single place for constants, e.g., `DFNT_FLOAT32`
 - https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html?highlight=packaging#distributing-cython-modules
+- *Getting to zero-diff with the operational product...*
+  - Confirmed that the delivered SOC file (now as `/media/arthur.endsley/raid/TCF/tcf_V7_delivered_C*_M01land_0002089.flt32`) produces the closest results to the operational product.
 
 
 Building and Testing
