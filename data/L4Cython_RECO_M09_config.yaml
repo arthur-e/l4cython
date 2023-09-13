@@ -14,7 +14,7 @@ data:
     - /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_C1_M09land_0002089.flt32
     - /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_C2_M09land_0002089.flt32
   NPP_annual_sum: >- # Map of annual NPP sum [g C m-2 year-1] for each pixel
-    /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_npp_sum_M09land.flt32
+    /media/arthur.endsley/raid/TCF/tcf_V7_delivered_NPP_annual_sum_M09land.flt32
   litterfall_schedule: >- # [N] array specifying parts-per-thousand of litterfall allocated every 8 days
     /anx_lagr4/SMAP/L4C_drivers/VIIRS_LAI/L4Cython_litterfall_allocation_clim_2012-2021_M09land_P%s.flt32
   drivers:

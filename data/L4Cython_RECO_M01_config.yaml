@@ -12,7 +12,7 @@ data:
     - /media/arthur.endsley/raid/TCF/tcf_V7_delivered_C1_M01land_0002089.flt32
     - /media/arthur.endsley/raid/TCF/tcf_V7_delivered_C2_M01land_0002089.flt32
   NPP_annual_sum: >- # Map of annual NPP sum [g C m-2 year-1] for each pixel
-      /anx_lagr4/SMAP/L4C_code/tcf/output/OL7000/tcf_OL7000_npp_sum_M01land.flt32
+      /media/arthur.endsley/raid/TCF/tcf_V7_delivered_NPP_annual_sum_M01land.flt32
   drivers:
     smsf: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_smsf_M09land_%s.flt32 # Surface soil wetness (%) on [0,100]
     tsoil: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_tsoil_M09land_%s.flt32 # Soil temperature [deg K]
