@@ -10,9 +10,9 @@ data:
   PFT_map: >- # Map of plant functional types (PFT)
     /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4C_PFT_map_M09land.uint8
   SOC: # List of three (3) soil organic carbon (SOC) pools
-    - /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_C0_M09land_0002089.flt32
-    - /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_C1_M09land_0002089.flt32
-    - /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/tcf_OL7000_C2_M09land_0002089.flt32
+    - /media/arthur.endsley/raid/TCF/tcf_V7_delivered_C0_M09land_0002089.flt32
+    - /media/arthur.endsley/raid/TCF/tcf_V7_delivered_C1_M09land_0002089.flt32
+    - /media/arthur.endsley/raid/TCF/tcf_V7_delivered_C2_M09land_0002089.flt32
   NPP_annual_sum: >- # Map of annual NPP sum [g C m-2 year-1] for each pixel
     /media/arthur.endsley/raid/TCF/tcf_V7_delivered_NPP_annual_sum_M09land.flt32
   litterfall_schedule: >- # [N] array specifying parts-per-thousand of litterfall allocated every 8 days
@@ -23,9 +23,9 @@ data:
     GPP: /media/arthur.endsley/raid/TCF/L4C_V7_mdl_GPP/L4_C_mdl_V7_GPP_%s_M09land.flt32 # Only used to calculate NEE
 model:
   litterfall:
-    scheduled: true
+    scheduled: false
     interval_days: 8 # Number of days represented by litterfall rate
-  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230910
+  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20231002
   output_fields: # Valid output fields include: "RH", "NEE"
     - RH
   output_format: M09land # "M09land" for flat (1D) output

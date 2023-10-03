@@ -13,7 +13,7 @@ from l4cython.utils.fixtures import NROW9KM, NCOL9KM, NROW1KM, NCOL1KM
 from matplotlib import pyplot
 
 L4C_FILE_TPL = '/media/arthur.endsley/raid/SMAP/L4_C/Vv7042/SMAP_L4_C_mdl_{date}T000000_Vv7042_001.h5'
-FILE_RX = re.compile(r'L4Cython\_(?P<field>.*)\_(?P<date>\d{8})\_M09\.flt32')
+FILE_RX = re.compile(r'L4Cython\_(?P<field>.*)\_(?P<date>\d{8})\_.*\.flt32')
 
 def main(filename, grid = 'M09'):
     '''
@@ -26,7 +26,7 @@ def main(filename, grid = 'M09'):
         Either "M09" (default) or "M01"
     '''
     dtype = np.float32 if filename.split('.')[-1] == 'flt32' else np.float64
-    if 'M09land' in filename:
+    if f'{grid}land' in filename:
         inflate_file(filename, grid)
         filename = filename.replace(f'{grid}land', f'{grid}')
     field, date = FILE_RX.match(os.path.basename(filename)).groups()
