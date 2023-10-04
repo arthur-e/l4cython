@@ -89,25 +89,31 @@ def main(config = None, verbose = True):
         Py_ssize_t j
         Py_ssize_t k
         Py_ssize_t pft
+        float reco # Ecosystem respiration
         char* ofname # Output filename
+        float* gpp
+        float* smsf
+        float* tsoil
         float* rh0
         float* rh1
         float* rh2
         float* rh_total
+        float* nee
         float* w_mult
         float* t_mult
-        float* smsf
-        float* tsoil
         float* soc_total
         float k_mult
+    # Note that some datasets are only available at 9-km (M09) resolution
+    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    nee = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-    smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     soc_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
     # Read in configuration file, then load state data
@@ -146,6 +152,12 @@ def main(config = None, verbose = True):
             (config['data']['drivers']['tsoil'] % date).encode('UTF-8'), READ)
         fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
+        # Read in the GPP data
+        fid = open_fid(
+            (config['data']['drivers']['GPP'] % date).encode('UTF-8'), READ)
+        fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+        fclose(fid)
+
         # Iterate over each 9-km pixel
         for i in prange(SPARSE_M09_N, nogil = True):
             # Iterate over each nested 1-km pixel
@@ -156,6 +168,7 @@ def main(config = None, verbose = True):
                 t_mult[k] = FILL_VALUE
                 rh_total[k] = FILL_VALUE
                 soc_total[k] = FILL_VALUE
+                nee[k] = FILL_VALUE
                 pft = PFT[k]
                 if is_valid(pft, tsoil[i], LITTERFALL[k]) == 0:
                     continue # Skip invalid PFTs
@@ -180,6 +193,9 @@ def main(config = None, verbose = True):
                 SOC1[k] = fmax(SOC1[k], 0)
                 SOC2[k] = fmax(SOC2[k], 0)
                 soc_total[k] = SOC0[k] + SOC1[k] + SOC2[k]
+                # Compute NEE
+                reco = rh_total[k] + (gpp[i] * (1 - PARAMS.cue[pft]))
+                nee[k] = reco - gpp[i]
 
         # If averaging from 1-km to 9-km resolution is requested...
         out_dir = config['model']['output_dir']
@@ -190,6 +206,10 @@ def main(config = None, verbose = True):
                 output_filename = ('%s/L4Cython_RH_%s_%s.flt32' % (out_dir, date, fmt))\
                     .encode('UTF-8')
                 write_resampled(output_filename, rh_total, inflated)
+            if 'NEE' in config['model']['output_fields']:
+                output_filename = ('%s/L4Cython_NEE_%s_%s.flt32' % (out_dir, date, fmt))\
+                    .encode('UTF-8')
+                write_resampled(output_filename, nee, inflated)
             if 'Tmult' in config['model']['output_fields']:
                 output_filename = ('%s/L4Cython_Tmult_%s_%s.flt32' % (out_dir, date, fmt))\
                     .encode('UTF-8')
@@ -203,6 +223,10 @@ def main(config = None, verbose = True):
                 OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
                 OUT_M01.tofile(
                     '%s/L4Cython_RH_%s_M01land.flt32' % (out_dir, date))
+            if 'NEE' in config['model']['output_fields']:
+                OUT_M01 = to_numpy(nee, SPARSE_M01_N)
+                OUT_M01.tofile(
+                    '%s/L4Cython_NEE_%s_M01land.flt32' % (out_dir, date))
             if 'Tmult' in config['model']['output_fields']:
                 OUT_M01 = to_numpy(t_mult, SPARSE_M01_N)
                 OUT_M01.tofile(
@@ -216,10 +240,14 @@ def main(config = None, verbose = True):
     PyMem_Free(SOC1)
     PyMem_Free(SOC2)
     PyMem_Free(LITTERFALL)
+    PyMem_Free(gpp)
+    PyMem_Free(smsf)
+    PyMem_Free(tsoil)
     PyMem_Free(rh0)
     PyMem_Free(rh1)
     PyMem_Free(rh2)
     PyMem_Free(rh_total)
+    PyMem_Free(nee)
     PyMem_Free(w_mult)
     PyMem_Free(t_mult)
 

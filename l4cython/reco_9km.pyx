@@ -74,7 +74,6 @@ def main(config = None, verbose = True):
         float* rh2
         float* rh_total
         float* gpp
-        float* npp
         float* nee
         float* w_mult
         float* t_mult
@@ -85,7 +84,6 @@ def main(config = None, verbose = True):
     rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     rh_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    npp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     nee = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -177,9 +175,10 @@ def main(config = None, verbose = True):
             SOC0[i] = fmax(SOC0[i], 0)
             SOC1[i] = fmax(SOC1[i], 0)
             SOC2[i] = fmax(SOC2[i], 0)
-            # NEE is equivalent to RH - NPP
+            # Compute NEE
             reco = rh_total[i] + (gpp[i] * (1 - PARAMS.cue[pft]))
             nee[i] = reco - gpp[i]
+            
         # Write datasets to disk
         fname = '%s/L4Cython_{what}_%s_M09.flt32' % (
             config['model']['output_dir'], date_str)
