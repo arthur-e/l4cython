@@ -67,6 +67,7 @@ def main(config = None, verbose = True):
         Py_ssize_t doy # Day of year, on [1,365]
         int n_litter_days
         float litter # Amount of litterfall entering SOC pools
+        float reco # Ecosystem respiration
         float* litter_rate # Fraction of litterfall allocated
         float* rh0
         float* rh1
@@ -154,8 +155,6 @@ def main(config = None, verbose = True):
             pft = int(PFT[i])
             if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
                 continue
-            # Compute daily NPP
-            npp[i] = gpp[i] * PARAMS.cue[pft]
             # Compute daily fraction of litterfall entering SOC pools
             litter = LITTERFALL[i] * (fmax(0, litter_rate[i]) / n_litter_days)
             # Compute daily RH based on moisture, temperature constraints
@@ -165,16 +164,22 @@ def main(config = None, verbose = True):
             rh0[i] = w_mult[i] * t_mult[i] * SOC0[i] * PARAMS.decay_rate[0][pft]
             rh1[i] = w_mult[i] * t_mult[i] * SOC1[i] * PARAMS.decay_rate[1][pft]
             rh2[i] = w_mult[i] * t_mult[i] * SOC2[i] * PARAMS.decay_rate[2][pft]
-            # "the adjustment...to account for material transferred into the
-            #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
-            rh1[i] = rh1[i] * (1 - PARAMS.f_structural[pft])
-            rh_total[i] = rh0[i] + rh1[i] + rh2[i]
             # Calculate change in SOC pools
             SOC0[i] += (litter * PARAMS.f_metabolic[pft]) - rh0[i]
             SOC1[i] += (litter * (1 - PARAMS.f_metabolic[pft])) - rh1[i]
             SOC2[i] += (PARAMS.f_structural[pft] * rh1[i]) - rh2[i]
+            # "the adjustment...to account for material transferred into the
+            #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
+            rh1[i] = rh1[i] * (1 - PARAMS.f_structural[pft])
+            rh_total[i] = rh0[i] + rh1[i] + rh2[i]
+            # Adjust pools, if needed, to guard against negative values
+            rh_total[i] = fmax(rh_total[i], 0)
+            SOC0[i] = fmax(SOC0[i], 0)
+            SOC1[i] = fmax(SOC1[i], 0)
+            SOC2[i] = fmax(SOC2[i], 0)
             # NEE is equivalent to RH - NPP
-            nee[i] = rh_total[i] - npp[i]
+            reco = rh_total[i] + (gpp[i] * (1 - PARAMS.cue[pft]))
+            nee[i] = reco - gpp[i]
         # Write datasets to disk
         fname = '%s/L4Cython_{what}_%s_M09.flt32' % (
             config['model']['output_dir'], date_str)

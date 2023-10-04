@@ -32,9 +32,10 @@ import datetime
 import yaml
 import numpy as np
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
+from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
-from l4cython.respiration cimport arrhenius, linear_constraint
+from l4cython.respiration cimport is_valid, arrhenius, linear_constraint
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.mkgrid cimport inflate
 from l4cython.utils.mkgrid import write_inflated
@@ -47,6 +48,7 @@ from tqdm import tqdm
 cdef:
     FILE* fid
     BPLUT PARAMS
+    int   FILL_VALUE = -9999
     int   M01_NESTED_IN_M09 = 9 * 9
     long  SPARSE_M09_N = PY_SPARSE_M09_N # Number of grid cells in sparse ("land") arrays
     long  SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
@@ -150,8 +152,12 @@ def main(config = None, verbose = True):
             for j in range(M01_NESTED_IN_M09):
                 # Hence, (i) indexes the 9-km pixel and k the 1-km pixel
                 k = (M01_NESTED_IN_M09 * i) + j
+                w_mult[k] = FILL_VALUE
+                t_mult[k] = FILL_VALUE
+                rh_total[k] = FILL_VALUE
+                soc_total[k] = FILL_VALUE
                 pft = PFT[k]
-                if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+                if is_valid(pft, tsoil[i], LITTERFALL[k]) == 0:
                     continue # Skip invalid PFTs
                 w_mult[k] = linear_constraint(
                     smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
@@ -160,16 +166,19 @@ def main(config = None, verbose = True):
                 rh0[k] = k_mult * SOC0[k] * PARAMS.decay_rate[0][pft]
                 rh1[k] = k_mult * SOC1[k] * PARAMS.decay_rate[1][pft]
                 rh2[k] = k_mult * SOC2[k] * PARAMS.decay_rate[2][pft]
-                # "the adjustment...to account for material transferred into the
-                #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
-                rh1[k] = rh1[k] * (1 - PARAMS.f_structural[pft])
-                rh_total[k] = rh0[k] + rh1[k] + rh2[k]
-                if rh_total[k] < 0:
-                    rh_total[k] = 0
                 # Calculate change in SOC pools; LITTERFALL[k] is daily litterfall
                 SOC0[k] += (LITTERFALL[k] * PARAMS.f_metabolic[pft]) - rh0[k]
                 SOC1[k] += (LITTERFALL[k] * (1 - PARAMS.f_metabolic[pft])) - rh1[k]
                 SOC2[k] += (PARAMS.f_structural[pft] * rh1[k]) - rh2[k]
+                # "the adjustment...to account for material transferred into the
+                #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
+                rh1[k] = rh1[k] * (1 - PARAMS.f_structural[pft])
+                rh_total[k] = rh0[k] + rh1[k] + rh2[k]
+                # Adjust pools, if needed, to guard against negative values
+                rh_total[k] = fmax(rh_total[k], 0)
+                SOC0[k] = fmax(SOC0[k], 0)
+                SOC1[k] = fmax(SOC1[k], 0)
+                SOC2[k] = fmax(SOC2[k], 0)
                 soc_total[k] = SOC0[k] + SOC1[k] + SOC2[k]
 
         # If averaging from 1-km to 9-km resolution is requested...
@@ -185,14 +194,23 @@ def main(config = None, verbose = True):
                 output_filename = ('%s/L4Cython_Tmult_%s_%s.flt32' % (out_dir, date, fmt))\
                     .encode('UTF-8')
                 write_resampled(output_filename, t_mult, inflated)
-            if 'Tmult' in config['model']['output_fields']:
+            if 'Wmult' in config['model']['output_fields']:
                 output_filename = ('%s/L4Cython_Wmult_%s_%s.flt32' % (out_dir, date, fmt))\
                     .encode('UTF-8')
                 write_resampled(output_filename, w_mult, inflated)
         else:
-            OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
-            OUT_M01.tofile(
-                '%s/L4Cython_RH_%s_M01land.flt32' % (out_dir, date))
+            if 'RH' in config['model']['output_fields']:
+                OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
+                OUT_M01.tofile(
+                    '%s/L4Cython_RH_%s_M01land.flt32' % (out_dir, date))
+            if 'Tmult' in config['model']['output_fields']:
+                OUT_M01 = to_numpy(t_mult, SPARSE_M01_N)
+                OUT_M01.tofile(
+                    '%s/L4Cython_Tmult_%s_M01land.flt32' % (out_dir, date))
+            if 'Wmult' in config['model']['output_fields']:
+                OUT_M01 = to_numpy(w_mult, SPARSE_M01_N)
+                OUT_M01.tofile(
+                    '%s/L4Cython_Wmult_%s_M01land.flt32' % (out_dir, date))
     PyMem_Free(PFT)
     PyMem_Free(SOC0)
     PyMem_Free(SOC1)
@@ -252,14 +270,13 @@ cdef void write_resampled(bytes output_filename, float* array_data, int inflated
     inflated : int
         1 if the output array should be inflated to a 2D global EASE-Grid 2.0
     '''
-    data_resampled = np.empty((SPARSE_M09_N,), np.float32)
+    data_resampled = FILL_VALUE * np.ones((SPARSE_M09_N,), np.float32)
     for i in range(0, SPARSE_M09_N):
         value = 0
         count = 0
         for j in range(0, M01_NESTED_IN_M09):
             k = (M01_NESTED_IN_M09 * i) + j
-            pft = PFT[k]
-            if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+            if array_data[k] == FILL_VALUE:
                 continue # Skip invalid PFTs
             value += array_data[k]
             count += 1

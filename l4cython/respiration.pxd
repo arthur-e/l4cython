@@ -73,3 +73,33 @@ cdef inline float linear_constraint(
         return 0
     else:
         return (x - xmin) / (xmax - xmin)
+
+
+cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
+    '''
+    Checks to see if a given pixel is valid, based on the PFT but also on
+    select input data values. Modeled after `tcfModUtil_isInCell()` in the
+    TCF code.
+
+    Parameters
+    ----------
+    pft : char
+        The Plant Functional Type (PFT)
+    tsoil : float
+        The daily mean soil temperature in the surface layer (deg K)
+    litter : float
+        The daily litterfall input
+
+    Returns
+    -------
+    char
+        A value of 0 indicates the pixel is invalid, otherwise returns 1
+    '''
+    cdef char valid = 1 # Assume it's a valid pixel
+    if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+        valid = 0
+    elif tsoil <= 0:
+        valid = 0
+    elif litter <= 0:
+        valid = 0
+    return valid
