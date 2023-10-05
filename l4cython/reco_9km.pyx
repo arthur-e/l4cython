@@ -1,8 +1,9 @@
 # cython: language_level=3
 
 '''
-SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
-Version 7 state and parameters, at 9-km spatial resolution.
+SMAP Level 4 Carbon (L4C) heterotrophic respiration (RH) and NEE calculation
+at 9-km spatial resolution. The `main()` routine is optimized for model
+execution but it may take several seconds to load the state data.
 
 Recent benchmarks on Gullveig (Intel Xeon 3.7 GHz): About 1.2s per data-day
 when producing a flat ("M09land") output.
@@ -119,9 +120,11 @@ def main(config = None, verbose = True):
             [i] * n_litter_days for i in range(1, n_litter_periods + 1)
         ]).ravel()
     else:
-        n_litter_days = 1
+        # Allocate equal daily fraction; i.e., final rate is
+        #   (litter_rate / n_litter_days) or 1/365
+        n_litter_days = 365
         for i in range(0, SPARSE_M09_N):
-            litter_rate[i] = 1/365.0 # Allocate equal daily fraction
+            litter_rate[i] = 1
 
     load_state(config) # Load global state variables
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
@@ -178,7 +181,7 @@ def main(config = None, verbose = True):
             # Compute NEE
             reco = rh_total[i] + (gpp[i] * (1 - PARAMS.cue[pft]))
             nee[i] = reco - gpp[i]
-            
+
         # Write datasets to disk
         fname = '%s/L4Cython_{what}_%s_M09.flt32' % (
             config['model']['output_dir'], date_str)
@@ -223,12 +226,12 @@ def main(config = None, verbose = True):
         OUT_M09.tofile(fname_soc.format(i = 1))
         OUT_M09 = to_numpy(SOC2, SPARSE_M09_N)
         OUT_M09.tofile(fname_soc.format(i = 2))
-    PyMem_Free(litter_rate)
     PyMem_Free(PFT)
     PyMem_Free(SOC0)
     PyMem_Free(SOC1)
     PyMem_Free(SOC2)
     PyMem_Free(LITTERFALL)
+    PyMem_Free(litter_rate)
     PyMem_Free(rh0)
     PyMem_Free(rh1)
     PyMem_Free(rh2)

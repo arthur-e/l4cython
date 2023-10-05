@@ -1,18 +1,19 @@
 # cython: language_level=3
 
 '''
-SMAP Level 4 Carbon (L4C) heterotrophic respiration calculation, based on
-Version 6 state and parameters, at 1-km spatial resolution. The `main()`
-routine is optimized for model execution but it may take several seconds to
-load the state data.
+SMAP Level 4 Carbon (L4C) heterotrophic respiration (RH) and NEE calculation
+at 1-km spatial resolution. The `main()` routine is optimized for model
+execution but it may take several seconds to load the state data.
 
-After the initial state data are loaded it takes about 15-20 seconds per
-data day.
+After the initial state data are loaded it takes about 15-30 seconds per
+data day when writing one or two fluxes out. Time increases considerably
+with more daily output variables.
 
-Required data:
+Required daily driver data:
 
 - Surface soil wetness ("SMSF"), in percentage units [0,100]
 - Soil temperature, in degrees K
+- Gross primary productivity (GPP), in [g C m-2 day-1]
 
 Developer notes:
 
@@ -22,7 +23,6 @@ Developer notes:
 
 Possible improvements:
 
-- [ ] Add support for NEE output, by reading in L4C GPP data
 - [ ] 1-km global grid files will always be ~500 MB in size, without
     compression; try writing the array to an HDF5 file instead.
 '''
@@ -89,6 +89,9 @@ def main(config = None, verbose = True):
         Py_ssize_t j
         Py_ssize_t k
         Py_ssize_t pft
+        Py_ssize_t doy # Day of year, on [1,365]
+        int n_litter_days
+        float litter # Amount of litterfall entering SOC pools
         float reco # Ecosystem respiration
         char* ofname # Output filename
         float* gpp
@@ -107,6 +110,7 @@ def main(config = None, verbose = True):
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    litter_rate = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
@@ -137,12 +141,28 @@ def main(config = None, verbose = True):
         PARAMS.decay_rate[1][p] = params['decay_rate'][1][p]
         PARAMS.decay_rate[2][p] = params['decay_rate'][2][p]
 
+    # Option to schedule the rate at which litterfall enters SOC pools; if no
+    #   schedule is used, an equal daily fraction of available NPP allocated
+    if config['model']['litterfall']['scheduled']:
+        n_litter_days = config['model']['litterfall']['interval_days']
+        n_litter_periods = np.ceil(365 / n_litter_days)
+        periods = np.array([
+            [i] * n_litter_days for i in range(1, n_litter_periods + 1)
+        ]).ravel()
+    else:
+        # Allocate equal daily fraction; i.e., final rate is
+        #   (litter_rate / n_litter_days) or 1/365
+        n_litter_days = 365
+        for i in range(0, SPARSE_M01_N):
+            litter_rate[i] = 1
+
     load_state(config) # Load global state variables
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
     num_steps = int(config['daily_steps'])
     for step in tqdm(range(num_steps)):
         date = date_start + datetime.timedelta(days = step)
         date = date.strftime('%Y%m%d')
+        doy = int(date.strftime('%j'))
         # Read in soil moisture ("smsf") and soil temperature ("tsoil") data
         fid = open_fid(
             (config['data']['drivers']['smsf'] % date).encode('UTF-8'), READ)
@@ -158,6 +178,15 @@ def main(config = None, verbose = True):
         fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
 
+        # Option to schedule the rate at which litterfall enters SOC pools
+        if config['model']['litterfall']['scheduled']:
+            # Get the file covering the 8-day period in which this DOY falls
+            filename = config['data']['litterfall_schedule']\
+                % str(periods[doy-1]).zfill(2)
+            fid = open_fid(filename.encode('UTF-8'), READ)
+            fread(litter_rate, sizeof(float), <size_t>sizeof(float)*SPARSE_M01_N, fid)
+            fclose(fid)
+
         # Iterate over each 9-km pixel
         for i in prange(SPARSE_M09_N, nogil = True):
             # Iterate over each nested 1-km pixel
@@ -172,6 +201,9 @@ def main(config = None, verbose = True):
                 pft = PFT[k]
                 if is_valid(pft, tsoil[i], LITTERFALL[k]) == 0:
                     continue # Skip invalid PFTs
+                # Compute daily fraction of litterfall entering SOC pools
+                litter = LITTERFALL[k] * (fmax(0, litter_rate[k]) / n_litter_days)
+                # Compute daily RH based on moisture, temperature constraints
                 w_mult[k] = linear_constraint(
                     smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
                 t_mult[k] = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
@@ -180,8 +212,8 @@ def main(config = None, verbose = True):
                 rh1[k] = k_mult * SOC1[k] * PARAMS.decay_rate[1][pft]
                 rh2[k] = k_mult * SOC2[k] * PARAMS.decay_rate[2][pft]
                 # Calculate change in SOC pools; LITTERFALL[k] is daily litterfall
-                SOC0[k] += (LITTERFALL[k] * PARAMS.f_metabolic[pft]) - rh0[k]
-                SOC1[k] += (LITTERFALL[k] * (1 - PARAMS.f_metabolic[pft])) - rh1[k]
+                SOC0[k] += (litter * PARAMS.f_metabolic[pft]) - rh0[k]
+                SOC1[k] += (litter * (1 - PARAMS.f_metabolic[pft])) - rh1[k]
                 SOC2[k] += (PARAMS.f_structural[pft] * rh1[k]) - rh2[k]
                 # "the adjustment...to account for material transferred into the
                 #   slow pool during humification" (Jones et al. 2017 TGARS, p.5)
@@ -243,6 +275,7 @@ def main(config = None, verbose = True):
     PyMem_Free(gpp)
     PyMem_Free(smsf)
     PyMem_Free(tsoil)
+    PyMem_Free(litter_rate)
     PyMem_Free(rh0)
     PyMem_Free(rh1)
     PyMem_Free(rh2)
@@ -284,7 +317,11 @@ def load_state(config):
     fread(LITTERFALL, sizeof(float), <size_t>n_bytes, fid)
     fclose(fid)
     for i in range(SPARSE_M01_N):
-        LITTERFALL[i] = LITTERFALL[i] / 365
+        # Set any negative values (really just -9999) to zero
+        SOC0[i] = fmax(0, SOC0[i])
+        SOC1[i] = fmax(0, SOC1[i])
+        SOC2[i] = fmax(0, SOC2[i])
+        LITTERFALL[i] = fmax(0, LITTERFALL[i])
 
 
 cdef void write_resampled(bytes output_filename, float* array_data, int inflated = 1):
@@ -312,7 +349,6 @@ cdef void write_resampled(bytes output_filename, float* array_data, int inflated
             continue
         value /= count
         data_resampled[i] = value
-    data_resampled.tofile('/home/arthur/temp.flt32')
     # Write a flat (1D) file or inflate the file and then write
     if inflated == 0:
         data_resampled.tofile(output_filename.decode('UTF-8'))
