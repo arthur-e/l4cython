@@ -46,6 +46,10 @@ def deflate_file(filename, grid = 'M09'):
     data_type = DFNT_FLOAT32
     if ext == 'flt64':
         data_type = DFNT_FLOAT64
+    elif ext == 'int8':
+        data_type = DFNT_INT8
+    elif ext == 'int16':
+        data_type = DFNT_INT16
     elif ext == 'int32':
         data_type = DFNT_INT32
     elif ext == 'uint8':
@@ -128,6 +132,10 @@ def inflate_file(filename, grid = 'M09'):
     data_type = DFNT_FLOAT32
     if ext == 'flt64':
         data_type = DFNT_FLOAT64
+    elif ext == 'int8':
+        data_type = DFNT_INT8
+    elif ext == 'int16':
+        data_type = DFNT_INT16
     elif ext == 'int32':
         data_type = DFNT_INT32
     elif ext == 'uint8':

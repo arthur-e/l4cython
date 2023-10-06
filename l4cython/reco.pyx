@@ -161,20 +161,20 @@ def main(config = None, verbose = True):
     num_steps = int(config['daily_steps'])
     for step in tqdm(range(num_steps)):
         date = date_start + datetime.timedelta(days = step)
-        date = date.strftime('%Y%m%d')
+        date_str = date.strftime('%Y%m%d')
         doy = int(date.strftime('%j'))
         # Read in soil moisture ("smsf") and soil temperature ("tsoil") data
         fid = open_fid(
-            (config['data']['drivers']['smsf'] % date).encode('UTF-8'), READ)
+            (config['data']['drivers']['smsf'] % date_str).encode('UTF-8'), READ)
         fread(smsf, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
         fid = open_fid(
-            (config['data']['drivers']['tsoil'] % date).encode('UTF-8'), READ)
+            (config['data']['drivers']['tsoil'] % date_str).encode('UTF-8'), READ)
         fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
         # Read in the GPP data
         fid = open_fid(
-            (config['data']['drivers']['GPP'] % date).encode('UTF-8'), READ)
+            (config['data']['drivers']['GPP'] % date_str).encode('UTF-8'), READ)
         fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
 
@@ -235,38 +235,38 @@ def main(config = None, verbose = True):
             fmt = config['model']['output_format']
             inflated = 1 if fmt == 'M09' else 0
             if 'RH' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_RH_%s_%s.flt32' % (out_dir, date, fmt))\
+                output_filename = ('%s/L4Cython_RH_%s_%s.flt32' % (out_dir, date_str, fmt))\
                     .encode('UTF-8')
                 write_resampled(output_filename, rh_total, inflated)
             if 'NEE' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_NEE_%s_%s.flt32' % (out_dir, date, fmt))\
+                output_filename = ('%s/L4Cython_NEE_%s_%s.flt32' % (out_dir, date_str, fmt))\
                     .encode('UTF-8')
                 write_resampled(output_filename, nee, inflated)
             if 'Tmult' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_Tmult_%s_%s.flt32' % (out_dir, date, fmt))\
+                output_filename = ('%s/L4Cython_Tmult_%s_%s.flt32' % (out_dir, date_str, fmt))\
                     .encode('UTF-8')
                 write_resampled(output_filename, t_mult, inflated)
             if 'Wmult' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_Wmult_%s_%s.flt32' % (out_dir, date, fmt))\
+                output_filename = ('%s/L4Cython_Wmult_%s_%s.flt32' % (out_dir, date_str, fmt))\
                     .encode('UTF-8')
                 write_resampled(output_filename, w_mult, inflated)
         else:
             if 'RH' in config['model']['output_fields']:
                 OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
                 OUT_M01.tofile(
-                    '%s/L4Cython_RH_%s_M01land.flt32' % (out_dir, date))
+                    '%s/L4Cython_RH_%s_M01land.flt32' % (out_dir, date_str))
             if 'NEE' in config['model']['output_fields']:
                 OUT_M01 = to_numpy(nee, SPARSE_M01_N)
                 OUT_M01.tofile(
-                    '%s/L4Cython_NEE_%s_M01land.flt32' % (out_dir, date))
+                    '%s/L4Cython_NEE_%s_M01land.flt32' % (out_dir, date_str))
             if 'Tmult' in config['model']['output_fields']:
                 OUT_M01 = to_numpy(t_mult, SPARSE_M01_N)
                 OUT_M01.tofile(
-                    '%s/L4Cython_Tmult_%s_M01land.flt32' % (out_dir, date))
+                    '%s/L4Cython_Tmult_%s_M01land.flt32' % (out_dir, date_str))
             if 'Wmult' in config['model']['output_fields']:
                 OUT_M01 = to_numpy(w_mult, SPARSE_M01_N)
                 OUT_M01.tofile(
-                    '%s/L4Cython_Wmult_%s_M01land.flt32' % (out_dir, date))
+                    '%s/L4Cython_Wmult_%s_M01land.flt32' % (out_dir, date_str))
     PyMem_Free(PFT)
     PyMem_Free(SOC0)
     PyMem_Free(SOC1)
