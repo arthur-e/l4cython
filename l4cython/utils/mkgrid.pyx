@@ -4,6 +4,13 @@
 
 '''
 Tools for manipulating grid_array or flat_array EASE-Grid 2.0 array data.
+
+NOTE: If the following files don't exist, `inflate_file()` and
+`deflate_file()` will silently fail. A file may be written but it will be
+incorrect.
+
+    /anx_v2/laj/smap/code/landdomdef/output/MCD12Q1_M09land_col.uint16
+    /anx_v2/laj/smap/code/landdomdef/output/MCD12Q1_M09land_row.uint16
 '''
 
 import cython
@@ -12,7 +19,7 @@ import numpy as np
 from libc.stdlib cimport free, calloc
 from libc.stdio cimport fopen, fread, fclose, fwrite
 from l4cython.utils cimport open_fid
-from l4cython.utils.fixtures import SPARSE_M09_N, SPARSE_M01_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32, READ, WRITE
+from l4cython.utils.fixtures import SPARSE_M09_N, SPARSE_M01_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32, DFNT_INT64, READ, WRITE
 # Implicit importing of inflate(), deflate(), and spland_*() functions from mkgrid.pxd
 
 @cython.boundscheck(False)
@@ -52,10 +59,10 @@ def deflate_file(filename, grid = 'M09'):
         data_type = DFNT_INT16
     elif ext == 'int32':
         data_type = DFNT_INT32
+    elif ext == 'int64':
+        data_type = DFNT_INT64
     elif ext == 'uint8':
         data_type = DFNT_UINT8
-    elif ext == 'int16':
-        data_type = DFNT_INT16
     elif ext == 'uint16':
         data_type = DFNT_UINT16
 
@@ -138,10 +145,10 @@ def inflate_file(filename, grid = 'M09'):
         data_type = DFNT_INT16
     elif ext == 'int32':
         data_type = DFNT_INT32
+    elif ext == 'int64':
+        data_type = DFNT_INT64
     elif ext == 'uint8':
         data_type = DFNT_UINT8
-    elif ext == 'int16':
-        data_type = DFNT_INT16
     elif ext == 'uint16':
         data_type = DFNT_UINT16
 

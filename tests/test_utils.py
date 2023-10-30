@@ -5,8 +5,19 @@ Tests for the `utils` module.
 import os
 import numpy as np
 from l4cython.utils.mkgrid import inflate_file, deflate_file
-from l4cython.utils.fixtures import NROW9KM, NCOL9KM, SPARSE_M09_N
+from l4cython.utils.fixtures import NROW9KM, NCOL9KM, SPARSE_M09_N, SPARSE_M01_N
 
+DTYPES = ('flt32', 'flt64', 'int8', 'int16', 'int32', 'uint8', 'uint16')
+RANGES = {
+    'flt32': (-9999, 12000),
+    'flt64': (-9999, 12000),
+    'int8': (-128, 127),
+    'uint8': (0, 255),
+    'int16': (-9999, 12000),
+    'uint16': (0, 12000),
+    'int32': (-9999, 12000),
+    'int64': (-9999, 12000),
+}
 TEST_FILES = {
     'deflated_uint8': '/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/test_cert/example_to_inflate_M09land.uint8',
     'inflated_uint8': '/anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/test_cert/example_to_deflate_M09.uint8',
@@ -15,6 +26,28 @@ TEST_FILES = {
     'deflated_float64': 'test_deflated_M09land.flt64',
     'inflated_float64': 'test_inflated_M09.flt64',
 }
+
+if not os.path.exists('/anx_v2/laj/smap/code/landdomdef/output/MCD12Q1_M09land_row.uint16'):
+    pytest.skip('Land definition file ("MCD12Q1_M09land_row.uint16") not found')
+if not os.path.exists('/anx_v2/laj/smap/code/landdomdef/output/MCD12Q1_M09land_col.uint16'):
+    pytest.skip('Land definition file ("MCD12Q1_M09land_col.uint16") not found')
+
+
+def test_inflate_M01land_random_all_dtypes():
+    'Should correctly inflate files regardless of type'
+    for ext in DTYPES:
+        print(ext)
+        fname0 = f'test_inflated_M01land.{ext}'
+        fname = fname0.replace('M01land', 'M01')
+        dtype = getattr(np, ext.replace('flt', 'float'))
+        arr = np.random.randint(*RANGES[ext], size = SPARSE_M01_N)
+        arr.astype(dtype).tofile(fname0)
+        inflate_file(fname0)
+        new = np.fromfile(fname.format(ext = ext), dtype)
+        assert arr[arr > 0].min() == new[new > 0].min()
+        assert arr.max() == new.max()
+        os.remove(fname0)
+        os.remove(fname.format(ext = ext))
 
 
 def test_inflate_uint8_actual():
