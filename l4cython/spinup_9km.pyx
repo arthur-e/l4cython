@@ -497,7 +497,7 @@ cdef numerical_spinup(
     PyMem_Free(tolerance)
 
 
-cdef inline void numerical_step(
+cdef inline int numerical_step(
         double* delta, float* rh_total, float litter, float k_mult,
         float f_met, float f_str, float k0, float k1, float k2,
         double c0, double c1, double c2, float[3] ad_rate) nogil:

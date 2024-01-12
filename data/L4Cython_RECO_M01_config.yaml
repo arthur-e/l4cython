@@ -20,6 +20,7 @@ data:
 model:
   output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230914
   output_fields: # Valid output fields include: "RH", "NEE"
+  - NEE
   - RH
   - Tmult
   - Wmult

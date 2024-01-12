@@ -19,7 +19,7 @@ Building and Testing
 
 **To install Cython and other Python dependencies,** from the project root directory:
 ```
-pip install .
+pip install -e .
 ```
 
 **Then, build the `utils` module:**
@@ -42,8 +42,27 @@ make
 make test
 ```
 
+**If you have C dependency issues at compile time, note that some shared libraries have name variants on Ubuntu GNU/Linux and possibly other systems.** Symbolic linking is a simple fix.
+
+```sh
+sudo ln -s /usr/lib/libdfalt.so.0 /usr/lib/libdfalt.so
+sudo ln -s /usr/lib/libmfhdfalt.so.0 /usr/lib/libmfhdfalt.so
+```
+
 
 Troubleshooting
+----------------------------
+
+If you have trouble locating dependencies on your system (e.g., `/usr/bin/ld: cannot find -ldf`), try using the `ld` utility.
+
+Try calling `ld` in `--verbose` mode, e.g., to debug an issue with the `ldf` compiler flag:
+
+```sh
+$ ld -ldf --verbose
+```
+
+
+Debugging
 ----------------------------
 
 **First, distinguish between typed memory views and manual heap allocation:**
