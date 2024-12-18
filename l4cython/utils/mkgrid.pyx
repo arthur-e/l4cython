@@ -9,8 +9,8 @@ NOTE: If the following files don't exist, `inflate_file()` and
 `deflate_file()` will silently fail. A file may be written but it will be
 incorrect.
 
-    /anx_v2/laj/smap/code/landdomdef/output/MCD12Q1_M09land_col.uint16
-    /anx_v2/laj/smap/code/landdomdef/output/MCD12Q1_M09land_row.uint16
+    /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/MCD12Q1_M09land_col.uint16
+    /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/MCD12Q1_M09land_row.uint16
 '''
 
 import cython

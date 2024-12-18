@@ -19,10 +19,10 @@
 #define   MAIN_NAME    "MKGRID"
 #define   VERS_TAG     "v0.0-2014-02-21T18:33:00-07:00, laj"
 
-#define   LAND_R_FILE  "/anx_v2/laj/smap/code/landdomdef/output/MCD12Q1_M09land_row.uint16"
-#define   LAND_C_FILE  "/anx_v2/laj/smap/code/landdomdef/output/MCD12Q1_M09land_col.uint16"
+#define   LAND_R_FILE  "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/MCD12Q1_M09land_row.uint16"
+#define   LAND_C_FILE  "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/MCD12Q1_M09land_col.uint16"
 
-#define   LLAND9KM           1664040ul       /*Total grid cells in sparse 9km land domain*/    
+#define   LLAND9KM           1664040ul       /*Total grid cells in sparse 9km land domain*/
 
 #define   LDOM1KM          507233664ul       /*Total number of cells in EGv2 1km global domain*/
 #define   NROW1KM                14616       /*Number of grid rows in EGv2 1km */
@@ -43,7 +43,7 @@
 #define   NESTED_1KM_IN_9KM_SQ    81ul       /*Total number of 1km grid cells in nested 9km domain*/
 
 #define   MXSTRLEN                 500
-#define   FILLVAL                -9999       /*Fill values*/        
+#define   FILLVAL                -9999       /*Fill values*/
 
 // From hntdfs.h, HDF4 library
 #define   DFNT_FLOAT32  5
@@ -71,7 +71,7 @@
 #define   SIZE_UCHAR8   1
 #define   SIZE_UCHAR    1
 
-// SERIALIZATION OFFSETS 
+// SERIALIZATION OFFSETS
 // 2D offsets: y is outermost, x is innermost (fastest varying) term
 #define M_2D_B0(x,y,n_y) (((x)*n_y)+(y))
 

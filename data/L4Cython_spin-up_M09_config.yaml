@@ -4,7 +4,7 @@ data:
   PFT_map: >- # Map of plant functional types (PFT)
     /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4C_PFT_map_M09land.uint8
   NPP_annual_sum: >- # Map of annual NPP sum [g C m-2 year-1] for each pixel
-    /media/arthur.endsley/raid/TCF/tcf_V7_delivered_NPP_annual_sum_M09land.flt32
+    /Stout1/SMAP/L4_C/TCF/data/Version7/tcf_V7_delivered_NPP_annual_sum_M09land.flt32
   litterfall_schedule: >- # [N] array specifying parts-per-thousand of litterfall allocated every 8 days
     /anx_lagr4/SMAP/L4C_drivers/VIIRS_LAI/L4Cython_litterfall_allocation_clim_2012-2021_M09land_P%s.flt32
   climatology: # Each of these files should represent a 365-day annual climatology
@@ -13,9 +13,9 @@ data:
     tsoil: >- # Soil temperature [deg K]
       /anx_lagr4/SMAP/L4SM/OL7000/climatology/OL7000_climate_tsoil_M09land_0001%s.flt32
 model:
-  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230913
+  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20231002
   ending_day_of_year: 89 # Day of year we want simulation to end on, to align the seasonal cycle
-  accelerated: false # Use accelerated decomposition?
+  accelerated: false # Use accelerated decomposition? (Not recommended)
   ad_rate: # Accelerated decomposition (AD) rates
     - 1 # AD rate for SOC pool 0
     - 1 # AD rate for SOC pool 1

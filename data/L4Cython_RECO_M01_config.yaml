@@ -8,22 +8,22 @@ data:
   PFT_map: >- # Map of plant functional types (PFT)
     /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4C_PFT_map_M01land.uint8
   SOC: # List of three (3) soil organic carbon (SOC) pools
-    - /media/arthur.endsley/raid/TCF/tcf_V7_delivered_C0_M01land_0002089.flt32
-    - /media/arthur.endsley/raid/TCF/tcf_V7_delivered_C1_M01land_0002089.flt32
-    - /media/arthur.endsley/raid/TCF/tcf_V7_delivered_C2_M01land_0002089.flt32
+    - /Stout1/SMAP/L4_C/TCF/data/Version7/tcf_V7_delivered_C0_M01land_0002089.flt32
+    - /Stout1/SMAP/L4_C/TCF/data/Version7/tcf_V7_delivered_C1_M01land_0002089.flt32
+    - /Stout1/SMAP/L4_C/TCF/data/Version7/tcf_V7_delivered_C2_M01land_0002089.flt32
   NPP_annual_sum: >- # Map of annual NPP sum [g C m-2 year-1] for each pixel
-      /media/arthur.endsley/raid/TCF/tcf_V7_delivered_NPP_annual_sum_M01land.flt32
+      /Stout1/SMAP/L4_C/TCF/data/Version7/tcf_V7_delivered_NPP_annual_sum_M01land.flt32
   litterfall_schedule: >- # [N] array specifying parts-per-thousand of litterfall allocated every 8 days
-    /anx_lagr4/SMAP/L4C_drivers/VIIRS_LAI/L4Cython_litterfall_allocation_clim_EBF-GRS-excluded_2012-2021_M01land_P%s.flt32
+    /anx_lagr4/SMAP/L4C_drivers/VIIRS_LAI/alt_allocation/L4Cython_litterfall_allocation_clim_EBF-GRS-excluded_2012-2021_M01land_P%s.flt32
   drivers:
     smsf: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_smsf_M09land_%s.flt32 # Surface soil wetness (%) on [0,100]
     tsoil: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_tsoil_M09land_%s.flt32 # Soil temperature [deg K]
-    GPP: /media/arthur.endsley/raid/TCF/L4C_V7_mdl_GPP/L4_C_mdl_GPP_%s_V7.flt32 # Only used to calculate NEE
+    GPP: /media/arthur.endsley/Mimisbrunnr/TCF/L4C_V7_mdl_GPP/L4_C_mdl_V7_GPP_%s_M09land.flt32 # Only used to calculate NEE
 model:
   litterfall:
     scheduled: false
     interval_days: 8 # Number of days represented by litterfall rate
-  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20230914
+  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20231002
   output_fields: # Valid output fields include: "RH", "NEE"
   - NEE
   - RH
