@@ -5,8 +5,6 @@ daily_steps: 1
 # In debug mode, additional outputs are generated, including final SOC state
 debug: false
 data:
-  porosity: >-
-    /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4_SM_lmc_00000000T000000_Vv7032_001.h5
   PFT_map: >- # Map of plant functional types (PFT)
     /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4C_PFT_map_M09land.uint8
   SOC: # List of three (3) soil organic carbon (SOC) pools
