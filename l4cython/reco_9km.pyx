@@ -22,7 +22,7 @@ import numpy as np
 from libc.math cimport fmax
 from libc.stdio cimport FILE, fread, fclose
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
-from l4cython.respiration cimport arrhenius, linear_constraint
+from l4cython.constraints cimport arrhenius, linear_constraint
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.mkgrid import write_inflated
 from l4cython.utils.fixtures import READ, SPARSE_M09_N, N_PFT, load_parameters_table

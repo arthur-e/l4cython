@@ -35,7 +35,7 @@ from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
-from l4cython.respiration cimport is_valid, arrhenius, linear_constraint
+from l4cython.constraints cimport is_valid, arrhenius, linear_constraint
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.mkgrid cimport inflate
 from l4cython.utils.mkgrid import write_inflated
