@@ -9,6 +9,18 @@ MACROS = [ # Avoids warning "Using deprecated NumPy API"
 # NOTE: For profile, add the following to MACROS:
 #   ('CYTHON_NOGIL_TRACE', '1') # https://cython.readthedocs.io/en/latest/src/tutorial/profiling_tutorial.html
 
+gpp = Extension(
+    name = 'gpp',
+    sources = ['gpp.pyx'],
+    define_macros = MACROS,
+    libraries = ['dfalt'],
+    include_dirs = ['/usr/include', '/usr/include/hdf', './utils'],
+    extra_compile_args = [
+        '-fopenmp', '-DHAVE_HDF4', '-ldfalt', '-Wno-maybe-uninitialized', '-g1'
+    ],
+    extra_link_args = ['-fopenmp']
+)
+
 reco_9km = Extension(
     name = 'reco_9km',
     sources = ['reco_9km.pyx'],
@@ -37,4 +49,4 @@ spinup = Extension(
     extra_link_args = ['-fopenmp']
 )
 
-setup(ext_modules = cythonize([spinup, reco, reco_9km]))
+setup(ext_modules = cythonize([spinup, gpp, reco, reco_9km]))

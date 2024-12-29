@@ -8,6 +8,7 @@ virtualenv.sh
 # Cython compilation files
 a.out
 mkgrid.c
+gpp.c
 reco.c
 reco_9km.c
 spinup_9km.c
