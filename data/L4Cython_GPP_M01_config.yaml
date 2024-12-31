@@ -5,10 +5,12 @@ daily_steps: 1
 data:
   PFT_map: >- # Map of plant functional types (PFT)
     /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4C_PFT_map_M01land.uint8
+  scratch: >- # A file path that can be written (and overwritten) with scratch data
+    /home/arthur/temp_l4cython_%s.%s
   drivers:
-    smrz: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_smrz0_M09land_%s.flt32 # Surface soil wetness (%) on [0,100]
-    tsoil: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_tsoil_M09land_%s.flt32 # Soil temperature [deg K]
-    fpar: /anx_lagr4/SMAP/L4C_drivers/Version7/L4C_MOD/L4_C_mod_%sT000000_Vv7042_001.h5 # Canopy fPAR
+    smrz: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_smrz0_M09land_%s.flt32 # Root-zone soil wetness (%) on [0,100]
+    # fpar: /anx_lagr4/SMAP/L4C_drivers/Version7/L4C_MOD/L4_C_mod_%sT000000_Vv7042_001.h5 # Canopy fPAR
+    fpar: /home/arthur.endsley/Downloads/SMAP_L4C/L4_C_mod_%sT000000_Vv7042_001.h5 # Canopy fPAR
     other: /anx_lagr4/SMAP/L4C_drivers/L4C_Vv7042/L4_C_met_%sT000000_Vv7042_001.h5 # All others (from re-analysis data)
 model:
   output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20231002

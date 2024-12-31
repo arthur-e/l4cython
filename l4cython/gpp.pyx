@@ -1,20 +1,27 @@
 # cython: language_level=3
 
 '''
+Assumptions:
+
+- The fPAR dataset (an HDF5 file) has a field "fpar_M01" that contains the
+    fPAR data and a field "fpar_qc_M01" that contains the QC flags.
 '''
 
 import cython
 import datetime
 import yaml
 import numpy as np
+import h5py
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
+from bisect import bisect_right
 from l4cython.constraints cimport is_valid, linear_constraint
+from l4cython.science cimport rescale_smrz
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.mkgrid cimport inflate
-from l4cython.utils.mkgrid import write_inflated
+from l4cython.utils.mkgrid import write_inflated, deflate_file
 from l4cython.utils.fixtures import READ, WRITE, DFNT_FLOAT32, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 from tqdm import tqdm
@@ -34,6 +41,14 @@ PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
 # Python arrays that want heap allocations must be global; this one is reused
 #   for any array that needs to be written to disk (using NumPy)
 OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
+# 8-day composite periods, as ordinal days of a 365-day year
+PERIODS = np.arange(1, 365, 8)
+PERIODS_DATES = [
+    datetime.datetime.strptime('2005-%03d' % p, '%Y-%j') for p in PERIODS
+]
+PERIODS_DATES_LEAP = [
+    datetime.datetime.strptime('2004-%03d' % p, '%Y-%j') for p in PERIODS
+]
 
 
 @cython.boundscheck(False)
@@ -50,8 +65,18 @@ def main(config = None, verbose = True):
     cdef:
         float* smrz0
         float* smrz
+        float* tmin
+        float* vpd
+        float* ft
+        unsigned char* fpar
+        unsigned char* fpar_qc
     smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smrz  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    tmin  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    vpd   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    ft    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    fpar  = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+    fpar_qc = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
 
     # Read in configuration file, then load state data
     if config is None:
@@ -64,13 +89,77 @@ def main(config = None, verbose = True):
 
     params = load_parameters_table(config['BPLUT'].encode('UTF-8'))
     for p in range(1, N_PFT + 1):
+        PARAMS.lue[p] = params['LUE'][0][p]
         PARAMS.smrz0[p] = params['smrz0'][0][p]
         PARAMS.smrz1[p] = params['smrz1'][0][p]
+        PARAMS.vpd0[p] = params['vpd0'][0][p]
+        PARAMS.vpd1[p] = params['vpd1'][0][p]
+        PARAMS.tmin0[p] = params['tmin0'][0][p]
+        PARAMS.tmin1[p] = params['tmin1'][0][p]
+        PARAMS.ft0[p] = params['ft0'][0][p]
+        PARAMS.ft1[p] = params['ft1'][0][p]
 
     load_state(config) # Load global state variables
+    date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
+    num_steps = int(config['daily_steps'])
+
+    # Begin forward time stepping
+    date_fpar_ongoing = None
+    for step in tqdm(range(num_steps)):
+        date = date_start + datetime.timedelta(days = step)
+        date_str = date.strftime('%Y%m%d')
+        doy = int(date.strftime('%j'))
+
+        # Read in soil moisture ("smrz") data
+        fid = open_fid(
+            (config['data']['drivers']['smrz'] % date_str).encode('UTF-8'), READ)
+        fread(smrz0, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+        fclose(fid)
+
+        # Read in fPAR data; to do so, we need to first find the nearest
+        #   8-day composite date
+        p = int(date.strftime('%j'))
+        # Find the date of the fPAR data associated with this 8-day span
+        if date.year % 4 == 0:
+            date_fpar = PERIODS_DATES_LEAP[bisect_right(PERIODS, p) - 1]
+        else:
+            date_fpar = PERIODS_DATES[bisect_right(PERIODS, p) - 1]
+
+        # Only read-in the fPAR data (and deflate it) once, for every
+        #   8-day period
+        if date_fpar_ongoing is None or date_fpar_ongoing != date_fpar:
+            # Load the corresponding fPAR data (as a NumPy array)
+            fpar_filename = config['data']['drivers']['fpar'] % (
+                str(date.year) + date_fpar.strftime('%m%d'))
+            with h5py.File(fpar_filename, 'r') as hdf:
+                fpar0 = hdf['fpar_M01'][:]
+                fpar_qc0 = hdf['fpar_qc_M01'][:]
+            out_fname = config['data']['scratch'] % ('fpar_M01', 'uint8')
+            out_fname_qc = config['data']['scratch'] % ('fpar_qc_M01', 'uint8')
+            fpar0.astype(np.uint8).tofile(out_fname)
+            fpar_qc0.astype(np.uint8).tofile(out_fname_qc)
+            deflate_file(out_fname)
+            deflate_file(out_fname_qc)
+            # Read in the deflated fPAR data
+            fid = open_fid(
+                (out_fname.replace('M01', 'M01land')).encode('UTF-8'), READ)
+            fread(
+                fpar, sizeof(unsigned char),
+                <size_t>sizeof(unsigned char)*SPARSE_M01_N, fid)
+            fclose(fid)
+            # Read in the deflated fPAR QC flag data
+            fid = open_fid(
+                (out_fname_qc.replace('M01', 'M01land')).encode('UTF-8'), READ)
+            fread(
+                fpar_qc, sizeof(unsigned char),
+                <size_t>sizeof(unsigned char)*SPARSE_M01_N, fid)
+            fclose(fid)
 
     PyMem_Free(smrz0)
     PyMem_Free(smrz)
+    PyMem_Free(tmin)
+    PyMem_Free(vpd)
+    PyMem_Free(ft)
 
 
 def load_state(config):
@@ -87,6 +176,35 @@ def load_state(config):
     fid = open_fid(config['data']['PFT_map'].encode('UTF-8'), READ)
     fread(PFT, sizeof(unsigned char), <size_t>n_bytes, fid)
     fclose(fid)
+
+
+def mod15a2h_qc_fail(x):
+    '''
+    Returns pass/fail for QC flags based on the L4C fPAR QC protocol for the
+    `FparLai_QC` band: Bad pixels have either `1` in the first bit ("Pixel not
+    produced at all") or anything other than `00` ("clear") in bits 3-4.
+    Output array is True wherever the array fails QC criteria. Compare to:
+
+        np.vectorize(lambda v: v[0] == 1 or v[3:5] != '00')
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        Array where the last axis enumerates the unpacked bits
+        (ones and zeros)
+
+    Returns
+    -------
+    numpy.ndarray
+        Boolean array with True wherever QC criteria are failed
+    '''
+    y = np.unpackbits(x[...,None], axis = 1)[...,-8:]
+    # Emit 1 = FAIL if these two bits are not == "00"
+    c1 = y[...,3:5].sum(axis = -1).astype(np.uint8)
+    # Emit 1 = FAIL if 1st bit == 1 ("Pixel not produced at all")
+    c2 = y[...,0]
+    # Intermediate arrays are 1 = FAIL, 0 = PASS
+    return (c1 + c2) > 0
 
 
 cdef void write_resampled(bytes output_filename, float* array_data, int inflated = 1):

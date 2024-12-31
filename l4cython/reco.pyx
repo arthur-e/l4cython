@@ -157,6 +157,7 @@ def main(config = None, verbose = True):
             litter_rate[i] = 1
 
     load_state(config) # Load global state variables
+    # Begin forward time stepping
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
     num_steps = int(config['daily_steps'])
     for step in tqdm(range(num_steps)):
