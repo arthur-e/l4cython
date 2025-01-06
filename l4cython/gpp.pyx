@@ -22,6 +22,7 @@ from l4cython.science cimport rescale_smrz
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.mkgrid cimport inflate
 from l4cython.utils.mkgrid import write_inflated, deflate_file
+from l4cython.utils.hdf5 cimport read_hdf5
 from l4cython.utils.fixtures import READ, WRITE, DFNT_FLOAT32, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 from tqdm import tqdm
@@ -164,6 +165,8 @@ def main(config = None, verbose = True):
             #         config['data']['drivers']['other'] % date_str, 'r') as hdf:
             #     out_fname = confg['data']['scratch'] % ('tmin', 'float32')
             #     tmin =
+            fname_bs = (config['data']['drivers']['other'] % date_str).encode('UTF-8')
+            read_hdf5(fname_bs, 'QV2M_M09_AVG', qv2m)
 
 
     PyMem_Free(smrz0)
