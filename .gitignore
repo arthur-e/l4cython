@@ -9,6 +9,7 @@ virtualenv.sh
 a.out
 mkgrid.c
 gpp.c
+hdf5.c
 reco.c
 reco_9km.c
 spinup_9km.c

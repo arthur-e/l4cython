@@ -22,4 +22,19 @@ mkgrid = Extension(
     ]
 )
 
-setup(ext_modules = cythonize([mkgrid]))
+hdf5 = Extension(
+    name = 'hdf5',
+    sources = ['hdf5.pyx'],
+    define_macros = MACROS,
+    libraries = ['dfalt', 'mfhdfalt', 'hdf5'],
+    include_dirs = ['/usr/include', '/usr/include/hdf5/openmpi/', '/usr/lib', '/usr/lib/x86_64-linux-gnu/openmpi/include/'],
+    extra_compile_args = [
+        '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
+        '-ldfalt', '-lmfhdfalt', '-lhdf5', '-lz', '-lsz', '-luuid', '-lm', '-lutil'
+    ],
+    extra_link_args = [
+        '-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/',
+    ]
+)
+
+setup(ext_modules = cythonize([hdf5, mkgrid]))

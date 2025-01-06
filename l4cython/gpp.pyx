@@ -66,14 +66,18 @@ def main(config = None, verbose = True):
         float* smrz0
         float* smrz
         float* tmin
-        float* vpd
+        float* qv2m
+        float* ps
+        float* tsurf
         float* ft
         unsigned char* fpar
         unsigned char* fpar_qc
     smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smrz  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tmin  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    vpd   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    qv2m  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    ps    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    tsurf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     ft    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     fpar  = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
     fpar_qc = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
@@ -155,11 +159,22 @@ def main(config = None, verbose = True):
                 <size_t>sizeof(unsigned char)*SPARSE_M01_N, fid)
             fclose(fid)
 
+            # Read in the remaining surface meteorlogical data
+            # with h5py.File(
+            #         config['data']['drivers']['other'] % date_str, 'r') as hdf:
+            #     out_fname = confg['data']['scratch'] % ('tmin', 'float32')
+            #     tmin =
+
+
     PyMem_Free(smrz0)
     PyMem_Free(smrz)
     PyMem_Free(tmin)
-    PyMem_Free(vpd)
+    PyMem_Free(qv2m)
+    PyMem_Free(ps)
+    PyMem_Free(tsurf)
     PyMem_Free(ft)
+    PyMem_Free(fpar)
+    PyMem_Free(fpar_qc)
 
 
 def load_state(config):

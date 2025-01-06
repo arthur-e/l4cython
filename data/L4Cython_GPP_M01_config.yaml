@@ -11,7 +11,7 @@ data:
     smrz: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_smrz0_M09land_%s.flt32 # Root-zone soil wetness (%) on [0,100]
     # fpar: /anx_lagr4/SMAP/L4C_drivers/Version7/L4C_MOD/L4_C_mod_%sT000000_Vv7042_001.h5 # Canopy fPAR
     fpar: /home/arthur.endsley/Downloads/SMAP_L4C/L4_C_mod_%sT000000_Vv7042_001.h5 # Canopy fPAR
-    other: /anx_lagr4/SMAP/L4C_drivers/L4C_Vv7042/L4_C_met_%sT000000_Vv7042_001.h5 # All others (from re-analysis data)
+    other: /anx_lagr4/SMAP/L4C_drivers/Version7/L4C_MET/L4_C_met_%sT000000_Vv7042_001.h5 # All others (from re-analysis data)
 model:
   output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20231002
   output_fields: # Valid output fields include: "GPP", "NPP"
