@@ -189,7 +189,7 @@ def inflate_file(filename, grid = 'M09'):
     free(grid_array)
 
 
-def write_deflated(
+def write_numpy_deflated(
         output_filename, grid_numpy_array, data_type = DFNT_FLOAT32, grid = 'M09'):
     '''
     Given a gridded (2D) array as a NumPy array, deflates the array to the
@@ -243,7 +243,7 @@ def write_deflated(
     free(deflated_array)
 
 
-def write_inflated(
+def write_numpy_inflated(
         output_filename, flat_numpy_array, data_type = DFNT_FLOAT32, grid = 'M09'):
     '''
     Given a flat (1D or "sparse land") array as a NumPy array, inflates the

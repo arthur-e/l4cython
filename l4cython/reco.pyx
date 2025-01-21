@@ -37,8 +37,8 @@ from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from l4cython.constraints cimport is_valid, arrhenius, linear_constraint
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
-from l4cython.utils.mkgrid cimport inflate
-from l4cython.utils.mkgrid import write_inflated
+from l4cython.utils.mkgrid cimport inflate # TODO Not needed?
+from l4cython.utils.mkgrid import write_numpy_inflated
 from l4cython.utils.fixtures import READ, WRITE, DFNT_FLOAT32, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 from tqdm import tqdm
@@ -354,4 +354,4 @@ cdef void write_resampled(bytes output_filename, float* array_data, int inflated
     if inflated == 0:
         data_resampled.tofile(output_filename.decode('UTF-8'))
     else:
-        write_inflated(output_filename, data_resampled, grid = 'M09')
+        write_numpy_inflated(output_filename, data_resampled, grid = 'M09')

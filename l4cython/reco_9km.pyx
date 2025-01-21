@@ -24,7 +24,7 @@ from libc.stdio cimport FILE, fread, fclose
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from l4cython.constraints cimport arrhenius, linear_constraint
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
-from l4cython.utils.mkgrid import write_inflated
+from l4cython.utils.mkgrid import write_numpy_inflated
 from l4cython.utils.fixtures import READ, SPARSE_M09_N, N_PFT, load_parameters_table
 from tqdm import tqdm
 
@@ -210,10 +210,10 @@ def main(config = None, verbose = True):
                     fname.format(what = 'Wmult').replace('M09', 'M09land'))
         else:
             if 'RH' in config['model']['output_fields']:
-                write_inflated(
+                write_numpy_inflated(
                     fname.format(what = 'RH').encode('UTF-8'), to_numpy(rh_total, SPARSE_M09_N))
             if 'NEE' in config['model']['output_fields']:
-                write_inflated(
+                write_numpy_inflated(
                     fname.format(what = 'NEE').encode('UTF-8'), to_numpy(nee, SPARSE_M09_N))
     # Finally, write out the final SOC state, if we're in debug mode
     if config['debug']:

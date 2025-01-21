@@ -17,11 +17,11 @@ from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from bisect import bisect_right
+from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport is_valid, linear_constraint
-from l4cython.science cimport rescale_smrz
+from l4cython.science cimport rescale_smrz, vapor_pressure_deficit
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
-from l4cython.utils.mkgrid cimport inflate
-from l4cython.utils.mkgrid import write_inflated, deflate_file
+from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated, deflate_file
 from l4cython.utils.hdf5 cimport read_hdf5
 from l4cython.utils.fixtures import READ, WRITE, DFNT_FLOAT32, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
@@ -64,22 +64,27 @@ def main(config = None, verbose = True):
     verbose : bool
     '''
     cdef:
+        Py_ssize_t i
         float* smrz0
         float* smrz
+        float* tmean
         float* tmin
         float* qv2m
         float* ps
         float* tsurf
         float* ft
+        float* vpd
         unsigned char* fpar
         unsigned char* fpar_qc
     smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smrz  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    tmean  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tmin  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     qv2m  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     ps    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tsurf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     ft    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    vpd   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     fpar  = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
     fpar_qc = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
 
@@ -161,16 +166,52 @@ def main(config = None, verbose = True):
             fclose(fid)
 
             # Read in the remaining surface meteorlogical data
-            # with h5py.File(
-            #         config['data']['drivers']['other'] % date_str, 'r') as hdf:
-            #     out_fname = confg['data']['scratch'] % ('tmin', 'float32')
-            #     tmin =
-            fname_bs = (config['data']['drivers']['other'] % date_str).encode('UTF-8')
-            read_hdf5(fname_bs, 'QV2M_M09_AVG', qv2m)
-
+            # TODO See if we can use a single NamedTemporaryFile(),
+            #   overwriting its contents without creating a new instance
+            with h5py.File(
+                    config['data']['drivers']['other'] % date_str, 'r') as hdf:
+                # T2M_M09_MIN (tmin)
+                tmp = NamedTemporaryFile()
+                tmp_fname_bs = tmp.name.encode('UTF-8')
+                write_numpy_deflated(tmp_fname_bs, hdf['T2M_M09_MIN'][:])
+                fid = open_fid(tmp_fname_bs, READ)
+                fread(
+                    tmin, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+                fclose(fid)
+                # T2M_M09_AVG (tmean)
+                tmp = NamedTemporaryFile()
+                tmp_fname_bs = tmp.name.encode('UTF-8')
+                write_numpy_deflated(tmp_fname_bs, hdf['T2M_M09_AVG'][:])
+                fid = open_fid(tmp_fname_bs, READ)
+                fread(
+                    tmean, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+                fclose(fid)
+                # QV2M
+                tmp = NamedTemporaryFile()
+                tmp_fname_bs = tmp.name.encode('UTF-8')
+                write_numpy_deflated(tmp_fname_bs, hdf['QV2M_M09_AVG'][:])
+                fid = open_fid(tmp_fname_bs, READ)
+                fread(
+                    qv2m, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+                fclose(fid)
+                # PS
+                tmp = NamedTemporaryFile()
+                tmp_fname_bs = tmp.name.encode('UTF-8')
+                write_numpy_deflated(tmp_fname_bs, hdf['SURFACE_PRESSURE'][:])
+                fid = open_fid(tmp_fname_bs, READ)
+                fread(
+                    ps, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+                fclose(fid)
+            for i in prange(SPARSE_M09_N, nogil = True):
+                vpd[i] = vapor_pressure_deficit(qv2m[i], ps[i], tmean[i])
+            # NOTE: Alternatively, try reading with read_hdf5, then copying the
+            #   array into an unsigned char* buffer
+            # fname_bs = (config['data']['drivers']['other'] % date_str).encode('UTF-8')
+            # read_hdf5(fname_bs, 'QV2M_M09_AVG', qv2m)
 
     PyMem_Free(smrz0)
     PyMem_Free(smrz)
+    PyMem_Free(tmean)
     PyMem_Free(tmin)
     PyMem_Free(qv2m)
     PyMem_Free(ps)
@@ -178,6 +219,7 @@ def main(config = None, verbose = True):
     PyMem_Free(ft)
     PyMem_Free(fpar)
     PyMem_Free(fpar_qc)
+    PyMem_Free(vpd)
 
 
 def load_state(config):
@@ -254,4 +296,4 @@ cdef void write_resampled(bytes output_filename, float* array_data, int inflated
     if inflated == 0:
         data_resampled.tofile(output_filename.decode('UTF-8'))
     else:
-        write_inflated(output_filename, data_resampled, grid = 'M09')
+        write_numpy_inflated(output_filename, data_resampled, grid = 'M09')
