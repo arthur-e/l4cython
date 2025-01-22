@@ -113,6 +113,30 @@ setup(ext_modules = cythonize(respiration))
 [Then see this resource for tips on debugging.](https://github.com/cython/cython/wiki/DebuggingTechniques)
 
 
+### Undefined Symbols in `*.pyx` Files
+
+If you get an error, e.g.:
+
+```sh
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ImportError: /usr/local/dev/l4cython/l4cython/gpp.cpython-310-x86_64-linux-gnu.so: undefined symbol: copyUUTA
+make: *** [Makefile:17: test-gpp] Error 1
+```
+
+The above example is confusing because `copyUUTA` is indeed defined for the `mkgrid` extension when compiling the `utils` sub-module. We included the C source code at the top of `utils/mkgrid.pyx`:
+
+```python
+# distutils: sources = ["src/spland.c", "src/uuta.c"]
+```
+
+However, it's when we run code in the parent module that we see this error. It turns out that we still need to include this header in the parent module as well. The relative paths need to be changed, accordingly, at the top of `module.pyx`:
+
+```python
+# distutils: sources = ["utils/src/spland.c", "utils/src/uuta.c"]
+```
+
+
 Resources
 -------------------
 

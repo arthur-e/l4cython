@@ -1,7 +1,14 @@
 # cython: language_level=3
 
-from libc.stdlib cimport calloc
-from l4cython.utils.fixtures import SPARSE_M09_N, SPARSE_M01_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32
+from libc.stdlib cimport calloc, free
+from l4cython.utils.fixtures import NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32
+from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
+
+# EASE-Grid 2.0 params used here can't be Python numbers
+cdef:
+    int  M01_NESTED_IN_M09 = 9 * 9
+    long SPARSE_M09_N = PY_SPARSE_M09_N # Number of grid cells in sparse ("land") arrays
+    long SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
 
 cdef extern from "src/spland.h":
     ctypedef struct spland_ref_struct:
@@ -65,6 +72,9 @@ cdef inline unsigned char* deflate(unsigned char* grid_array, unsigned short dat
         spland_deflate_9km(lookup, &grid_array, &flat_array, data_type)
     elif grid.decode('UTF-8') == 'M01':
         spland_deflate_1km(lookup, &grid_array, &flat_array, data_type)
+
+    free(lookup.row)
+    free(lookup.col)
     return flat_array
 
 
@@ -118,4 +128,7 @@ cdef inline unsigned char* inflate(unsigned char* flat_array, unsigned short dat
     elif grid.decode('UTF-8') == 'M01':
         spland_inflate_init_1km(&grid_array, data_type)
         spland_inflate_1km(lookup, &flat_array, &grid_array, data_type)
+
+    free(lookup.row)
+    free(lookup.col)
     return grid_array

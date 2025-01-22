@@ -1,4 +1,5 @@
 # cython: language_level=3
+# distutils: sources = ["utils/src/spland.c", "utils/src/uuta.c"]
 
 '''
 Assumptions:
@@ -12,6 +13,7 @@ import datetime
 import yaml
 import numpy as np
 import h5py
+from libc.stdlib cimport calloc, free
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from libc.math cimport fmax
 from cython.parallel import prange
@@ -22,8 +24,9 @@ from l4cython.constraints cimport is_valid, linear_constraint
 from l4cython.science cimport rescale_smrz, vapor_pressure_deficit
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated, deflate_file
-from l4cython.utils.hdf5 cimport read_hdf5
-from l4cython.utils.fixtures import READ, WRITE, DFNT_FLOAT32, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
+from l4cython.utils.mkgrid cimport deflate, size_in_bytes
+from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE, H5T_IEEE_F32LE
+from l4cython.utils.fixtures import READ, DFNT_UINT8, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 from tqdm import tqdm
 
@@ -74,8 +77,6 @@ def main(config = None, verbose = True):
         float* tsurf
         float* ft
         float* vpd
-        unsigned char* fpar
-        unsigned char* fpar_qc
     smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smrz  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tmean  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -85,8 +86,11 @@ def main(config = None, verbose = True):
     tsurf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     ft    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     vpd   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    fpar  = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
-    fpar_qc = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+
+    # These have to be allocated differently for use with low-level functions
+    in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
+    fpar    = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    fpar_qc = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
 
     # Read in configuration file, then load state data
     if config is None:
@@ -141,62 +145,40 @@ def main(config = None, verbose = True):
             # Load the corresponding fPAR data (as a NumPy array)
             fpar_filename = config['data']['drivers']['fpar'] % (
                 str(date.year) + date_fpar.strftime('%m%d'))
-            with h5py.File(fpar_filename, 'r') as hdf:
-                fpar0 = hdf['fpar_M01'][:]
-                fpar_qc0 = hdf['fpar_qc_M01'][:]
-            out_fname = config['data']['scratch'] % ('fpar_M01', 'uint8')
-            out_fname_qc = config['data']['scratch'] % ('fpar_qc_M01', 'uint8')
-            fpar0.astype(np.uint8).tofile(out_fname)
-            fpar_qc0.astype(np.uint8).tofile(out_fname_qc)
-            deflate_file(out_fname)
-            deflate_file(out_fname_qc)
-            # Read in the deflated fPAR data
-            fid = open_fid(
-                (out_fname.replace('M01', 'M01land')).encode('UTF-8'), READ)
-            fread(
-                fpar, sizeof(unsigned char),
-                <size_t>sizeof(unsigned char)*SPARSE_M01_N, fid)
-            fclose(fid)
-            # Read in the deflated fPAR QC flag data
-            fid = open_fid(
-                (out_fname_qc.replace('M01', 'M01land')).encode('UTF-8'), READ)
-            fread(
-                fpar_qc, sizeof(unsigned char),
-                <size_t>sizeof(unsigned char)*SPARSE_M01_N, fid)
-            fclose(fid)
+            fpar_filename_bs = fpar_filename.encode('UTF-8')
+            # Read and deflate the fPAR data and QC flags
+            read_hdf5(fpar_filename_bs, 'fpar_M01', H5T_STD_U8LE, fpar)
+            read_hdf5(fpar_filename_bs, 'fpar_qc_M01', H5T_STD_U8LE, fpar_qc)
+            deflate(fpar, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            deflate(fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
 
             # Read in the remaining surface meteorlogical data
-            # TODO See if we can use a single NamedTemporaryFile(),
-            #   overwriting its contents without creating a new instance
+            # We re-use a single NamedTemporaryFile(), overwriting its
+            #   contents without creating a new instance; there should be
+            #   little risk in this because each array is the same size
+            tmp = NamedTemporaryFile()
+            tmp_fname_bs = tmp.name.encode('UTF-8')
             with h5py.File(
                     config['data']['drivers']['other'] % date_str, 'r') as hdf:
                 # T2M_M09_MIN (tmin)
-                tmp = NamedTemporaryFile()
-                tmp_fname_bs = tmp.name.encode('UTF-8')
                 write_numpy_deflated(tmp_fname_bs, hdf['T2M_M09_MIN'][:])
                 fid = open_fid(tmp_fname_bs, READ)
                 fread(
                     tmin, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
                 fclose(fid)
                 # T2M_M09_AVG (tmean)
-                tmp = NamedTemporaryFile()
-                tmp_fname_bs = tmp.name.encode('UTF-8')
                 write_numpy_deflated(tmp_fname_bs, hdf['T2M_M09_AVG'][:])
                 fid = open_fid(tmp_fname_bs, READ)
                 fread(
                     tmean, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
                 fclose(fid)
                 # QV2M
-                tmp = NamedTemporaryFile()
-                tmp_fname_bs = tmp.name.encode('UTF-8')
                 write_numpy_deflated(tmp_fname_bs, hdf['QV2M_M09_AVG'][:])
                 fid = open_fid(tmp_fname_bs, READ)
                 fread(
                     qv2m, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
                 fclose(fid)
                 # PS
-                tmp = NamedTemporaryFile()
-                tmp_fname_bs = tmp.name.encode('UTF-8')
                 write_numpy_deflated(tmp_fname_bs, hdf['SURFACE_PRESSURE'][:])
                 fid = open_fid(tmp_fname_bs, READ)
                 fread(
@@ -205,9 +187,9 @@ def main(config = None, verbose = True):
             for i in prange(SPARSE_M09_N, nogil = True):
                 vpd[i] = vapor_pressure_deficit(qv2m[i], ps[i], tmean[i])
             # NOTE: Alternatively, try reading with read_hdf5, then copying the
-            #   array into an unsigned char* buffer
+            #   array (element-wise) into an unsigned char* buffer
             # fname_bs = (config['data']['drivers']['other'] % date_str).encode('UTF-8')
-            # read_hdf5(fname_bs, 'QV2M_M09_AVG', qv2m)
+            # read_hdf5(fname_bs, 'QV2M_M09_AVG', H5T_IEEE_F32LE, qv2m)
 
     PyMem_Free(smrz0)
     PyMem_Free(smrz)
@@ -217,9 +199,9 @@ def main(config = None, verbose = True):
     PyMem_Free(ps)
     PyMem_Free(tsurf)
     PyMem_Free(ft)
-    PyMem_Free(fpar)
-    PyMem_Free(fpar_qc)
     PyMem_Free(vpd)
+    free(fpar)
+    free(fpar_qc)
 
 
 def load_state(config):
