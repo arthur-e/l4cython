@@ -20,7 +20,7 @@ from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from bisect import bisect_right
 from tempfile import NamedTemporaryFile
-from l4cython.constraints cimport is_valid, linear_constraint
+from l4cython.constraints cimport linear_constraint
 from l4cython.science cimport rescale_smrz, vapor_pressure_deficit
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated, deflate_file
@@ -45,6 +45,7 @@ PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
 # Python arrays that want heap allocations must be global; this one is reused
 #   for any array that needs to be written to disk (using NumPy)
 OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
+OUT_M09 = np.full((SPARSE_M09_N,), np.nan, dtype = np.float32) # TODO FIXME
 # 8-day composite periods, as ordinal days of a 365-day year
 PERIODS = np.arange(1, 365, 8)
 PERIODS_DATES = [
@@ -67,8 +68,7 @@ def main(config = None, verbose = True):
     verbose : bool
     '''
     cdef:
-        Py_ssize_t i
-        int smrz_scale
+        Py_ssize_t i, j, k, pft
         float* smrz0
         float* smrz
         float* smrz_min
@@ -81,6 +81,11 @@ def main(config = None, verbose = True):
         float* tsurf
         float* ft
         float* vpd
+        float* emult
+        float* f_tmin
+        float* f_vpd
+        float* f_smrz
+
     smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smrz  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smrz_min = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -91,8 +96,12 @@ def main(config = None, verbose = True):
     qv2m  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     ps    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tsurf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    ft    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     vpd   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    ft    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    emult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    f_tmin = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    f_vpd  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    f_smrz = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
     # These have to be allocated differently for use with low-level functions
     in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
@@ -131,7 +140,6 @@ def main(config = None, verbose = True):
     fid = open_fid(config['data']['smrz_max'].encode('UTF-8'), READ)
     fread(smrz_max, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
     fclose(fid)
-    smrz_scale = <int>config['data']['smrz_minmax_scale']
 
     # Begin forward time stepping
     date_fpar_ongoing = None
@@ -175,6 +183,10 @@ def main(config = None, verbose = True):
         #  this because each array is the same size
         tmp = NamedTemporaryFile()
         tmp_fname_bs = tmp.name.encode('UTF-8')
+        # NOTE: Alternatively, try reading with read_hdf5, then copying the
+        #   array (element-wise) into an unsigned char* buffer
+        # fname_bs = (config['data']['drivers']['other'] % date_str).encode('UTF-8')
+        # read_hdf5(fname_bs, 'QV2M_M09_AVG', H5T_IEEE_F32LE, qv2m)
         with h5py.File(
                 config['data']['drivers']['other'] % date_str, 'r') as hdf:
             # SWRAD
@@ -213,25 +225,68 @@ def main(config = None, verbose = True):
             fread(
                 smrz0, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
             fclose(fid)
+            # NOTE: TS/Tsurf is stored in deg C, to great annoyance
+            # TS/Tsurf
+            write_numpy_deflated(tmp_fname_bs, hdf['TS_M09_DEGC_AVG'][:])
+            fid = open_fid(tmp_fname_bs, READ)
+            fread(
+                tsurf, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+            fclose(fid)
+
+        # Iterate over 9-km grid
         for i in prange(SPARSE_M09_N, nogil = True):
+            # par[i] =
             vpd[i] = vapor_pressure_deficit(qv2m[i], ps[i], tmean[i])
-            # smrz[i] = rescale_smrz(smrz0[i])
-        # NOTE: Alternatively, try reading with read_hdf5, then copying the
-        #   array (element-wise) into an unsigned char* buffer
-        # fname_bs = (config['data']['drivers']['other'] % date_str).encode('UTF-8')
-        # read_hdf5(fname_bs, 'QV2M_M09_AVG', H5T_IEEE_F32LE, qv2m)
+            smrz[i] = rescale_smrz(smrz0[i], smrz_min[i], smrz_max[i])
+
+            # TODO See if it is actually faster to do this in a single thread
+            #   i.e., with range(); could be overhead assoc. with small task
+            # Iterate over each nested 1-km pixel
+            for j in prange(M01_NESTED_IN_M09):
+                # Hence, (i) indexes the 9-km pixel and k the 1-km pixel
+                k = (M01_NESTED_IN_M09 * i) + j
+                pft = PFT[k]
+                # Make sure to fill output grids with the FILL_VALUE,
+                #   otherwise they may contain zero (0) at invalid data
+                emult[k] = FILL_VALUE
+                ft[k] = FILL_VALUE
+                f_tmin[k] = FILL_VALUE
+                f_vpd[k] = FILL_VALUE
+                f_smrz[k] = FILL_VALUE
+                if is_valid(pft) == 0:
+                    continue # Skip invalid PFTs
+                # If surface soil temp. is above freezing, mark Thawed (=1),
+                #   otherwise Frozen (=0)
+                ft[k] = PARAMS.ft0[pft]
+                # NOTE: TS/Tsurf is stored in deg C, to great annoyance
+                if tsurf[i] >= 0:
+                    ft[k] = PARAMS.ft1[pft]
+
+                # Compute the environmental constraints
+                f_tmin[k] = linear_constraint(
+                    tmin[i], PARAMS.tmin0[pft], PARAMS.tmin1[pft], 0)
+                f_vpd[k] = linear_constraint(
+                    vpd[i], PARAMS.vpd0[pft], PARAMS.vpd1[pft], 1)
+                f_smrz[k] = linear_constraint(
+                    smrz[i], PARAMS.smrz0[pft], PARAMS.smrz1[pft], 0)
+                emult[k] = ft[k] * f_tmin[k] * f_vpd[k] * f_smrz[k]
 
     PyMem_Free(smrz0)
     PyMem_Free(smrz)
     PyMem_Free(smrz_min)
     PyMem_Free(smrz_max)
+    PyMem_Free(swrad)
     PyMem_Free(tmean)
     PyMem_Free(tmin)
     PyMem_Free(qv2m)
     PyMem_Free(ps)
     PyMem_Free(tsurf)
-    PyMem_Free(ft)
     PyMem_Free(vpd)
+    PyMem_Free(ft)
+    PyMem_Free(emult)
+    PyMem_Free(f_tmin)
+    PyMem_Free(f_vpd)
+    PyMem_Free(f_smrz)
     free(fpar)
     free(fpar_qc)
 
@@ -281,7 +336,29 @@ def mod15a2h_qc_fail(x):
     return (c1 + c2) > 0
 
 
-cdef void write_resampled(bytes output_filename, float* array_data, int inflated = 1):
+cdef inline char is_valid(char pft) nogil:
+    '''
+    Checks to see if a given pixel is valid, based on the PFT.
+    Modeled after `tcfModUtil_isInCell()` in the TCF code.
+
+    Parameters
+    ----------
+    pft : char
+        The Plant Functional Type (PFT)
+
+    Returns
+    -------
+    char
+        A value of 0 indicates the pixel is invalid, otherwise returns 1
+    '''
+    cdef char valid = 1 # Assume it's a valid pixel
+    if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+        valid = 0
+    return valid
+
+
+cdef void write_resampled(
+        bytes output_filename, float* array_data, int inflated = 1):
     '''
     Resamples a 1-km array to 9-km, then writes the output to a file.
 

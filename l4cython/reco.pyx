@@ -190,6 +190,8 @@ def main(config = None, verbose = True):
             for j in range(M01_NESTED_IN_M09):
                 # Hence, (i) indexes the 9-km pixel and k the 1-km pixel
                 k = (M01_NESTED_IN_M09 * i) + j
+                # Make sure to fill output grids with the FILL_VALUE,
+                #   otherwise they may contain zero (0) at invalid data
                 w_mult[k] = FILL_VALUE
                 t_mult[k] = FILL_VALUE
                 rh_total[k] = FILL_VALUE

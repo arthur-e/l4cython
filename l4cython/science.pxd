@@ -1,5 +1,41 @@
 from libc.math cimport log, exp
 
+cdef inline float photosynth_active_radiation(float sw_rad) nogil:
+    '''
+    Calculates daily total photosynthetically active radiation (PAR) from
+    (hourly) incoming short-wave radiation (`sw_rad`). PAR is assumed to
+    be 45% of `sw_rad`.
+
+    I make a note here, because this is one place someone would come back to
+    when looking for this information: `sw_rad` is a power (energy per unit
+    time), so when working with sub-daily source data, we don't take, e.g., a
+    24-hour sum but a 24-hour mean. An alternative approach might be to
+    convert the hourly data to energy (Joules) first, but that is not what has
+    historically been done. This was confirmed by comparing an official
+    24-hour MERRA-2 granule with the (apparently averaged) MERRA-2 data used
+    previously in L4C V4, as listed here:
+
+        /anx_v2/laj/smap/code/geog2egv2/list/merra2_gran_swgdn.list
+
+    Parameters
+    ----------
+    sw_rad : int or float or numpy.ndarray
+        Incoming short-wave radiation (W m-2)
+
+    NOTE: Assumes that the period over which radiation is measured, in hours,
+        is 1 (i.e., once-hourly measurements).
+
+    Returns
+    -------
+    int or float or numpy.ndarray
+        Photosynthetically active radiation (MJ m-2)
+    '''
+    # Convert SW_rad from [W m-2] to [MJ m-2], then take 45%; because
+    #   1 W == 1 J s-1, we multiply 3600 secs hr-1 times
+    #   (1 MJ / 1e6 Joules) == 0.0036
+    return 0.45 * (0.0036 * 24 * sw_rad)
+
+
 cdef inline float rescale_smrz(
         float smrz0, float smrz_min, float smrz_max) nogil:
     '''
