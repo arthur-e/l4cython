@@ -35,9 +35,8 @@ from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
-from l4cython.constraints cimport is_valid, arrhenius, linear_constraint
+from l4cython.constraints cimport arrhenius, linear_constraint
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
-from l4cython.utils.mkgrid cimport inflate # TODO Not needed?
 from l4cython.utils.mkgrid import write_numpy_inflated
 from l4cython.utils.fixtures import READ, WRITE, DFNT_FLOAT32, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
@@ -85,10 +84,7 @@ def main(config = None, verbose = True):
     verbose : bool
     '''
     cdef:
-        Py_ssize_t i
-        Py_ssize_t j
-        Py_ssize_t k
-        Py_ssize_t pft
+        Py_ssize_t i, j, k, pft
         Py_ssize_t doy # Day of year, on [1,365]
         int n_litter_days
         float litter # Amount of litterfall entering SOC pools
@@ -323,6 +319,36 @@ def load_state(config):
         SOC1[i] = fmax(0, SOC1[i])
         SOC2[i] = fmax(0, SOC2[i])
         LITTERFALL[i] = fmax(0, LITTERFALL[i])
+
+
+cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
+    '''
+    Checks to see if a given pixel is valid, based on the PFT but also on
+    select input data values. Modeled after `tcfModUtil_isInCell()` in the
+    TCF code.
+
+    Parameters
+    ----------
+    pft : char
+        The Plant Functional Type (PFT)
+    tsoil : float
+        The daily mean soil temperature in the surface layer (deg K)
+    litter : float
+        The daily litterfall input
+
+    Returns
+    -------
+    char
+        A value of 0 indicates the pixel is invalid, otherwise returns 1
+    '''
+    cdef char valid = 1 # Assume it's a valid pixel
+    if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
+        valid = 0
+    elif tsoil <= 0:
+        valid = 0
+    elif litter <= 0:
+        valid = 0
+    return valid
 
 
 cdef void write_resampled(bytes output_filename, float* array_data, int inflated = 1):
