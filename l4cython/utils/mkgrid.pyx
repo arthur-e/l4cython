@@ -201,7 +201,7 @@ def write_numpy_deflated(
 
     Parameters
     ----------
-    output_filename : str
+    output_filename : bytes
     grid_numpy_array : numpy.ndarray
     data_type : int
         Defaults to `DFNT_FLOAT32`
@@ -234,7 +234,9 @@ def write_numpy_deflated(
     fclose(fid)
 
     # Inflate to a 2D grid, then write to file
-    deflated_array = deflate(grid_array, data_type, grid.encode('UTF-8'))
+    if hasattr(grid, 'encode'):
+        grid = grid.encode('UTF-8')
+    deflated_array = deflate(grid_array, data_type, grid)
     ofname = output_filename
     fid = open_fid(ofname, WRITE)
     fwrite(deflated_array, sizeof(unsigned char), <size_t>out_bytes, fid)
@@ -293,8 +295,9 @@ def write_numpy_inflated(
     fclose(fid)
 
     # Inflate to a 2D grid, then write to file
-    inflated_array = inflate(
-        flat_array, DFNT_FLOAT32, grid.encode('UTF-8'))
+    if hasattr(grid, 'encode'):
+        grid = grid.encode('UTF-8')
+    inflated_array = inflate(flat_array, DFNT_FLOAT32, grid)
     ofname = output_filename
     fid = open_fid(ofname, WRITE)
     fwrite(inflated_array, sizeof(unsigned char), <size_t>out_bytes, fid)

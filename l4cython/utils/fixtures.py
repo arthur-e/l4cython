@@ -81,6 +81,12 @@ def load_parameters_table(csv_file_path: bytes):
         for row in reader:
             contents.append(row)
 
+    # With the horrible CSV files written by L4CSYS, it's sometimes unclear
+    #   on which line we should start; this sometimes manifests as an empty
+    #   header row with None for values
+    if None in contents[0].values():
+        contents = contents[1:]
+
     params = OrderedDict()
     params['LUE'] = np.array([[
         contents[p-1]['LUEmax'] if p in range(1, 9) else np.nan
