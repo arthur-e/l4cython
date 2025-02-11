@@ -82,6 +82,7 @@ def main(config = None, verbose = True):
         float* ft
         float* vpd
         float* emult
+        float* gpp
         float* f_tmin
         float* f_vpd
         float* f_smrz
@@ -99,14 +100,16 @@ def main(config = None, verbose = True):
     vpd   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     ft    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     emult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     f_tmin = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     f_vpd  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     f_smrz = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
     # These have to be allocated differently for use with low-level functions
     in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
-    fpar    = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-    fpar_qc = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    fpar      = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    fpar_qc   = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    fpar_clim = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
 
     # Read in configuration file, then load the global state variables
     if config is None:
@@ -171,11 +174,24 @@ def main(config = None, verbose = True):
             fpar_filename = config['data']['drivers']['fpar'] % (
                 str(date.year) + date_fpar.strftime('%m%d'))
             fpar_filename_bs = fpar_filename.encode('UTF-8')
+            # Load and deflate the fPAR climatology
+            fpar_clim_filename_bs = config['data']['fpar_clim'].encode('UTF-8')
             # Read and deflate the fPAR data and QC flags
             read_hdf5(fpar_filename_bs, 'fpar_M01', H5T_STD_U8LE, fpar)
             read_hdf5(fpar_filename_bs, 'fpar_qc_M01', H5T_STD_U8LE, fpar_qc)
+            # The climatology field names are difficult; first, we need to get
+            #   the ordinal of this 8-day period, counting starting from 1
+            period = list(PERIODS).index(int(date_fpar.strftime("%j"))) + 1
+            # Then, we need to format the string, e.g.:
+            #   "fpar_clim_M01_day089_per12"
+            clim_field = f'fpar_clim_M01_day{date_fpar.strftime("%j")}'\
+                f'_per{str(period).zfill(2)}'
+            read_hdf5(
+                fpar_clim_filename_bs, clim_field.encode('utf-8'),
+                H5T_STD_U8LE, fpar_clim)
             deflate(fpar, DFNT_UINT8, 'M01'.encode('UTF-8'))
             deflate(fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            deflate(fpar_clim, DFNT_UINT8, 'M01'.encode('UTF-8'))
 
         # Read in the remaining surface meteorlogical data
         # We re-use a single NamedTemporaryFile(), overwriting its contents
@@ -271,6 +287,13 @@ def main(config = None, verbose = True):
                     smrz[i], PARAMS.smrz0[pft], PARAMS.smrz1[pft], 0)
                 emult[k] = ft[k] * f_tmin[k] * f_vpd[k] * f_smrz[k]
 
+        # If averaging from 1-km to 9-km resolution is requested...
+        # out_dir = config['model']['output_dir']
+        # if config['model']['output_format'] in ('M09', 'M09land'):
+        #     fmt = config['model']['output_format']
+        #     inflated = 1 if fmt == 'M09' else 0
+
+
     PyMem_Free(smrz0)
     PyMem_Free(smrz)
     PyMem_Free(smrz_min)
@@ -289,6 +312,7 @@ def main(config = None, verbose = True):
     PyMem_Free(f_smrz)
     free(fpar)
     free(fpar_qc)
+    free(fpar_clim)
 
 
 def load_state(config):
