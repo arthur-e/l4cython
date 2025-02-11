@@ -26,6 +26,7 @@ from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated, deflate_file
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE, H5T_IEEE_F32LE
+from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.fixtures import READ, DFNT_UINT8, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 from tqdm import tqdm
@@ -69,6 +70,7 @@ def main(config = None, verbose = True):
     '''
     cdef:
         Py_ssize_t i, j, k, pft
+        unsigned char fpar
         float* smrz0
         float* smrz
         float* smrz_min
@@ -107,7 +109,7 @@ def main(config = None, verbose = True):
 
     # These have to be allocated differently for use with low-level functions
     in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
-    fpar      = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    fpar0     = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
     fpar_qc   = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
     fpar_clim = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
 
@@ -177,7 +179,7 @@ def main(config = None, verbose = True):
             # Load and deflate the fPAR climatology
             fpar_clim_filename_bs = config['data']['fpar_clim'].encode('UTF-8')
             # Read and deflate the fPAR data and QC flags
-            read_hdf5(fpar_filename_bs, 'fpar_M01', H5T_STD_U8LE, fpar)
+            read_hdf5(fpar_filename_bs, 'fpar_M01', H5T_STD_U8LE, fpar0)
             read_hdf5(fpar_filename_bs, 'fpar_qc_M01', H5T_STD_U8LE, fpar_qc)
             # The climatology field names are difficult; first, we need to get
             #   the ordinal of this 8-day period, counting starting from 1
@@ -189,7 +191,7 @@ def main(config = None, verbose = True):
             read_hdf5(
                 fpar_clim_filename_bs, clim_field.encode('utf-8'),
                 H5T_STD_U8LE, fpar_clim)
-            deflate(fpar, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            deflate(fpar0, DFNT_UINT8, 'M01'.encode('UTF-8'))
             deflate(fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
             deflate(fpar_clim, DFNT_UINT8, 'M01'.encode('UTF-8'))
 
@@ -287,12 +289,23 @@ def main(config = None, verbose = True):
                     smrz[i], PARAMS.smrz0[pft], PARAMS.smrz1[pft], 0)
                 emult[k] = ft[k] * f_tmin[k] * f_vpd[k] * f_smrz[k]
 
+                # Bad pixels have either:
+                #   1 in the left-most bit (SCF_QC bit = "Pixel not produced at all")
+                if bits_from_uint32(7, 7, fpar_qc[k]) == 1:
+                    fpar = fpar_clim[k]
+                #   Or, anything other than 00 ("Clear") in bits 3-4
+                elif bits_from_uint32(3, 4, fpar_qc[k]) > 0:
+                    fpar = fpar_clim[k]
+                else:
+                    fpar = fpar0[k] # Otherwise, we're good
+
+                # gpp[k] = fpar * emult[k] * PARAMS.lue[pft]
+
         # If averaging from 1-km to 9-km resolution is requested...
         # out_dir = config['model']['output_dir']
         # if config['model']['output_format'] in ('M09', 'M09land'):
         #     fmt = config['model']['output_format']
         #     inflated = 1 if fmt == 'M09' else 0
-
 
     PyMem_Free(smrz0)
     PyMem_Free(smrz)
@@ -310,7 +323,7 @@ def main(config = None, verbose = True):
     PyMem_Free(f_tmin)
     PyMem_Free(f_vpd)
     PyMem_Free(f_smrz)
-    free(fpar)
+    free(fpar0)
     free(fpar_qc)
     free(fpar_clim)
 

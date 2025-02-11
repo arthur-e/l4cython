@@ -37,4 +37,10 @@ hdf5 = Extension(
     ]
 )
 
-setup(ext_modules = cythonize([hdf5, mkgrid]))
+dec2bin = Extension(
+    name = 'dec2bin',
+    sources = ['dec2bin.pyx'],
+    define_macros = MACROS
+)
+
+setup(ext_modules = cythonize([hdf5, mkgrid, dec2bin]))
