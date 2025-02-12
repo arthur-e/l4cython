@@ -113,6 +113,14 @@ setup(ext_modules = cythonize(respiration))
 [Then see this resource for tips on debugging.](https://github.com/cython/cython/wiki/DebuggingTechniques)
 
 
+### Operations Not Permitted without the GIL
+
+Some things to check if you get an error related to Cython code being interpreted as Python code inside a `prange()` loop, when the GIL is released:
+
+- Are you using strictly C `inline` functions with a `nogil` annotation?
+- Even if you are working with the return value of a valid C `inline` function, is the return value assigned to a C-defined (i.e., `cdef`) variable?
+
+
 ### Undefined Symbols in `*.pyx` Files
 
 If you get an error, e.g.:

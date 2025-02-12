@@ -7,6 +7,7 @@ cdef extern from "src/hdf5.h":
     int H5P_DEFAULT
     int H5S_ALL
     hid_t H5T_IEEE_F32LE
+    hid_t H5T_NATIVE_UINT8
     hid_t H5T_STD_U8LE
 
     # To open an HDF5 file
@@ -16,8 +17,10 @@ cdef extern from "src/hdf5.h":
     # To read the data from the open dataset
     herr_t H5Dread(hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id,
         hid_t file_space_id, hid_t plist_id, void* buf)
+    herr_t H5Dclose(hid_t dset_id)
 
 
+# Based on frm_hdf5_ReadData()
 cdef inline void read_hdf5(
         char* filename, char* field, hid_t dtype, void* buff):
     '''
@@ -38,3 +41,4 @@ cdef inline void read_hdf5(
     fid = H5Fopen(filename, 0, H5P_DEFAULT)
     dsetid = H5Dopen1(fid, field)
     ret = H5Dread(dsetid, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, buff)
+    H5Dclose(dsetid)

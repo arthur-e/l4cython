@@ -12,7 +12,7 @@ from l4cython.utils.mkgrid import inflate_file
 from l4cython.utils.fixtures import NROW9KM, NCOL9KM, NROW1KM, NCOL1KM
 from matplotlib import pyplot
 
-L4C_FILE_TPL = '/media/arthur.endsley/raid/SMAP/L4_C/Vv7042/SMAP_L4_C_mdl_{date}T000000_Vv7042_001.h5'
+L4C_FILE_TPL = '/media/arthur.endsley/Mimisbrunnr/SMAP/L4_C/Vv7042/SMAP_L4_C_mdl_{date}T000000_Vv7042_001.h5'
 FILE_RX = re.compile(r'L4Cython\_(?P<field>.*)\_(?P<date>\d{8})\_.*\.flt32')
 
 def main(filename, grid = 'M09'):

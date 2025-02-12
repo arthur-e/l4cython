@@ -21,13 +21,13 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from bisect import bisect_right
 from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport linear_constraint
-from l4cython.science cimport rescale_smrz, vapor_pressure_deficit
+from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated, deflate_file
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE, H5T_IEEE_F32LE
 from l4cython.utils.dec2bin cimport bits_from_uint32
-from l4cython.utils.fixtures import READ, DFNT_UINT8, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
+from l4cython.utils.fixtures import READ, DFNT_UINT8, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 from tqdm import tqdm
 
@@ -46,7 +46,6 @@ PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
 # Python arrays that want heap allocations must be global; this one is reused
 #   for any array that needs to be written to disk (using NumPy)
 OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
-OUT_M09 = np.full((SPARSE_M09_N,), np.nan, dtype = np.float32) # TODO FIXME
 # 8-day composite periods, as ordinal days of a 365-day year
 PERIODS = np.arange(1, 365, 8)
 PERIODS_DATES = [
@@ -70,24 +69,7 @@ def main(config = None, verbose = True):
     '''
     cdef:
         Py_ssize_t i, j, k, pft
-        unsigned char fpar
-        float* smrz0
-        float* smrz
-        float* smrz_min
-        float* smrz_max
-        float* swrad
-        float* tmean
-        float* tmin
-        float* qv2m
-        float* ps
-        float* tsurf
-        float* ft
-        float* vpd
-        float* emult
-        float* gpp
-        float* f_tmin
-        float* f_vpd
-        float* f_smrz
+        float fpar
 
     smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smrz  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -100,18 +82,23 @@ def main(config = None, verbose = True):
     ps    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tsurf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     vpd   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    par   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     ft    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     emult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    npp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     f_tmin = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     f_vpd  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     f_smrz = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    fpar0 = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+    fpar_qc = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+    fpar_clim = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
 
     # These have to be allocated differently for use with low-level functions
     in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
-    fpar0     = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-    fpar_qc   = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-    fpar_clim = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    h5_fpar0     = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    h5_fpar_qc   = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    h5_fpar_clim = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
 
     # Read in configuration file, then load the global state variables
     if config is None:
@@ -137,6 +124,7 @@ def main(config = None, verbose = True):
         PARAMS.tmin1[p] = params['tmin1'][0][p]
         PARAMS.ft0[p] = params['ft0'][0][p]
         PARAMS.ft1[p] = params['ft1'][0][p]
+        PARAMS.cue[p] = params['CUE'][0][p]
 
     # Load ancillary files: min and max root-zone soil moisture (SMRZ)
     fid = open_fid(config['data']['smrz_min'].encode('UTF-8'), READ)
@@ -179,8 +167,8 @@ def main(config = None, verbose = True):
             # Load and deflate the fPAR climatology
             fpar_clim_filename_bs = config['data']['fpar_clim'].encode('UTF-8')
             # Read and deflate the fPAR data and QC flags
-            read_hdf5(fpar_filename_bs, 'fpar_M01', H5T_STD_U8LE, fpar0)
-            read_hdf5(fpar_filename_bs, 'fpar_qc_M01', H5T_STD_U8LE, fpar_qc)
+            read_hdf5(fpar_filename_bs, 'fpar_M01', H5T_STD_U8LE, h5_fpar0)
+            read_hdf5(fpar_filename_bs, 'fpar_qc_M01', H5T_STD_U8LE, h5_fpar_qc)
             # The climatology field names are difficult; first, we need to get
             #   the ordinal of this 8-day period, counting starting from 1
             period = list(PERIODS).index(int(date_fpar.strftime("%j"))) + 1
@@ -190,10 +178,10 @@ def main(config = None, verbose = True):
                 f'_per{str(period).zfill(2)}'
             read_hdf5(
                 fpar_clim_filename_bs, clim_field.encode('utf-8'),
-                H5T_STD_U8LE, fpar_clim)
-            deflate(fpar0, DFNT_UINT8, 'M01'.encode('UTF-8'))
-            deflate(fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
-            deflate(fpar_clim, DFNT_UINT8, 'M01'.encode('UTF-8'))
+                H5T_STD_U8LE, h5_fpar_clim)
+            fpar0 = deflate(h5_fpar0, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            fpar_qc = deflate(h5_fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            fpar_clim = deflate(h5_fpar_clim, DFNT_UINT8, 'M01'.encode('UTF-8'))
 
         # Read in the remaining surface meteorlogical data
         # We re-use a single NamedTemporaryFile(), overwriting its contents
@@ -253,7 +241,7 @@ def main(config = None, verbose = True):
 
         # Iterate over 9-km grid
         for i in prange(SPARSE_M09_N, nogil = True):
-            # par[i] =
+            par[i] = photosynth_active_radiation(swrad[i])
             vpd[i] = vapor_pressure_deficit(qv2m[i], ps[i], tmean[i])
             smrz[i] = rescale_smrz(smrz0[i], smrz_min[i], smrz_max[i])
 
@@ -271,6 +259,8 @@ def main(config = None, verbose = True):
                 f_tmin[k] = FILL_VALUE
                 f_vpd[k] = FILL_VALUE
                 f_smrz[k] = FILL_VALUE
+                gpp[k] = FILL_VALUE
+                npp[k] = FILL_VALUE
                 if is_valid(pft) == 0:
                     continue # Skip invalid PFTs
                 # If surface soil temp. is above freezing, mark Thawed (=1),
@@ -289,23 +279,60 @@ def main(config = None, verbose = True):
                     smrz[i], PARAMS.smrz0[pft], PARAMS.smrz1[pft], 0)
                 emult[k] = ft[k] * f_tmin[k] * f_vpd[k] * f_smrz[k]
 
-                # Bad pixels have either:
+                # Determine the value of fPAR based on QC flag;
+                #   bad pixels have either:
                 #   1 in the left-most bit (SCF_QC bit = "Pixel not produced at all")
                 if bits_from_uint32(7, 7, fpar_qc[k]) == 1:
-                    fpar = fpar_clim[k]
+                    fpar = <float>fpar_clim[k]
                 #   Or, anything other than 00 ("Clear") in bits 3-4
                 elif bits_from_uint32(3, 4, fpar_qc[k]) > 0:
-                    fpar = fpar_clim[k]
+                    fpar = <float>fpar_clim[k]
                 else:
-                    fpar = fpar0[k] # Otherwise, we're good
+                    fpar = <float>fpar0[k] # Otherwise, we're good
+                # Then, check that we're not out of range
+                if fpar0[k] > 100 and fpar_clim[k] <= 100:
+                    fpar = <float>fpar_clim[k]
+                elif fpar0[k] > 100:
+                    continue # Skip this pixel
+                fpar = fpar / 100.0 # Convert from [0,100] to [0,1]
 
-                # gpp[k] = fpar * emult[k] * PARAMS.lue[pft]
+                # Finally, compute GPP and NPP
+                gpp[k] = fpar * par[i] * emult[k] * PARAMS.lue[pft]
+                npp[k] = gpp[k] * PARAMS.cue[pft]
+
 
         # If averaging from 1-km to 9-km resolution is requested...
-        # out_dir = config['model']['output_dir']
-        # if config['model']['output_format'] in ('M09', 'M09land'):
-        #     fmt = config['model']['output_format']
-        #     inflated = 1 if fmt == 'M09' else 0
+        out_dir = config['model']['output_dir']
+        output_fields = list(map(lambda x: x.upper(), config['model']['output_fields']))
+        if config['model']['output_format'] in ('M09', 'M09land'):
+            fmt = config['model']['output_format']
+            inflated = 1 if fmt == 'M09' else 0
+            if 'GPP' in output_fields:
+                output_filename = ('%s/L4Cython_GPP_%s_%s.flt32' % (out_dir, date_str, fmt))\
+                    .encode('UTF-8')
+                write_resampled(output_filename, gpp, inflated)
+            if 'NPP' in output_fields:
+                output_filename = ('%s/L4Cython_NPP_%s_%s.flt32' % (out_dir, date_str, fmt))\
+                    .encode('UTF-8')
+                write_resampled(output_filename, npp, inflated)
+            if 'EMULT' in output_fields:
+                output_filename = ('%s/L4Cython_Emult_%s_%s.flt32' % (out_dir, date_str, fmt))\
+                    .encode('UTF-8')
+                write_resampled(output_filename, emult, inflated)
+        else:
+            if 'GPP' in output_fields:
+                OUT_M01 = to_numpy(gpp, SPARSE_M01_N)
+                OUT_M01.tofile(
+                    '%s/L4Cython_GPP_%s_M01land.flt32' % (out_dir, date_str))
+            if 'NPP' in output_fields:
+                OUT_M01 = to_numpy(npp, SPARSE_M01_N)
+                OUT_M01.tofile(
+                    '%s/L4Cython_NPP_%s_M01land.flt32' % (out_dir, date_str))
+            if 'EMULT' in output_fields:
+                OUT_M01 = to_numpy(emult, SPARSE_M01_N)
+                OUT_M01.tofile(
+                    '%s/L4Cython_Emult_%s_M01land.flt32' % (out_dir, date_str))
+
 
     PyMem_Free(smrz0)
     PyMem_Free(smrz)
@@ -318,14 +345,20 @@ def main(config = None, verbose = True):
     PyMem_Free(ps)
     PyMem_Free(tsurf)
     PyMem_Free(vpd)
+    PyMem_Free(par)
     PyMem_Free(ft)
     PyMem_Free(emult)
+    PyMem_Free(gpp)
+    PyMem_Free(npp)
     PyMem_Free(f_tmin)
     PyMem_Free(f_vpd)
     PyMem_Free(f_smrz)
-    free(fpar0)
-    free(fpar_qc)
-    free(fpar_clim)
+    PyMem_Free(fpar0)
+    PyMem_Free(fpar_qc)
+    PyMem_Free(fpar_clim)
+    free(h5_fpar0)
+    free(h5_fpar_qc)
+    free(h5_fpar_clim)
 
 
 def load_state(config):
