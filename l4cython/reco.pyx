@@ -90,17 +90,6 @@ def main(config = None, verbose = True):
         float litter # Amount of litterfall entering SOC pools
         float reco # Ecosystem respiration
         char* ofname # Output filename
-        float* gpp
-        float* smsf
-        float* tsoil
-        float* rh0
-        float* rh1
-        float* rh2
-        float* rh_total
-        float* nee
-        float* w_mult
-        float* t_mult
-        float* soc_total
         float k_mult
     # Note that some datasets are only available at 9-km (M09) resolution
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)

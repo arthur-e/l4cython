@@ -69,16 +69,6 @@ def main(config = None, verbose = True):
         int n_litter_days
         float litter # Amount of litterfall entering SOC pools
         float reco # Ecosystem respiration
-        float* litter_rate # Fraction of litterfall allocated
-        float* rh0
-        float* rh1
-        float* rh2
-        float* rh_total
-        float* gpp
-        float* nee
-        float* w_mult
-        float* t_mult
-        float* soil_organic_carbon
     litter_rate = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)

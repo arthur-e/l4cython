@@ -34,11 +34,11 @@ def main(cython_granule, mdl_granule, grid = 'M09'):
     # Open the recent file
     recent = np.fromfile(cython_granule, dtype = dtype).reshape((1624, 3856))
     recent[recent < -900] = np.nan
-    if field in ('Tmult', 'Wmult'):
+    if field in ('Tmult', 'Wmult', 'Emult'):
         recent *= 100
     # Open the official V7 file
     with h5py.File(mdl_granule, 'r') as hdf:
-        if field in ('Tmult', 'Wmult'):
+        if field in ('Tmult', 'Wmult', 'Emult'):
             official = hdf[f'EC/{field.lower()}_mean'][:]
         else:
             official = hdf[f'{field}/{field.lower()}_mean'][:]
