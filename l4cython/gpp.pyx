@@ -41,7 +41,11 @@ cdef:
     long  SPARSE_M09_N = PY_SPARSE_M09_N # Number of grid cells in sparse ("land") arrays
     long  SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
     unsigned char* PFT
+    float* SMRZ_MAX
+    float* SMRZ_MIN
 PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+SMRZ_MAX = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+SMRZ_MIN = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
 
 # Python arrays that want heap allocations must be global; this one is reused
 #   for any array that needs to be written to disk (using NumPy)
@@ -74,8 +78,6 @@ def main(config = None, verbose = True):
 
     smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smrz  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    smrz_min = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    smrz_max = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     swrad = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tmean = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tmin  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -130,27 +132,12 @@ def main(config = None, verbose = True):
         PARAMS.ft1[p] = params['ft1'][0][p]
         PARAMS.cue[p] = params['CUE'][0][p]
 
-    # Load ancillary files: min and max root-zone soil moisture (SMRZ)
-    fid = open_fid(config['data']['smrz_min'].encode('UTF-8'), READ)
-    fread(smrz_min, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-    fclose(fid)
-    fid = open_fid(config['data']['smrz_max'].encode('UTF-8'), READ)
-    fread(smrz_max, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-    fclose(fid)
-
     # Begin forward time stepping
     date_fpar_ongoing = None
     for step in tqdm(range(num_steps)):
         date = date_start + datetime.timedelta(days = step)
         date_str = date.strftime('%Y%m%d')
         doy = int(date.strftime('%j'))
-
-        # NOTE: This isn't needed so long as the L4C_MET data are available
-        # Read in soil moisture ("smrz") data
-        # fid = open_fid(
-        #     (config['data']['drivers']['smrz'] % date_str).encode('UTF-8'), READ)
-        # fread(smrz0, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        # fclose(fid)
 
         # Read in fPAR data; to do so, we need to first find the nearest
         #   8-day composite date
@@ -247,7 +234,7 @@ def main(config = None, verbose = True):
         for i in prange(SPARSE_M09_N, nogil = True):
             par[i] = photosynth_active_radiation(swrad[i])
             vpd[i] = vapor_pressure_deficit(qv2m[i], ps[i], tmean[i])
-            smrz[i] = rescale_smrz(smrz0[i], smrz_min[i], smrz_max[i])
+            smrz[i] = rescale_smrz(smrz0[i], SMRZ_MIN[i], SMRZ_MAX[i])
 
             # TODO See if it is actually faster to do this in a single thread
             #   i.e., with range(); could be overhead assoc. with small task
@@ -362,8 +349,6 @@ def main(config = None, verbose = True):
 
     PyMem_Free(smrz0)
     PyMem_Free(smrz)
-    PyMem_Free(smrz_min)
-    PyMem_Free(smrz_max)
     PyMem_Free(swrad)
     PyMem_Free(tmean)
     PyMem_Free(tmin)
@@ -400,6 +385,13 @@ def load_state(config):
     n_bytes = sizeof(unsigned char)*SPARSE_M01_N
     fid = open_fid(config['data']['PFT_map'].encode('UTF-8'), READ)
     fread(PFT, sizeof(unsigned char), <size_t>n_bytes, fid)
+    fclose(fid)
+    # Load ancillary files: min and max root-zone soil moisture (SMRZ)
+    fid = open_fid(config['data']['smrz_min'].encode('UTF-8'), READ)
+    fread(SMRZ_MIN, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+    fclose(fid)
+    fid = open_fid(config['data']['smrz_max'].encode('UTF-8'), READ)
+    fread(SMRZ_MAX, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
     fclose(fid)
 
 
