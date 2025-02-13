@@ -4,6 +4,8 @@ L4C-Cython
 A Cython implementation of the Terrestrial Carbon Flux (TCF) model, which is
 the basis for the Soil Moisture Active Passive (SMAP) Level 4 Carbon (L4C) model.
 
+- [ ] Refactor `gpp.pyx` so that it mirrors L4CMDL dependencies (i.e., uses SMAP L4_SM input HDF5 granules).
+- [ ] Refactor `reco.pyx` so that it mirrors L4CMDL dependencies: Use the SOC restart file (also for NPP annual sum); Use L4CMDL granule for GPP; and use L4_SM input HDF5 granules.
 - [ ] Single place for constants, e.g., `DFNT_FLOAT32`
 - https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html?highlight=packaging#distributing-cython-modules
 - *Getting to zero-diff with the operational L4CMDL product...*

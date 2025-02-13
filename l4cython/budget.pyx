@@ -1,4 +1,5 @@
 # cython: language_level=3
+# distutils: sources = ["utils/src/spland.c", "utils/src/uuta.c"]
 
 '''
 SMAP Level 4 Carbon (L4C) heterotrophic respiration (RH) and NEE calculation
@@ -31,6 +32,7 @@ import cython
 import datetime
 import yaml
 import numpy as np
+from libc.stdlib cimport calloc, free
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from libc.math cimport fmax
 from cython.parallel import prange
@@ -38,7 +40,8 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from l4cython.constraints cimport arrhenius, linear_constraint
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated
-from l4cython.utils.fixtures import READ, DFNT_FLOAT32, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
+from l4cython.utils.mkgrid cimport deflate, size_in_bytes
+from l4cython.utils.fixtures import READ, DFNT_UINT8, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 from tqdm import tqdm
 
@@ -55,28 +58,38 @@ cdef:
     float TSOIL1 = 66.02 # deg K
     float TSOIL2 = 227.13 # deg K
     unsigned char* PFT
+    float* LITTERFALL
     float* SOC0
     float* SOC1
     float* SOC2
-    float* LITTERFALL
+    float* SMRZ_MAX
+    float* SMRZ_MIN
 PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+LITTERFALL  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-LITTERFALL  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+SMRZ_MAX = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+SMRZ_MIN = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
 
 # Python arrays that want heap allocations must be global; this one is reused
 #   for any array that needs to be written to disk (using NumPy)
 OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
+# 8-day composite periods, as ordinal days of a 365-day year
+PERIODS = np.arange(1, 365, 8)
+PERIODS_DATES = [
+    datetime.datetime.strptime('2005-%03d' % p, '%Y-%j') for p in PERIODS
+]
+PERIODS_DATES_LEAP = [
+    datetime.datetime.strptime('2004-%03d' % p, '%Y-%j') for p in PERIODS
+]
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def main(config = None, verbose = True):
     '''
-    Forward run of the L4C soil decomposition and heterotrophic respiration
-    algorithm. Starts on "origin_date" and continues for the specified number
-    of time steps.
+    Forward run...
 
     Parameters
     ----------
@@ -86,15 +99,30 @@ def main(config = None, verbose = True):
     cdef:
         Py_ssize_t i, j, k, pft
         Py_ssize_t doy # Day of year, on [1,365]
-        int n_litter_days
+        int DEBUG, n_litter_days
+        float fpar # Current fPAR value
         float litter # Amount of litterfall entering SOC pools
         float reco # Ecosystem respiration
         char* ofname # Output filename
         float k_mult
-    # Note that some datasets are only available at 9-km (M09) resolution
-    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+
+    # 9-km (M09) heap allocations, for RECO
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    # For GPP
+    smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    smrz  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    smrz_min = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    smrz_max = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    swrad = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    tmean = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    tmin  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    qv2m  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    ps    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    tsurf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    vpd   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    par   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    # 1-km (M01) heap allocations, for GPP
     litter_rate = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
@@ -104,15 +132,37 @@ def main(config = None, verbose = True):
     w_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     t_mult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     soc_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    # For GPP
+    ft    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    emult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    npp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    f_tmin = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    f_vpd  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    f_smrz = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    fpar0 = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+    fpar_qc = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+    fpar_clim = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+    # These have to be allocated differently for use with low-level functions
+    in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
+    h5_fpar0     = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    h5_fpar_qc   = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    h5_fpar_clim = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
 
     # Read in configuration file, then load state data
     if config is None:
-        config = '../data/L4Cython_RECO_M01_config.yaml'
+        config = '../data/L4Cython_M01_config.yaml'
     if isinstance(config, str) and verbose:
         print(f'Using config file: {config}')
     if isinstance(config, str):
         with open(config, 'r') as file:
             config = yaml.safe_load(file)
+    load_state(config) # Load global state variables
+    date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
+    num_steps = int(config['daily_steps'])
+    DEBUG = 1 if config['debug'] else 0
+    if DEBUG == 1:
+        fpar_final = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
     params = load_parameters_table(config['BPLUT'].encode('UTF-8'))
     for p in range(1, N_PFT + 1):
@@ -125,6 +175,16 @@ def main(config = None, verbose = True):
         PARAMS.decay_rate[0][p] = params['decay_rate'][0][p]
         PARAMS.decay_rate[1][p] = params['decay_rate'][1][p]
         PARAMS.decay_rate[2][p] = params['decay_rate'][2][p]
+        PARAMS.lue[p] = params['LUE'][0][p]
+        PARAMS.smrz0[p] = params['smrz0'][0][p]
+        PARAMS.smrz1[p] = params['smrz1'][0][p]
+        PARAMS.vpd0[p] = params['vpd0'][0][p]
+        PARAMS.vpd1[p] = params['vpd1'][0][p]
+        PARAMS.tmin0[p] = params['tmin0'][0][p]
+        PARAMS.tmin1[p] = params['tmin1'][0][p]
+        PARAMS.ft0[p] = params['ft0'][0][p]
+        PARAMS.ft1[p] = params['ft1'][0][p]
+        PARAMS.cue[p] = params['CUE'][0][p]
 
     # Option to schedule the rate at which litterfall enters SOC pools; if no
     #   schedule is used, an equal daily fraction of available NPP allocated
@@ -141,10 +201,11 @@ def main(config = None, verbose = True):
         for i in range(0, SPARSE_M01_N):
             litter_rate[i] = 1
 
-    load_state(config) # Load global state variables
+    #############################
     # Begin forward time stepping
-    date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
     num_steps = int(config['daily_steps'])
+    date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
+    date_fpar_ongoing = None
     for step in tqdm(range(num_steps)):
         date = date_start + datetime.timedelta(days = step)
         date_str = date.strftime('%Y%m%d')
@@ -271,6 +332,9 @@ def main(config = None, verbose = True):
     PyMem_Free(nee)
     PyMem_Free(w_mult)
     PyMem_Free(t_mult)
+    free(h5_fpar0)
+    free(h5_fpar_qc)
+    free(h5_fpar_clim)
 
 
 def load_state(config):
@@ -310,6 +374,13 @@ def load_state(config):
         SOC1[i] = fmax(0, SOC1[i])
         SOC2[i] = fmax(0, SOC2[i])
         LITTERFALL[i] = fmax(0, LITTERFALL[i])
+    # Load ancillary files: min and max root-zone soil moisture (SMRZ)
+    fid = open_fid(config['data']['smrz_min'].encode('UTF-8'), READ)
+    fread(SMRZ_MIN, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+    fclose(fid)
+    fid = open_fid(config['data']['smrz_max'].encode('UTF-8'), READ)
+    fread(SMRZ_MAX, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+    fclose(fid)
 
 
 cdef inline char is_valid(char pft, float tsoil, float litter) nogil:

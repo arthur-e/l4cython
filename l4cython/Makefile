@@ -8,10 +8,10 @@ spinup:
 	python3 -c "from spinup import main;print(main())"
 
 run:
-	python3 -c "from reco import main; print(main())"
+	python3 -c "from budget import main; print(main())"
 
-test:
-	python3 -c "from reco_9km import main; print(main())"
+test-reco:
+	python3 -c "from reco import main; print(main())"
 
 test-gpp:
 	python3 -c "from gpp import main;print(main('../data/L4Cython_GPP_M01_config.yaml'))"
