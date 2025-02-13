@@ -69,6 +69,7 @@ def main(config = None, verbose = True):
     '''
     cdef:
         Py_ssize_t i, j, k, pft
+        int DEBUG
         float fpar
 
     smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -111,6 +112,9 @@ def main(config = None, verbose = True):
     load_state(config) # Load global state variables
     date_start = datetime.datetime.strptime(config['origin_date'], '%Y-%m-%d')
     num_steps = int(config['daily_steps'])
+    DEBUG = 1 if config['debug'] else 0
+    if DEBUG == 1:
+        fpar_final = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
     # Read in the model parameters (Biome Properties Lookup Table, BPLUT)
     params = load_parameters_table(config['BPLUT'].encode('UTF-8'))
@@ -295,6 +299,8 @@ def main(config = None, verbose = True):
                 elif fpar0[k] > 100:
                     continue # Skip this pixel
                 fpar = fpar / 100.0 # Convert from [0,100] to [0,1]
+                if DEBUG == 1:
+                    fpar_final[k] = fpar
 
                 # Finally, compute GPP and NPP
                 gpp[k] = fpar * par[i] * emult[k] * PARAMS.lue[pft]
@@ -303,9 +309,25 @@ def main(config = None, verbose = True):
 
         # If averaging from 1-km to 9-km resolution is requested...
         out_dir = config['model']['output_dir']
+        fmt = config['model']['output_format']
         output_fields = list(map(lambda x: x.upper(), config['model']['output_fields']))
+        if 'F_TMIN' in output_fields:
+            output_filename = ('%s/L4Cython_fTmin_%s_%s.flt32' % (out_dir, date_str, fmt))\
+            .encode('UTF-8')
+            write_numpy_inflated(output_filename, to_numpy(f_tmin, SPARSE_M09_N))
+        if 'F_VPD' in output_fields:
+            output_filename = ('%s/L4Cython_fVPD_%s_%s.flt32' % (out_dir, date_str, fmt))\
+            .encode('UTF-8')
+            write_numpy_inflated(output_filename, to_numpy(f_vpd, SPARSE_M09_N))
+        if 'F_SMRZ' in output_fields:
+            output_filename = ('%s/L4Cython_fSMRZ_%s_%s.flt32' % (out_dir, date_str, fmt))\
+            .encode('UTF-8')
+            write_numpy_inflated(output_filename, to_numpy(f_smrz, SPARSE_M09_N))
+        if 'F_FT' in output_fields:
+            output_filename = ('%s/L4Cython_fFT_%s_%s.flt32' % (out_dir, date_str, fmt))\
+            .encode('UTF-8')
+            write_numpy_inflated(output_filename, to_numpy(ft, SPARSE_M09_N))
         if config['model']['output_format'] in ('M09', 'M09land'):
-            fmt = config['model']['output_format']
             inflated = 1 if fmt == 'M09' else 0
             if 'GPP' in output_fields:
                 output_filename = ('%s/L4Cython_GPP_%s_%s.flt32' % (out_dir, date_str, fmt))\
@@ -319,6 +341,10 @@ def main(config = None, verbose = True):
                 output_filename = ('%s/L4Cython_Emult_%s_%s.flt32' % (out_dir, date_str, fmt))\
                     .encode('UTF-8')
                 write_resampled(output_filename, emult, inflated)
+            if DEBUG == 1:
+                output_filename = ('%s/L4Cython_fPAR_%s_%s.flt32' % (out_dir, date_str, fmt))\
+                    .encode('UTF-8')
+                write_resampled(output_filename, fpar_final, inflated)
         else:
             if 'GPP' in output_fields:
                 OUT_M01 = to_numpy(gpp, SPARSE_M01_N)

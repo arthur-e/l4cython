@@ -6,8 +6,10 @@ the basis for the Soil Moisture Active Passive (SMAP) Level 4 Carbon (L4C) model
 
 - [ ] Single place for constants, e.g., `DFNT_FLOAT32`
 - https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html?highlight=packaging#distributing-cython-modules
-- *Getting to zero-diff with the operational product...*
+- *Getting to zero-diff with the operational L4CMDL product...*
   - Confirmed that the delivered SOC file (now as `/media/arthur.endsley/raid/TCF/tcf_V7_delivered_C*_M01land_0002089.flt32`) produces the closest results to the operational product.
+  - RECO module achieves zero-diff when resampling to 9-km and comparing to `RH/rh_mean` or `NEE/nee_mean` (the latter, by using the GPP estimate from the L4CMDL granule).
+  - GPP module does *not* achieve zero-diff in GPP, with 98% of differences less than $\pm 0.36 \text{g C m}^{-2} \text{day}^{-1}$. These appear to be due to unresolved differences in fPAR conditioning post-climatology fill. Differences in Emult are rare and resemble random noise.
 
 
 Building and Testing

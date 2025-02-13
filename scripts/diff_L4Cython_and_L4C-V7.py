@@ -32,16 +32,17 @@ def main(filename, grid = 'M09'):
     field, date = FILE_RX.match(os.path.basename(filename)).groups()
     # Open the recent RH file
     recent = np.fromfile(filename, dtype = dtype).reshape((1624, 3856))
-    recent[recent < 0] = np.nan
-    if field in ('Tmult', 'Wmult'):
+    recent[recent < -9000] = np.nan
+    if field in ('Tmult', 'Wmult', 'Emult'):
         recent *= 100
     # Open the official V7 file
     with h5py.File(L4C_FILE_TPL.format(date = date), 'r') as hdf:
-        if field in ('Tmult', 'Wmult'):
+        if field in ('Tmult', 'Wmult', 'Emult'):
             official = hdf[f'EC/{field.lower()}_mean'][:]
         else:
             official = hdf[f'{field}/{field.lower()}_mean'][:]
-    official[official < 0] = np.nan
+    official[official < -9000] = np.nan
+
     # Statistics
     print(f'Official V7 {field} on {date}:')
     print('-- ', np.nanpercentile(official, (0, 10, 50, 90, 100)).round(2))
@@ -52,7 +53,7 @@ def main(filename, grid = 'M09'):
     if np.nanmax(np.abs(diff)) <= 1e-3 and np.nanmin(np.abs(diff)) <= 1e-3:
         print('Zero diff within tolerance of 1e-3')
     else:
-        print(f'Global maximum (mean) difference: {np.nanmax(np.abs(diff)).round(3)} ({np.nanmean(np.abs(diff)).round(3)})')
+        print(f'Global abs. maximum (mean) difference: {np.nanmax(np.abs(diff)).round(3)} ({np.nanmean(np.abs(diff)).round(3)})')
 
     vlimit = max(np.nanmax(diff), np.nanmin(diff))
     pyplot.imshow(
