@@ -256,10 +256,10 @@ def main(config = None, verbose = True):
                 OUT_M01.tofile(
                     '%s/L4Cython_Wmult_%s_M01land.flt32' % (out_dir, date_str))
     PyMem_Free(PFT)
+    PyMem_Free(LITTERFALL)
     PyMem_Free(SOC0)
     PyMem_Free(SOC1)
     PyMem_Free(SOC2)
-    PyMem_Free(LITTERFALL)
     PyMem_Free(gpp)
     PyMem_Free(smsf)
     PyMem_Free(tsoil)
@@ -271,6 +271,7 @@ def main(config = None, verbose = True):
     PyMem_Free(nee)
     PyMem_Free(w_mult)
     PyMem_Free(t_mult)
+    PyMem_Free(soc_total)
 
 
 def load_state(config):

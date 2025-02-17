@@ -115,8 +115,6 @@ def main(config = None, verbose = True):
     # For GPP
     smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smrz  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    smrz_min = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    smrz_max = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     swrad = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     t2m   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tmin  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -137,7 +135,7 @@ def main(config = None, verbose = True):
     soc_total = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     # For GPP
     ft    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-    emult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    e_mult= <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     npp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     f_tmin = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
@@ -216,50 +214,17 @@ def main(config = None, verbose = True):
         year = int(date.year)
 
         # Read in soil moisture ("smsf" and "smrz") and soil temperature ("tsoil") data
-        fid = open_fid(
-            (config['data']['drivers']['smsf'] % date_str).encode('UTF-8'), READ)
-        fread(smsf, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
-        fid = open_fid(
-            (config['data']['drivers']['smrz0'] % date_str).encode('UTF-8'), READ)
-        fread(smrz0, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
-        fid = open_fid(
-            (config['data']['drivers']['tsoil'] % date_str).encode('UTF-8'), READ)
-        fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
+        drivers = config['data']['drivers']
+        load_flat((drivers['smsf'] % date_str).encode('UTF-8'), smsf)
+        load_flat((drivers['smrz0'] % date_str).encode('UTF-8'), smrz0)
+        load_flat((drivers['tsoil'] % date_str).encode('UTF-8'), tsoil)
         # MERRA-2 daily variables
-        fid = open_fid(
-            (config['data']['drivers']['tmin'] % (year, date_str)).encode('UTF-8'), READ)
-        fread(
-            tmin, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
-        fid = open_fid(
-            (config['data']['drivers']['tsurf'] % (year, date_str)).encode('UTF-8'), READ)
-        fread(
-            tsurf, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
-        fid = open_fid(
-            (config['data']['drivers']['qv2m'] % (year, date_str)).encode('UTF-8'), READ)
-        fread(
-            qv2m, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
-        fid = open_fid(
-            (config['data']['drivers']['t2m'] % (year, date_str)).encode('UTF-8'), READ)
-        fread(
-            t2m, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
-        fid = open_fid(
-            (config['data']['drivers']['ps'] % (year, date_str)).encode('UTF-8'), READ)
-        fread(
-            ps, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
-        fid = open_fid(
-            (config['data']['drivers']['swrad'] % (year, date_str)).encode('UTF-8'), READ)
-        fread(
-            swrad, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
-        return
+        load_flat((drivers['tmin'] % (year, date_str)).encode('UTF-8'), tmin)
+        load_flat((drivers['tsurf'] % (year, date_str)).encode('UTF-8'), tsurf)
+        load_flat((drivers['qv2m'] % (year, date_str)).encode('UTF-8'), qv2m)
+        load_flat((drivers['t2m'] % (year, date_str)).encode('UTF-8'), t2m)
+        load_flat((drivers['ps'] % (year, date_str)).encode('UTF-8'), ps)
+        load_flat((drivers['swrad'] % (year, date_str)).encode('UTF-8'), swrad)
 
         # Read in fPAR data; to do so, we need to first find the nearest
         #   8-day composite date
@@ -296,7 +261,6 @@ def main(config = None, verbose = True):
             fpar_qc = deflate(h5_fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
             fpar_clim = deflate(h5_fpar_clim, DFNT_UINT8, 'M01'.encode('UTF-8'))
 
-        return
         # Option to schedule the rate at which litterfall enters SOC pools
         if config['model']['litterfall']['scheduled']:
             # Get the file covering the 8-day period in which this DOY falls
@@ -389,22 +353,14 @@ def main(config = None, verbose = True):
                 OUT_M01.tofile(
                     '%s/L4Cython_Wmult_%s_M01land.flt32' % (out_dir, date_str))
     PyMem_Free(PFT)
+    PyMem_Free(LITTERFALL)
     PyMem_Free(SOC0)
     PyMem_Free(SOC1)
     PyMem_Free(SOC2)
-    PyMem_Free(LITTERFALL)
-    PyMem_Free(gpp)
+    PyMem_Free(SMRZ_MAX)
+    PyMem_Free(SMRZ_MIN)
     PyMem_Free(smsf)
     PyMem_Free(tsoil)
-    PyMem_Free(litter_rate)
-    PyMem_Free(rh0)
-    PyMem_Free(rh1)
-    PyMem_Free(rh2)
-    PyMem_Free(rh_total)
-    PyMem_Free(nee)
-    PyMem_Free(w_mult)
-    PyMem_Free(t_mult)
-
     PyMem_Free(smrz0)
     PyMem_Free(smrz)
     PyMem_Free(swrad)
@@ -413,7 +369,24 @@ def main(config = None, verbose = True):
     PyMem_Free(qv2m)
     PyMem_Free(ps)
     PyMem_Free(tsurf)
-
+    PyMem_Free(vpd)
+    PyMem_Free(par)
+    PyMem_Free(litter_rate)
+    PyMem_Free(rh0)
+    PyMem_Free(rh1)
+    PyMem_Free(rh2)
+    PyMem_Free(rh_total)
+    PyMem_Free(nee)
+    PyMem_Free(w_mult)
+    PyMem_Free(t_mult)
+    PyMem_Free(soc_total)
+    PyMem_Free(ft)
+    PyMem_Free(e_mult)
+    PyMem_Free(gpp)
+    PyMem_Free(npp)
+    PyMem_Free(f_tmin)
+    PyMem_Free(f_vpd)
+    PyMem_Free(f_smrz)
     free(h5_fpar0)
     free(h5_fpar_qc)
     free(h5_fpar_clim)
@@ -462,6 +435,22 @@ def load_state(config):
     fclose(fid)
     fid = open_fid(config['data']['smrz_max'].encode('UTF-8'), READ)
     fread(SMRZ_MAX, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+    fclose(fid)
+
+
+cdef inline void load_flat(char* filename, float* arr):
+    '''
+    Reads in global, 9-km data from a flat file (*.flt32).
+
+    Parameters
+    ----------
+    filename : char*
+        The filename to read
+    arr : float*
+        The destination array buffer
+    '''
+    fid = open_fid(filename, READ)
+    fread(arr, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
     fclose(fid)
 
 

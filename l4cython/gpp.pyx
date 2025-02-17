@@ -87,7 +87,7 @@ def main(config = None, verbose = True):
     vpd   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     par   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     ft    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-    emult = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+    e_mult= <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     npp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     f_tmin = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
@@ -245,7 +245,7 @@ def main(config = None, verbose = True):
                 pft = PFT[k]
                 # Make sure to fill output grids with the FILL_VALUE,
                 #   otherwise they may contain zero (0) at invalid data
-                emult[k] = FILL_VALUE
+                e_mult[k] = FILL_VALUE
                 ft[k] = FILL_VALUE
                 f_tmin[k] = FILL_VALUE
                 f_vpd[k] = FILL_VALUE
@@ -268,7 +268,7 @@ def main(config = None, verbose = True):
                     vpd[i], PARAMS.vpd0[pft], PARAMS.vpd1[pft], 1)
                 f_smrz[k] = linear_constraint(
                     smrz[i], PARAMS.smrz0[pft], PARAMS.smrz1[pft], 0)
-                emult[k] = ft[k] * f_tmin[k] * f_vpd[k] * f_smrz[k]
+                e_mult[k] = ft[k] * f_tmin[k] * f_vpd[k] * f_smrz[k]
 
                 # Determine the value of fPAR based on QC flag;
                 #   bad pixels have either:
@@ -290,7 +290,7 @@ def main(config = None, verbose = True):
                     fpar_final[k] = fpar
 
                 # Finally, compute GPP and NPP
-                gpp[k] = fpar * par[i] * emult[k] * PARAMS.lue[pft]
+                gpp[k] = fpar * par[i] * e_mult[k] * PARAMS.lue[pft]
                 npp[k] = gpp[k] * PARAMS.cue[pft]
 
 
@@ -327,7 +327,7 @@ def main(config = None, verbose = True):
             if 'EMULT' in output_fields:
                 output_filename = ('%s/L4Cython_Emult_%s_%s.flt32' % (out_dir, date_str, fmt))\
                     .encode('UTF-8')
-                write_resampled(output_filename, emult, inflated)
+                write_resampled(output_filename, e_mult, inflated)
             if DEBUG == 1:
                 output_filename = ('%s/L4Cython_fPAR_%s_%s.flt32' % (out_dir, date_str, fmt))\
                     .encode('UTF-8')
@@ -342,7 +342,7 @@ def main(config = None, verbose = True):
                 OUT_M01.tofile(
                     '%s/L4Cython_NPP_%s_M01land.flt32' % (out_dir, date_str))
             if 'EMULT' in output_fields:
-                OUT_M01 = to_numpy(emult, SPARSE_M01_N)
+                OUT_M01 = to_numpy(e_mult, SPARSE_M01_N)
                 OUT_M01.tofile(
                     '%s/L4Cython_Emult_%s_M01land.flt32' % (out_dir, date_str))
 
@@ -358,7 +358,7 @@ def main(config = None, verbose = True):
     PyMem_Free(vpd)
     PyMem_Free(par)
     PyMem_Free(ft)
-    PyMem_Free(emult)
+    PyMem_Free(e_mult)
     PyMem_Free(gpp)
     PyMem_Free(npp)
     PyMem_Free(f_tmin)
