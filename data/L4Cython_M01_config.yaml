@@ -1,6 +1,6 @@
 BPLUT: >-
   /anx_lagr3/arthur.endsley/SMAP_L4C/calibration/v7_Y2022/SMAP_BPLUT_V7_rev_20220728.csv
-origin_date: '2015-03-31'
+origin_date: '2000-01-01'
 daily_steps: 1
 debug: false
 data:
@@ -16,10 +16,25 @@ data:
       /Stout1/SMAP/L4_C/TCF/data/Version7/tcf_V7_delivered_NPP_annual_sum_M01land.flt32
   litterfall_schedule: >- # [N] array specifying parts-per-thousand of litterfall allocated every 8 days
     /anx_lagr4/SMAP/L4C_drivers/VIIRS_LAI/alt_allocation/L4Cython_litterfall_allocation_clim_EBF-GRS-excluded_2012-2021_M01land_P%s.flt32
+  # (Deflated) Minimum root-zone soil moisture (SMRZ), for rescaling, wetness units on [0,1]
+  smrz_min: /anx_lagr3/arthur.endsley/SMAP_L4C/calibration/v7_Y2022/NRv10_daily_smrz_min_M09land.flt32
+  # (Deflated) Maximum root-zone soil moisture (SMRZ), for rescaling, wetness units on [0,1]
+  smrz_max: /anx_lagr3/arthur.endsley/SMAP_L4C/calibration/v7_Y2022/NRv10_daily_smrz_max_M09land.flt32
+  # fPAR climatology (unsigned 8-bit integer, 0-100%)
+  fpar_clim: /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4_C_FparClimatology_v7.4.h5
   drivers:
-    smsf: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_smsf_M09land_%s.flt32 # Surface soil wetness (%) on [0,100]
-    tsoil: /anx_lagr4/SMAP/L4SM/Vv703x/L4_SM_gph_Vv703x_tsoil_M09land_%s.flt32 # Soil temperature [deg K]
-    GPP: /media/arthur.endsley/Mimisbrunnr/TCF/L4C_V7_mdl_GPP/L4_C_mdl_V7_GPP_%s_M09land.flt32 # Only used to calculate NEE
+    # fPAR (unsigned 8-bit integer, 0-100%), should be an L4CMOD granule
+    fpar: /anx_lagr4/SMAP/L4C_drivers/Version7/L4C_MOD/L4_C_mod_%sT000000_Vv7042_001.h5 # Canopy fPAR
+    smrz0: /Stout1/SMAP/L4_SM/NRv11-4/L4_SM_gph_NRv11-4_smrz0_M09land_%s.flt32 # Root-zone soil wetness (%) on [0,100]
+    smsf: /Stout1/SMAP/L4_SM/NRv11-4/L4_SM_gph_NRv11-4_smsf_M09land_%s.flt32 # Surface soil wetness (%) on [0,100]
+    tsoil: /Stout1/SMAP/L4_SM/NRv11-4/L4_SM_gph_NRv11-4_tsoil_M09land_%s.flt32 # Soil temperature [deg K]
+    # MERRA-2 daily variables, in their original units
+    tmin: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_Tmin_%s_M09land.flt32
+    tsurf: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_TS_%s_M09land.flt32
+    qv2m: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_QV2M_%s_M09land.flt32
+    t2m: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_T2M_%s_M09land.flt32
+    ps: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_PS_%s_M09land.flt32
+    swrad: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_SWGDN_%s_M09land.flt32
 model:
   litterfall:
     scheduled: false

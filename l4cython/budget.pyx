@@ -32,6 +32,7 @@ import cython
 import datetime
 import yaml
 import numpy as np
+from bisect import bisect_right
 from libc.stdlib cimport calloc, free
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from libc.math cimport fmax
@@ -39,10 +40,12 @@ from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from l4cython.constraints cimport arrhenius, linear_constraint
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
-from l4cython.utils.mkgrid import write_numpy_inflated
-from l4cython.utils.mkgrid cimport deflate, size_in_bytes
+from l4cython.utils.dec2bin cimport bits_from_uint32
+from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE, H5T_IEEE_F32LE
 from l4cython.utils.fixtures import READ, DFNT_UINT8, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
+from l4cython.utils.mkgrid import write_numpy_inflated
+from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from tqdm import tqdm
 
 # EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
@@ -115,7 +118,7 @@ def main(config = None, verbose = True):
     smrz_min = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smrz_max = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     swrad = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    tmean = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    t2m   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tmin  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     qv2m  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     ps    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -210,21 +213,90 @@ def main(config = None, verbose = True):
         date = date_start + datetime.timedelta(days = step)
         date_str = date.strftime('%Y%m%d')
         doy = int(date.strftime('%j'))
-        # Read in soil moisture ("smsf") and soil temperature ("tsoil") data
+        year = int(date.year)
+
+        # Read in soil moisture ("smsf" and "smrz") and soil temperature ("tsoil") data
         fid = open_fid(
             (config['data']['drivers']['smsf'] % date_str).encode('UTF-8'), READ)
         fread(smsf, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
         fid = open_fid(
+            (config['data']['drivers']['smrz0'] % date_str).encode('UTF-8'), READ)
+        fread(smrz0, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+        fclose(fid)
+        fid = open_fid(
             (config['data']['drivers']['tsoil'] % date_str).encode('UTF-8'), READ)
         fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
-        # Read in the GPP data
+        # MERRA-2 daily variables
         fid = open_fid(
-            (config['data']['drivers']['GPP'] % date_str).encode('UTF-8'), READ)
-        fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+            (config['data']['drivers']['tmin'] % (year, date_str)).encode('UTF-8'), READ)
+        fread(
+            tmin, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
         fclose(fid)
+        fid = open_fid(
+            (config['data']['drivers']['tsurf'] % (year, date_str)).encode('UTF-8'), READ)
+        fread(
+            tsurf, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+        fclose(fid)
+        fid = open_fid(
+            (config['data']['drivers']['qv2m'] % (year, date_str)).encode('UTF-8'), READ)
+        fread(
+            qv2m, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+        fclose(fid)
+        fid = open_fid(
+            (config['data']['drivers']['t2m'] % (year, date_str)).encode('UTF-8'), READ)
+        fread(
+            t2m, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+        fclose(fid)
+        fid = open_fid(
+            (config['data']['drivers']['ps'] % (year, date_str)).encode('UTF-8'), READ)
+        fread(
+            ps, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+        fclose(fid)
+        fid = open_fid(
+            (config['data']['drivers']['swrad'] % (year, date_str)).encode('UTF-8'), READ)
+        fread(
+            swrad, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
+        fclose(fid)
+        return
 
+        # Read in fPAR data; to do so, we need to first find the nearest
+        #   8-day composite date
+        p = int(date.strftime('%j'))
+        # Find the date of the fPAR data associated with this 8-day span
+        if date.year % 4 == 0:
+            date_fpar = PERIODS_DATES_LEAP[bisect_right(PERIODS, p) - 1]
+        else:
+            date_fpar = PERIODS_DATES[bisect_right(PERIODS, p) - 1]
+
+        # Only read-in the fPAR data (and deflate it) once, for every
+        #   8-day period
+        if date_fpar_ongoing is None or date_fpar_ongoing != date_fpar:
+            # Load the corresponding fPAR data (as a NumPy array)
+            fpar_filename = config['data']['drivers']['fpar'] % (
+                str(date.year) + date_fpar.strftime('%m%d'))
+            fpar_filename_bs = fpar_filename.encode('UTF-8')
+            # Load and deflate the fPAR climatology
+            fpar_clim_filename_bs = config['data']['fpar_clim'].encode('UTF-8')
+            # Read and deflate the fPAR data and QC flags
+            read_hdf5(fpar_filename_bs, 'fpar_M01', H5T_STD_U8LE, h5_fpar0)
+            read_hdf5(fpar_filename_bs, 'fpar_qc_M01', H5T_STD_U8LE, h5_fpar_qc)
+            # The climatology field names are difficult; first, we need to get
+            #   the ordinal of this 8-day period, counting starting from 1
+            period = list(PERIODS).index(int(date_fpar.strftime("%j"))) + 1
+            # Then, we need to format the string, e.g.:
+            #   "fpar_clim_M01_day089_per12"
+            clim_field = f'fpar_clim_M01_day{date_fpar.strftime("%j")}'\
+                f'_per{str(period).zfill(2)}'
+            read_hdf5(
+                fpar_clim_filename_bs, clim_field.encode('utf-8'),
+                H5T_STD_U8LE, h5_fpar_clim)
+            fpar0 = deflate(h5_fpar0, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            fpar_qc = deflate(h5_fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            fpar_clim = deflate(h5_fpar_clim, DFNT_UINT8, 'M01'.encode('UTF-8'))
+
+        return
         # Option to schedule the rate at which litterfall enters SOC pools
         if config['model']['litterfall']['scheduled']:
             # Get the file covering the 8-day period in which this DOY falls
@@ -332,6 +404,16 @@ def main(config = None, verbose = True):
     PyMem_Free(nee)
     PyMem_Free(w_mult)
     PyMem_Free(t_mult)
+
+    PyMem_Free(smrz0)
+    PyMem_Free(smrz)
+    PyMem_Free(swrad)
+    PyMem_Free(t2m)
+    PyMem_Free(tmin)
+    PyMem_Free(qv2m)
+    PyMem_Free(ps)
+    PyMem_Free(tsurf)
+
     free(h5_fpar0)
     free(h5_fpar_qc)
     free(h5_fpar_clim)

@@ -13,13 +13,13 @@ import datetime
 import yaml
 import numpy as np
 import h5py
+from bisect import bisect_right
+from tempfile import NamedTemporaryFile
 from libc.stdlib cimport calloc, free
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
-from bisect import bisect_right
-from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport linear_constraint
 from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
