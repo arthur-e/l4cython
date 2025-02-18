@@ -79,7 +79,7 @@ def main(config = None, verbose = True):
     smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smrz  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     swrad = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    tmean = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    t2m   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tmin  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     qv2m  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     ps    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -188,52 +188,31 @@ def main(config = None, verbose = True):
                 config['data']['drivers']['other'] % date_str, 'r') as hdf:
             # SWRAD
             write_numpy_deflated(tmp_fname_bs, hdf['RADIATION_SHORTWAVE_DOWNWARD_FLUX'][:])
-            fid = open_fid(tmp_fname_bs, READ)
-            fread(
-                swrad, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-            fclose(fid)
+            read_flat(tmp_fname_bs, SPARSE_M09_N, swrad)
             # T2M_M09_MIN (tmin)
             write_numpy_deflated(tmp_fname_bs, hdf['T2M_M09_MIN'][:])
-            fid = open_fid(tmp_fname_bs, READ)
-            fread(
-                tmin, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-            fclose(fid)
-            # T2M_M09_AVG (tmean)
+            read_flat(tmp_fname_bs, SPARSE_M09_N, tmin)
+            # T2M_M09_AVG (t2m)
             write_numpy_deflated(tmp_fname_bs, hdf['T2M_M09_AVG'][:])
-            fid = open_fid(tmp_fname_bs, READ)
-            fread(
-                tmean, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-            fclose(fid)
+            read_flat(tmp_fname_bs, SPARSE_M09_N, t2m)
             # QV2M
             write_numpy_deflated(tmp_fname_bs, hdf['QV2M_M09_AVG'][:])
-            fid = open_fid(tmp_fname_bs, READ)
-            fread(
-                qv2m, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-            fclose(fid)
+            read_flat(tmp_fname_bs, SPARSE_M09_N, qv2m)
             # PS
             write_numpy_deflated(tmp_fname_bs, hdf['SURFACE_PRESSURE'][:])
-            fid = open_fid(tmp_fname_bs, READ)
-            fread(
-                ps, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-            fclose(fid)
+            read_flat(tmp_fname_bs, SPARSE_M09_N, ps)
             # SMRZ (before rescaling)
             write_numpy_deflated(tmp_fname_bs, hdf['SM_ROOTZONE_WETNESS'][:])
-            fid = open_fid(tmp_fname_bs, READ)
-            fread(
-                smrz0, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-            fclose(fid)
+            read_flat(tmp_fname_bs, SPARSE_M09_N, smrz0)
             # NOTE: TS/Tsurf is stored in deg C, to great annoyance
             # TS/Tsurf
             write_numpy_deflated(tmp_fname_bs, hdf['TS_M09_DEGC_AVG'][:])
-            fid = open_fid(tmp_fname_bs, READ)
-            fread(
-                tsurf, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-            fclose(fid)
+            read_flat(tmp_fname_bs, SPARSE_M09_N, tsurf)
 
         # Iterate over 9-km grid
         for i in prange(SPARSE_M09_N, nogil = True):
             par[i] = photosynth_active_radiation(swrad[i])
-            vpd[i] = vapor_pressure_deficit(qv2m[i], ps[i], tmean[i])
+            vpd[i] = vapor_pressure_deficit(qv2m[i], ps[i], t2m[i])
             smrz[i] = rescale_smrz(smrz0[i], SMRZ_MIN[i], SMRZ_MAX[i])
 
             # TODO See if it is actually faster to do this in a single thread
@@ -350,7 +329,7 @@ def main(config = None, verbose = True):
     PyMem_Free(smrz0)
     PyMem_Free(smrz)
     PyMem_Free(swrad)
-    PyMem_Free(tmean)
+    PyMem_Free(t2m)
     PyMem_Free(tmin)
     PyMem_Free(qv2m)
     PyMem_Free(ps)
@@ -443,6 +422,24 @@ cdef inline char is_valid(char pft) nogil:
     if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
         valid = 0
     return valid
+
+
+cdef inline void read_flat(char* filename, int n_elem, float* arr):
+    '''
+    Reads in global, 9-km data from a flat file (*.flt32).
+
+    Parameters
+    ----------
+    filename : char*
+        The filename to read
+    n_elem : int
+        The number of array elements
+    arr : float*
+        The destination array buffer
+    '''
+    fid = open_fid(filename, READ)
+    fread(arr, sizeof(float), <size_t>sizeof(float)*n_elem, fid)
+    fclose(fid)
 
 
 cdef void write_resampled(

@@ -24,6 +24,7 @@ Developer notes:
 
 Possible improvements:
 
+- [ ] TODO Check units of MERRA-2 "TS" field; in L4_SM it is deg C
 - [ ] 1-km global grid files will always be ~500 MB in size, without
     compression; try writing the array to an HDF5 file instead.
 '''
@@ -39,6 +40,7 @@ from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from l4cython.constraints cimport arrhenius, linear_constraint
+from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE, H5T_IEEE_F32LE
@@ -215,16 +217,16 @@ def main(config = None, verbose = True):
 
         # Read in soil moisture ("smsf" and "smrz") and soil temperature ("tsoil") data
         drivers = config['data']['drivers']
-        load_flat((drivers['smsf'] % date_str).encode('UTF-8'), smsf)
-        load_flat((drivers['smrz0'] % date_str).encode('UTF-8'), smrz0)
-        load_flat((drivers['tsoil'] % date_str).encode('UTF-8'), tsoil)
+        read_flat((drivers['smsf'] % date_str).encode('UTF-8'), SPARSE_M09_N, smsf)
+        read_flat((drivers['smrz0'] % date_str).encode('UTF-8'), SPARSE_M09_N, smrz0)
+        read_flat((drivers['tsoil'] % date_str).encode('UTF-8'), SPARSE_M09_N, tsoil)
         # MERRA-2 daily variables
-        load_flat((drivers['tmin'] % (year, date_str)).encode('UTF-8'), tmin)
-        load_flat((drivers['tsurf'] % (year, date_str)).encode('UTF-8'), tsurf)
-        load_flat((drivers['qv2m'] % (year, date_str)).encode('UTF-8'), qv2m)
-        load_flat((drivers['t2m'] % (year, date_str)).encode('UTF-8'), t2m)
-        load_flat((drivers['ps'] % (year, date_str)).encode('UTF-8'), ps)
-        load_flat((drivers['swrad'] % (year, date_str)).encode('UTF-8'), swrad)
+        read_flat((drivers['tmin'] % (year, date_str)).encode('UTF-8'), SPARSE_M09_N, tmin)
+        read_flat((drivers['tsurf'] % (year, date_str)).encode('UTF-8'), SPARSE_M09_N, tsurf)
+        read_flat((drivers['qv2m'] % (year, date_str)).encode('UTF-8'), SPARSE_M09_N, qv2m)
+        read_flat((drivers['t2m'] % (year, date_str)).encode('UTF-8'), SPARSE_M09_N, t2m)
+        read_flat((drivers['ps'] % (year, date_str)).encode('UTF-8'), SPARSE_M09_N, ps)
+        read_flat((drivers['swrad'] % (year, date_str)).encode('UTF-8'), SPARSE_M09_N, swrad)
 
         # Read in fPAR data; to do so, we need to first find the nearest
         #   8-day composite date
@@ -266,14 +268,18 @@ def main(config = None, verbose = True):
             # Get the file covering the 8-day period in which this DOY falls
             filename = config['data']['litterfall_schedule']\
                 % str(periods[doy-1]).zfill(2)
-            fid = open_fid(filename.encode('UTF-8'), READ)
-            fread(litter_rate, sizeof(float), <size_t>sizeof(float)*SPARSE_M01_N, fid)
-            fclose(fid)
+            read_flat(filename.encode('UTF-8'), SPARSE_M01_N, litter_rate)
+
+        # TODO Check units of MERRA-2 "TS" field; in L4_SM it is deg C
 
         # Iterate over each 9-km pixel
         for i in prange(SPARSE_M09_N, nogil = True):
+            par[i] = photosynth_active_radiation(swrad[i])
+            vpd[i] = vapor_pressure_deficit(qv2m[i], ps[i], t2m[i])
+            smrz[i] = rescale_smrz(smrz0[i], SMRZ_MIN[i], SMRZ_MAX[i])
+
             # Iterate over each nested 1-km pixel
-            for j in range(M01_NESTED_IN_M09):
+            for j in prange(M01_NESTED_IN_M09):
                 # Hence, (i) indexes the 9-km pixel and k the 1-km pixel
                 k = (M01_NESTED_IN_M09 * i) + j
                 # Make sure to fill output grids with the FILL_VALUE,
@@ -430,28 +436,8 @@ def load_state(config):
         SOC2[i] = fmax(0, SOC2[i])
         LITTERFALL[i] = fmax(0, LITTERFALL[i])
     # Load ancillary files: min and max root-zone soil moisture (SMRZ)
-    fid = open_fid(config['data']['smrz_min'].encode('UTF-8'), READ)
-    fread(SMRZ_MIN, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-    fclose(fid)
-    fid = open_fid(config['data']['smrz_max'].encode('UTF-8'), READ)
-    fread(SMRZ_MAX, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-    fclose(fid)
-
-
-cdef inline void load_flat(char* filename, float* arr):
-    '''
-    Reads in global, 9-km data from a flat file (*.flt32).
-
-    Parameters
-    ----------
-    filename : char*
-        The filename to read
-    arr : float*
-        The destination array buffer
-    '''
-    fid = open_fid(filename, READ)
-    fread(arr, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-    fclose(fid)
+    read_flat(config['data']['smrz_min'].encode('UTF-8'), SPARSE_M09_N, SMRZ_MIN)
+    read_flat(config['data']['smrz_min'].encode('UTF-8'), SPARSE_M09_N, SMRZ_MAX)
 
 
 cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
@@ -482,6 +468,24 @@ cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
     elif litter <= 0:
         valid = 0
     return valid
+
+
+cdef inline void read_flat(char* filename, int n_elem, float* arr):
+    '''
+    Reads in global, 9-km data from a flat file (*.flt32).
+
+    Parameters
+    ----------
+    filename : char*
+        The filename to read
+    n_elem : int
+        The number of array elements
+    arr : float*
+        The destination array buffer
+    '''
+    fid = open_fid(filename, READ)
+    fread(arr, sizeof(float), <size_t>sizeof(float)*n_elem, fid)
+    fclose(fid)
 
 
 cdef void write_resampled(bytes output_filename, float* array_data, int inflated = 1):

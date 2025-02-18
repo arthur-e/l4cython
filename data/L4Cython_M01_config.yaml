@@ -30,7 +30,7 @@ data:
     tsoil: /Stout1/SMAP/L4_SM/NRv11-4/L4_SM_gph_NRv11-4_tsoil_M09land_%s.flt32 # Soil temperature [deg K]
     # MERRA-2 daily variables, in their original units
     tmin: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_Tmin_%s_M09land.flt32
-    tsurf: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_TS_%s_M09land.flt32
+    tsurf: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_TS_%s_M09land.flt32 # Surface skin temp. [deg C]?
     qv2m: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_QV2M_%s_M09land.flt32
     t2m: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_T2M_%s_M09land.flt32
     ps: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_PS_%s_M09land.flt32
