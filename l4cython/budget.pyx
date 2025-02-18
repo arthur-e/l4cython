@@ -14,10 +14,10 @@ Required daily driver data:
 
 - Surface soil wetness ("SMSF"), in percentage units [0,100]
 - Soil temperature, in degrees K
-- Gross primary productivity (GPP), in [g C m-2 day-1]
 
 Developer notes:
 
+- Currently requires about 12 GB of memory.
 - Large datasets (1-km resolution) that are read-in from disk by one function,
     `load_state()`, and read-in from memory by another, `main()`, MUST be
     assigned to global variables because they must use heap allocation.
@@ -270,8 +270,6 @@ def main(config = None, verbose = True):
                 % str(periods[doy-1]).zfill(2)
             read_flat(filename.encode('UTF-8'), SPARSE_M01_N, litter_rate)
 
-        # TODO Check units of MERRA-2 "TS" field; in L4_SM it is deg C
-
         # Iterate over each 9-km pixel
         for i in prange(SPARSE_M09_N, nogil = True):
             par[i] = photosynth_active_radiation(swrad[i])
@@ -303,8 +301,8 @@ def main(config = None, verbose = True):
                 # If surface soil temp. is above freezing, mark Thawed (=1),
                 #   otherwise Frozen (=0)
                 ft[k] = PARAMS.ft0[pft]
-                # NOTE: TS/Tsurf is stored in deg C, to great annoyance
-                if tsurf[i] >= 0:
+                # NOTE: TS/Tsurf is stored in deg K in MERRA-2
+                if tsurf[i] >= 273.15:
                     ft[k] = PARAMS.ft1[pft]
 
                 # Compute the environmental constraints
@@ -368,43 +366,55 @@ def main(config = None, verbose = True):
                 nee[k] = reco - gpp[k]
 
         # If averaging from 1-km to 9-km resolution is requested...
+        fmt = config['model']['output_format']
         out_dir = config['model']['output_dir']
-        if config['model']['output_format'] in ('M09', 'M09land'):
-            fmt = config['model']['output_format']
+        output_fname_tpl = ('%s/L4Cython_%%s_%s_%s.flt32' % (out_dir, date_str, fmt))
+        output_fields = list(map(lambda x: x.upper(), config['model']['output_fields']))
+        if fmt in ('M09', 'M09land'):
             inflated = 1 if fmt == 'M09' else 0
-            if 'RH' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_RH_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
+            if 'GPP' in config['model']['output_fields']:
+                output_filename = (output_fname_tpl % 'GPP').encode('UTF-8')
+                write_resampled(output_filename, gpp, inflated)
+            if 'NPP' in output_fields:
+                output_filename = (output_fname_tpl % 'NPP').encode('UTF-8')
+                write_resampled(output_filename, npp, inflated)
+            if 'EMULT' in output_fields:
+                output_filename = (output_fname_tpl % 'Emult').encode('UTF-8')
+                write_resampled(output_filename, e_mult, inflated)
+            if 'RH' in output_fields:
+                output_filename = (output_fname_tpl % 'RH').encode('UTF-8')
                 write_resampled(output_filename, rh_total, inflated)
-            if 'NEE' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_NEE_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
+            if 'NEE' in output_fields:
+                output_filename = (output_fname_tpl % 'NEE').encode('UTF-8')
                 write_resampled(output_filename, nee, inflated)
-            if 'Tmult' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_Tmult_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
+            if 'TMULT' in output_fields:
+                output_filename = (output_fname_tpl % 'Tmult').encode('UTF-8')
                 write_resampled(output_filename, t_mult, inflated)
-            if 'Wmult' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_Wmult_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
+            if 'WMULT' in output_fields:
+                output_filename = (output_fname_tpl % 'Wmult').encode('UTF-8')
                 write_resampled(output_filename, w_mult, inflated)
         else:
-            if 'RH' in config['model']['output_fields']:
+            if 'GPP' in output_fields:
+                OUT_M01 = to_numpy(gpp, SPARSE_M01_N)
+                OUT_M01.tofile(output_fname_tpl % 'GPP')
+            if 'NPP' in output_fields:
+                OUT_M01 = to_numpy(npp, SPARSE_M01_N)
+                OUT_M01.tofile(output_fname_tpl % 'NPP')
+            if 'EMULT' in output_fields:
+                OUT_M01 = to_numpy(e_mult, SPARSE_M01_N)
+                OUT_M01.tofile(output_fname_tpl % 'Emult')
+            if 'RH' in output_fields:
                 OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
-                OUT_M01.tofile(
-                    '%s/L4Cython_RH_%s_M01land.flt32' % (out_dir, date_str))
-            if 'NEE' in config['model']['output_fields']:
+                OUT_M01.tofile(output_fname_tpl % 'RH')
+            if 'NEE' in output_fields:
                 OUT_M01 = to_numpy(nee, SPARSE_M01_N)
-                OUT_M01.tofile(
-                    '%s/L4Cython_NEE_%s_M01land.flt32' % (out_dir, date_str))
-            if 'Tmult' in config['model']['output_fields']:
+                OUT_M01.tofile(output_fname_tpl % 'NEE')
+            if 'TMULT' in output_fields:
                 OUT_M01 = to_numpy(t_mult, SPARSE_M01_N)
-                OUT_M01.tofile(
-                    '%s/L4Cython_Tmult_%s_M01land.flt32' % (out_dir, date_str))
-            if 'Wmult' in config['model']['output_fields']:
+                OUT_M01.tofile(output_fname_tpl % 'Tmult')
+            if 'WMULT' in output_fields:
                 OUT_M01 = to_numpy(w_mult, SPARSE_M01_N)
-                OUT_M01.tofile(
-                    '%s/L4Cython_Wmult_%s_M01land.flt32' % (out_dir, date_str))
+                OUT_M01.tofile(output_fname_tpl % 'Wmult')
     PyMem_Free(PFT)
     PyMem_Free(LITTERFALL)
     PyMem_Free(SOC0)
@@ -484,7 +494,7 @@ def load_state(config):
         LITTERFALL[i] = fmax(0, LITTERFALL[i])
     # Load ancillary files: min and max root-zone soil moisture (SMRZ)
     read_flat(config['data']['smrz_min'].encode('UTF-8'), SPARSE_M09_N, SMRZ_MIN)
-    read_flat(config['data']['smrz_min'].encode('UTF-8'), SPARSE_M09_N, SMRZ_MAX)
+    read_flat(config['data']['smrz_max'].encode('UTF-8'), SPARSE_M09_N, SMRZ_MAX)
 
 
 cdef inline char is_valid(char pft, float tsoil, float litter) nogil:

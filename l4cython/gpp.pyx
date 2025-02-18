@@ -274,56 +274,48 @@ def main(config = None, verbose = True):
 
 
         # If averaging from 1-km to 9-km resolution is requested...
-        out_dir = config['model']['output_dir']
         fmt = config['model']['output_format']
-        output_fields = list(map(lambda x: x.upper(), config['model']['output_fields']))
+        out_dir = config['model']['output_dir']
+        output_fname_tpl = (
+            '%s/L4Cython_%%s_%s_%s.flt32' % (out_dir, date_str, fmt))
+        output_fields = list(map(
+            lambda x: x.upper(), config['model']['output_fields']))
         if 'F_TMIN' in output_fields:
-            output_filename = ('%s/L4Cython_fTmin_%s_%s.flt32' % (out_dir, date_str, fmt))\
-            .encode('UTF-8')
+            output_filename = (output_fname_tpl % 'fTmin').encode('UTF-8')
             write_numpy_inflated(output_filename, to_numpy(f_tmin, SPARSE_M09_N))
         if 'F_VPD' in output_fields:
-            output_filename = ('%s/L4Cython_fVPD_%s_%s.flt32' % (out_dir, date_str, fmt))\
-            .encode('UTF-8')
+            output_filename = (output_fname_tpl % 'fVPD').encode('UTF-8')
             write_numpy_inflated(output_filename, to_numpy(f_vpd, SPARSE_M09_N))
         if 'F_SMRZ' in output_fields:
-            output_filename = ('%s/L4Cython_fSMRZ_%s_%s.flt32' % (out_dir, date_str, fmt))\
-            .encode('UTF-8')
+            output_filename = (output_fname_tpl % 'fSMRZ').encode('UTF-8')
             write_numpy_inflated(output_filename, to_numpy(f_smrz, SPARSE_M09_N))
         if 'F_FT' in output_fields:
-            output_filename = ('%s/L4Cython_fFT_%s_%s.flt32' % (out_dir, date_str, fmt))\
-            .encode('UTF-8')
+            output_filename = (output_fname_tpl % 'fFT').encode('UTF-8')
             write_numpy_inflated(output_filename, to_numpy(ft, SPARSE_M09_N))
-        if config['model']['output_format'] in ('M09', 'M09land'):
+        if fmt in ('M09', 'M09land'):
             inflated = 1 if fmt == 'M09' else 0
             if 'GPP' in output_fields:
-                output_filename = ('%s/L4Cython_GPP_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
+                output_filename = (output_fname_tpl % 'GPP').encode('UTF-8')
                 write_resampled(output_filename, gpp, inflated)
             if 'NPP' in output_fields:
-                output_filename = ('%s/L4Cython_NPP_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
+                output_filename = (output_fname_tpl % 'NPP').encode('UTF-8')
                 write_resampled(output_filename, npp, inflated)
             if 'EMULT' in output_fields:
-                output_filename = ('%s/L4Cython_Emult_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
+                output_filename = (output_fname_tpl % 'Emult').encode('UTF-8')
                 write_resampled(output_filename, e_mult, inflated)
             if DEBUG == 1:
-                output_filename = ('%s/L4Cython_fPAR_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
+                output_filename = (output_fname_tpl % 'fPAR').encode('UTF-8')
                 write_resampled(output_filename, fpar_final, inflated)
         else:
             if 'GPP' in output_fields:
                 OUT_M01 = to_numpy(gpp, SPARSE_M01_N)
-                OUT_M01.tofile(
-                    '%s/L4Cython_GPP_%s_M01land.flt32' % (out_dir, date_str))
+                OUT_M01.tofile(output_fname_tpl % 'GPP')
             if 'NPP' in output_fields:
                 OUT_M01 = to_numpy(npp, SPARSE_M01_N)
-                OUT_M01.tofile(
-                    '%s/L4Cython_NPP_%s_M01land.flt32' % (out_dir, date_str))
+                OUT_M01.tofile(output_fname_tpl % 'NPP')
             if 'EMULT' in output_fields:
                 OUT_M01 = to_numpy(e_mult, SPARSE_M01_N)
-                OUT_M01.tofile(
-                    '%s/L4Cython_Emult_%s_M01land.flt32' % (out_dir, date_str))
+                OUT_M01.tofile(output_fname_tpl % 'Emult')
 
 
     PyMem_Free(smrz0)
