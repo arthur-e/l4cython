@@ -22,7 +22,7 @@ data:
   # (Deflated) Maximum root-zone soil moisture (SMRZ), for rescaling, wetness units on [0,1]
   smrz_max: /anx_lagr3/arthur.endsley/SMAP_L4C/calibration/v7_Y2022/NRv10_daily_smrz_max_M09land.flt32
   # fPAR climatology (unsigned 8-bit integer, 0-100%)
-  fpar_clim: /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4_C_FparClimatology_v7.4.h5
+  fpar_clim: /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4_C_FparClimatology_v8.0.h5
   drivers:
     # fPAR (unsigned 8-bit integer, 0-100%), should be an L4CMOD granule
     fpar: /anx_lagr4/SMAP/L4C_drivers/Version7/L4C_MOD/L4_C_mod_%sT000000_Vv7042_001.h5 # Canopy fPAR

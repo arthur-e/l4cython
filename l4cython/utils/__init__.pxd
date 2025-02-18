@@ -41,6 +41,28 @@ cdef inline FILE* open_fid(bytes filename_byte_string, bytes mode):
     return fid
 
 
+cdef inline to_numpy_char(unsigned char *ptr, int n):
+    '''
+    Converts a typed memoryview to a NumPy array.
+
+    Parameters
+    ----------
+    ptr : unsigned char*
+        A pointer to the typed memoryview
+    n : int
+        The number of array elements
+
+    Returns
+    -------
+    numpy.ndarray
+    '''
+    cdef int i
+    arr = np.full((n,), 255, dtype = np.uint8)
+    for i in range(n):
+        arr[i] = ptr[i]
+    return arr
+
+
 cdef inline to_numpy(float *ptr, int n):
     '''
     Converts a typed memoryview to a NumPy array.

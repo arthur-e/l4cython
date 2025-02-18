@@ -25,7 +25,7 @@ def main(filename, grid = 'M09'):
     grid : str
         Either "M09" (default) or "M01"
     '''
-    dtype = np.float32 if filename.split('.')[-1] == 'flt32' else np.float64
+    dtype = np.float32 if '.flt32' in filename else np.float64
     if f'{grid}land' in filename:
         inflate_file(filename, grid)
         filename = filename.replace(f'{grid}land', f'{grid}')
