@@ -41,14 +41,6 @@ gpp = Extension(
     extra_link_args = ['-fopenmp', '-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']
 )
 
-reco_9km = Extension(
-    name = 'reco_9km',
-    sources = ['reco_9km.pyx'],
-    define_macros = MACROS,
-    # -g1 : See: https://docs.cython.org/en/latest/src/userguide/faq.html#how-do-i-speed-up-the-c-compilation
-    extra_compile_args = ['-g1']
-)
-
 reco = Extension(
     name = 'reco',
     sources = ['reco.pyx'],
@@ -69,4 +61,4 @@ spinup = Extension(
     extra_link_args = ['-fopenmp']
 )
 
-setup(ext_modules = cythonize([budget, gpp, reco, reco_9km, spinup]))
+setup(ext_modules = cythonize([budget, gpp, reco, spinup]))

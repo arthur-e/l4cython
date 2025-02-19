@@ -24,7 +24,9 @@ Developer notes:
 
 Possible improvements:
 
-- [ ] TODO Check units of MERRA-2 "TS" field; in L4_SM it is deg C
+- [ ] fPAR climatology filling could be done outside of the main 1-km
+    loop, in a separate nested 1-km loop, so that the QC and climatology
+    arrays can be freed from memory.
 - [ ] 1-km global grid files will always be ~500 MB in size, without
     compression; try writing the array to an HDF5 file instead.
 '''
@@ -146,11 +148,6 @@ def main(config = None, verbose = True):
     fpar0 = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
     fpar_qc = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
     fpar_clim = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
-    # These have to be allocated differently for use with low-level functions
-    in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
-    h5_fpar0     = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-    h5_fpar_qc   = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-    h5_fpar_clim = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
 
     # Read in configuration file, then load state data
     if config is None:
@@ -240,6 +237,11 @@ def main(config = None, verbose = True):
         # Only read-in the fPAR data (and deflate it) once, for every
         #   8-day period
         if date_fpar_ongoing is None or date_fpar_ongoing != date_fpar:
+            # These have to be allocated differently for use with low-level functions
+            in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
+            h5_fpar0     = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+            h5_fpar_qc   = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+            h5_fpar_clim = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
             # Load the corresponding fPAR data (as a NumPy array)
             fpar_filename = config['data']['drivers']['fpar'] % (
                 str(date.year) + date_fpar.strftime('%m%d'))
@@ -262,6 +264,9 @@ def main(config = None, verbose = True):
             fpar0 = deflate(h5_fpar0, DFNT_UINT8, 'M01'.encode('UTF-8'))
             fpar_qc = deflate(h5_fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
             fpar_clim = deflate(h5_fpar_clim, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            free(h5_fpar0)
+            free(h5_fpar_qc)
+            free(h5_fpar_clim)
 
         # Option to schedule the rate at which litterfall enters SOC pools
         if config['model']['litterfall']['scheduled']:
@@ -450,9 +455,6 @@ def main(config = None, verbose = True):
     PyMem_Free(f_tmin)
     PyMem_Free(f_vpd)
     PyMem_Free(f_smrz)
-    free(h5_fpar0)
-    free(h5_fpar_qc)
-    free(h5_fpar_clim)
 
 
 def load_state(config):

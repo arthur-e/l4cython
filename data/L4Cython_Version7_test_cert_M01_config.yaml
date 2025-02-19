@@ -41,7 +41,7 @@ model:
     scheduled: false
     interval_days: 8 # Number of days represented by litterfall rate
   output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/test_cert_V7
-  output_fields: # Valid output fields include: "RH", "NEE"
+  output_fields: # Valid output fields include: "RH", "NEE", "GPP", "NPP", "Emult", "f_Tmin", "f_VPD", "f_SMRZ", "f_FT"
   - NEE
   - RH
   - GPP
