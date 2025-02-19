@@ -45,7 +45,6 @@ cdef:
     float* SMRZ_MAX
     float* SMRZ_MIN
 PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
-PFT_MASK = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M09_N)
 SMRZ_MAX = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
 SMRZ_MIN = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
 
@@ -211,19 +210,11 @@ def main(config = None, verbose = True):
             write_numpy_deflated(tmp_fname_bs, hdf['TS_M09_DEGC_AVG'][:])
             read_flat(tmp_fname_bs, SPARSE_M09_N, tsurf)
 
-        # Pre-populate the final land mask (for M09 output); if we're not
-        #   using M09 output, then every 9-km pixel is valid
-        if config['model']['output_format'] != 'M09':
-            for i in prange(SPARSE_M09_N, nogil = True):
-                PFT_MASK[i] = 1 # Default: Every 9-km pixel is valid
-
         # Iterate over 9-km grid
         for i in prange(SPARSE_M09_N, nogil = True):
             par[i] = photosynth_active_radiation(swrad[i])
             vpd[i] = vapor_pressure_deficit(qv2m[i], ps[i], t2m[i])
             smrz[i] = rescale_smrz(smrz0[i], SMRZ_MIN[i], SMRZ_MAX[i])
-            if PFT_MASK[i] == 0:
-                continue # Skip pixels not in our land mask
 
             # TODO See if it is actually faster to do this in a single thread
             #   i.e., with range(); could be overhead assoc. with small task
@@ -368,11 +359,6 @@ def load_state(config):
     ancillary_file_bs = config['data']['ancillary']['file'].encode('UTF-8')
     pft_map_field = config['data']['ancillary']['PFT_map'].encode('UTF-8')
     read_hdf5(ancillary_file_bs, pft_map_field, H5T_STD_U8LE, PFT)
-    # Also read in the land mask, if applicable
-    if config['model']['output_format'] == 'M09':
-        pft_mask_field = config['data']['ancillary']['PFT_mask'].encode('UTF-8')
-        read_hdf5(ancillary_file_bs, pft_mask_field, H5T_STD_U8LE, h5_pft_mask)
-        PFT_MASK = deflate(h5_pft_mask, DFNT_UINT8, 'M09'.encode('UTF-8'))
     # Load ancillary files: min and max root-zone soil moisture (SMRZ);
     #   we write these NumPy arrays to deflated flat files in memory,
     #   then read them back in

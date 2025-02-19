@@ -8,7 +8,6 @@ data:
   ancillary:
     file: /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4_C_Ancillary_v7.4.1.h5
     PFT_map: MCD12Q1_M01land_lc_dom_uint8 # Name of the map of plant functional types (PFT) field
-    PFT_mask: MCD12Q1_M09_lc_mask_uint8 # Name of the final output land mask
   # SOC restart file (includes NPP and global SMRZ_min, SMRZ_max)
   restart:
     smrz_max: Natv91_daily_smrz_M09_max # Name of the SMRZ_max field
