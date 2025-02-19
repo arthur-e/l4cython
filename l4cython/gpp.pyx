@@ -282,18 +282,9 @@ def main(config = None, verbose = True):
             '%s/L4Cython_%%s_%s_%s.flt32' % (out_dir, date_str, fmt))
         output_fields = list(map(
             lambda x: x.upper(), config['model']['output_fields']))
-        if 'F_TMIN' in output_fields:
-            output_filename = (output_fname_tpl % 'fTmin').encode('UTF-8')
-            write_numpy_inflated(output_filename, to_numpy(f_tmin, SPARSE_M09_N))
-        if 'F_VPD' in output_fields:
-            output_filename = (output_fname_tpl % 'fVPD').encode('UTF-8')
-            write_numpy_inflated(output_filename, to_numpy(f_vpd, SPARSE_M09_N))
-        if 'F_SMRZ' in output_fields:
-            output_filename = (output_fname_tpl % 'fSMRZ').encode('UTF-8')
-            write_numpy_inflated(output_filename, to_numpy(f_smrz, SPARSE_M09_N))
-        if 'F_FT' in output_fields:
-            output_filename = (output_fname_tpl % 'fFT').encode('UTF-8')
-            write_numpy_inflated(output_filename, to_numpy(ft, SPARSE_M09_N))
+
+        # TODO NOTE That these output fields are still not written correctly;
+        #   the output (inflated) file shows striping
         if fmt in ('M09', 'M09land'):
             inflated = 1 if fmt == 'M09' else 0
             if 'GPP' in output_fields:
@@ -305,6 +296,18 @@ def main(config = None, verbose = True):
             if 'EMULT' in output_fields:
                 output_filename = (output_fname_tpl % 'Emult').encode('UTF-8')
                 write_resampled(output_filename, e_mult, inflated)
+            if 'F_TMIN' in output_fields:
+                output_filename = (output_fname_tpl % 'fTmin').encode('UTF-8')
+                write_resampled(output_filename, f_tmin, inflated)
+            if 'F_VPD' in output_fields:
+                output_filename = (output_fname_tpl % 'fVPD').encode('UTF-8')
+                write_resampled(output_filename, f_vpd, inflated)
+            if 'F_SMRZ' in output_fields:
+                output_filename = (output_fname_tpl % 'fSMRZ').encode('UTF-8')
+                write_resampled(output_filename, f_smrz, inflated)
+            if 'F_FT' in output_fields:
+                output_filename = (output_fname_tpl % 'fFT').encode('UTF-8')
+                write_resampled(output_filename, ft, inflated)
             if DEBUG == 1:
                 output_filename = (output_fname_tpl % 'fPAR').encode('UTF-8')
                 write_resampled(output_filename, fpar_final, inflated)
