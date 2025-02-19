@@ -8,7 +8,8 @@ data:
   ancillary:
     file: /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4_C_Ancillary_v7.4.1.h5
     PFT_map: MCD12Q1_M01land_lc_dom_uint8 # Name of the map of plant functional types (PFT) field
-  # SOC restart file (includes NPP and global SMRZ_min, SMRZ_max)
+  # SOC restart file (includes NPP and global SMRZ_min, SMRZ_max);
+  #   SMRZ_min and SMRZ_max are in wetness units on [0,1] (proportion)
   restart:
     smrz_max: Natv91_daily_smrz_M09_max # Name of the SMRZ_max field
     smrz_min: Natv91_daily_smrz_M09_min
@@ -18,7 +19,10 @@ data:
   drivers:
     # fPAR (unsigned 8-bit integer, 0-100%)
     fpar: /anx_lagr4/SMAP/L4C_drivers/Version7/L4C_MOD/L4_C_mod_%sT000000_Vv7042_001.h5 # Canopy fPAR
-    other: /anx_lagr4/SMAP/L4C_drivers/Version7/L4C_MET/L4_C_met_%sT000000_Vv7042_001.h5 # All others (from re-analysis data)
+    # All others (from re-analysis data)
+    #   SM_ROOTZONE_WETNESS in wetness units on [0,1] (proportion)
+    #   SM_SURFACE_WETNESS in wetness units on [0,1] (proportion)
+    other: /anx_lagr4/SMAP/L4C_drivers/Version7/L4C_MET/L4_C_met_%sT000000_Vv7042_001.h5
 model:
   output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250212
   # Valid output fields include: "GPP", "NPP", "Emult", "f_Tmin", "f_VPD", "f_SMRZ", "f_FT"
@@ -26,4 +30,8 @@ model:
   - GPP
   - NPP
   - Emult
+  - f_Tmin
+  - f_VPD
+  - f_SMRZ
+  - f_FT
   output_format: M09 # "M09land" for flat (1D) output

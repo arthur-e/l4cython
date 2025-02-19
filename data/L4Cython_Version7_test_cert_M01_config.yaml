@@ -26,8 +26,8 @@ data:
   drivers:
     # fPAR (unsigned 8-bit integer, 0-100%), should be an L4CMOD granule
     fpar: /anx_lagr4/SMAP/L4C_drivers/Version7/L4C_MOD/L4_C_mod_%sT000000_Vv7042_001.h5 # Canopy fPAR
-    smrz0: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/data/Y2015/L4CMET_Version7_smrz0_M09land_%s.flt32 # Root-zone soil wetness (%) on [0,100]
-    smsf: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/data/Y2015/L4CMET_Version7_smsf_M09land_%s.flt32 # Surface soil wetness (%) on [0,100]
+    smrz0: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/data/Y2015/L4CMET_Version7_smrz0_M09land_%s.flt32 # Root-zone soil wetness on [0,1]
+    smsf: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/data/Y2015/L4CMET_Version7_smsf_M09land_%s.flt32 # Surface soil wetness on [0,1]
     tsoil: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/data/Y2015/L4CMET_Version7_tsoil_M09land_%s.flt32 # Soil temperature [deg K]
     # MERRA-2 daily variables, in their original units
     tmin: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/data/Y%s/L4CMET_Version7_Tmin_M09land_%s.flt32

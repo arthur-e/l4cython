@@ -214,7 +214,8 @@ def main(config = None, verbose = True):
         for i in prange(SPARSE_M09_N, nogil = True):
             par[i] = photosynth_active_radiation(swrad[i])
             vpd[i] = vapor_pressure_deficit(qv2m[i], ps[i], t2m[i])
-            smrz[i] = rescale_smrz(smrz0[i], SMRZ_MIN[i], SMRZ_MAX[i])
+            smrz[i] = rescale_smrz(
+                100.0 * smrz0[i], 100.0 * SMRZ_MIN[i], 100.0 * SMRZ_MAX[i])
 
             # TODO See if it is actually faster to do this in a single thread
             #   i.e., with range(); could be overhead assoc. with small task
