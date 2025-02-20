@@ -107,7 +107,7 @@ def main(config = None, verbose = True):
 
     # Read in configuration file, then load state data
     if config is None:
-        config = '../data/L4Cython_RECO_M01_config.yaml'
+        config = '../data/L4Cython_RECO_config.yaml'
     if isinstance(config, str) and verbose:
         print(f'Using config file: {config}')
     if isinstance(config, str):

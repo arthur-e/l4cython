@@ -106,7 +106,7 @@ def main(config = None, verbose = True):
 
     # Read in configuration file, then load the global state variables
     if config is None:
-        config = '../data/L4Cython_GPP_M01_config.yaml'
+        config = '../data/L4Cython_GPP_config.yaml'
     if isinstance(config, str) and verbose:
         print(f'Using config file: {config}')
     if isinstance(config, str):
