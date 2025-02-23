@@ -2,10 +2,6 @@
 # distutils: sources = ["utils/src/spland.c", "utils/src/uuta.c"]
 
 '''
-TODO:
-
-- [ ] Confirm that rescaled SMRZ and f(SMRZ) look reasonable
-
 Assumptions:
 
 - The fPAR dataset (an HDF5 file) has a field "fpar_M01" that contains the
@@ -287,8 +283,6 @@ def main(config = None, verbose = True):
         output_fields = list(map(
             lambda x: x.upper(), config['model']['output_fields']))
 
-        # TODO NOTE That these output fields are still not written correctly;
-        #   the output (inflated) file shows striping
         if fmt in ('M09', 'M09land'):
             inflated = 1 if fmt == 'M09' else 0
             if 'GPP' in output_fields:

@@ -41,7 +41,7 @@ from tempfile import NamedTemporaryFile
 import h5py
 from l4cython.constraints cimport arrhenius, linear_constraint
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
-from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE, H5T_IEEE_F32LE
+from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.fixtures import READ, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
@@ -61,20 +61,11 @@ cdef:
     float TSOIL1 = 66.02 # deg K
     float TSOIL2 = 227.13 # deg K
     unsigned char* PFT
-    unsigned char* SOC0_UINT8
-    unsigned char* SOC1_UINT8
-    unsigned char* SOC2_UINT8
-    unsigned char* LITTERFALL_UINT8
     float* SOC0
     float* SOC1
     float* SOC2
     float* LITTERFALL
 PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
-# Trying this out as a way to use deflate(), inflate() with non-uint8 data
-SOC0_UINT8 = <unsigned char*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-SOC1_UINT8 = <unsigned char*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-SOC2_UINT8 = <unsigned char*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-LITTERFALL_UINT8 = <unsigned char*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
@@ -212,9 +203,10 @@ def main(config = None, verbose = True):
                     continue # Skip invalid PFTs
                 # Compute daily fraction of litterfall entering SOC pools
                 litter = LITTERFALL[k] * (fmax(0, litter_rate[k]) / n_litter_days)
-                # Compute daily RH based on moisture, temperature constraints
+                # Compute daily RH based on moisture, temperature constraints;
+                #   convert SMSF to % wetness
                 w_mult[k] = linear_constraint(
-                    smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
+                    smsf[i] * 100.0, PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
                 t_mult[k] = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
                 k_mult = w_mult[k] * t_mult[k]
                 rh0[k] = k_mult * SOC0[k] * PARAMS.decay_rate[0][pft]
@@ -259,6 +251,10 @@ def main(config = None, verbose = True):
                 output_filename = ('%s/L4Cython_Wmult_%s_%s.flt32' % (out_dir, date_str, fmt))\
                     .encode('UTF-8')
                 write_resampled(output_filename, w_mult, inflated)
+            if 'SOC' in config['model']['output_fields']:
+                output_filename = ('%s/L4Cython_SOC_%s_%s.flt32' % (out_dir, date_str, fmt))\
+                    .encode('UTF-8')
+                write_resampled(output_filename, soc_total, inflated)
         else:
             if 'RH' in config['model']['output_fields']:
                 OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
@@ -276,6 +272,10 @@ def main(config = None, verbose = True):
                 OUT_M01 = to_numpy(w_mult, SPARSE_M01_N)
                 OUT_M01.tofile(
                     '%s/L4Cython_Wmult_%s_M01land.flt32' % (out_dir, date_str))
+            if 'SOC' in config['model']['output_fields']:
+                OUT_M01 = to_numpy(soc_total, SPARSE_M01_N)
+                OUT_M01.tofile(
+                    '%s/L4Cython_SOC_%s_M01land.flt32' % (out_dir, date_str))
     PyMem_Free(PFT)
     PyMem_Free(LITTERFALL)
     PyMem_Free(SOC0)
@@ -304,14 +304,6 @@ def load_state(config):
     config : dict
         The configuration data dictionary
     '''
-    # These have to be allocated differently for use with low-level functions;
-    #   note that the allocation type is uint8 but we use this array buffer
-    #   to store floats (sized appropriately)
-    in_bytes = size_in_bytes(DFNT_FLOAT32) * NCOL1KM * NROW1KM
-    h5_litterfall = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-    h5_soc0 = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-    h5_soc1 = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-    h5_soc2 = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
     # Allocate space, read in 1-km PFT map
     ancillary_file_bs = config['data']['ancillary']['file'].encode('UTF-8')
     pft_map_field = config['data']['ancillary']['PFT_map'].encode('UTF-8')
@@ -321,37 +313,35 @@ def load_state(config):
     restart_file_bs = config['data']['restart']['file'].encode('UTF-8')
     # Read in SOC datasets
     soc_fields = config['data']['restart']['SOC']
-    read_hdf5(
-        restart_file_bs, soc_fields[0].encode('UTF-8'), H5T_IEEE_F32LE, h5_soc0)
-    read_hdf5(
-        restart_file_bs, soc_fields[1].encode('UTF-8'), H5T_IEEE_F32LE, h5_soc1)
-    read_hdf5(
-        restart_file_bs, soc_fields[2].encode('UTF-8'), H5T_IEEE_F32LE, h5_soc2)
-    SOC0_UINT8 = deflate(h5_soc0, DFNT_FLOAT32, 'M01'.encode('UTF-8'))
-    SOC1_UINT8 = deflate(h5_soc1, DFNT_FLOAT32, 'M01'.encode('UTF-8'))
-    SOC2_UINT8 = deflate(h5_soc2, DFNT_FLOAT32, 'M01'.encode('UTF-8'))
+    # We re-use a single NamedTemporaryFile(), overwriting its contents
+    #   without creating a new instance; there should be little risk in
+    #  this because each array is the same size
+    tmp = NamedTemporaryFile()
+    tmp_fname_bs = tmp.name.encode('UTF-8')
+    with h5py.File(restart_file_bs, 'r') as hdf:
+        write_numpy_deflated(
+            tmp_fname_bs, hdf[soc_fields[0]][:], grid = 'M01')
+        read_flat(tmp_fname_bs, SPARSE_M01_N, SOC0)
+        write_numpy_deflated(
+            tmp_fname_bs, hdf[soc_fields[1]][:], grid = 'M01')
+        read_flat(tmp_fname_bs, SPARSE_M01_N, SOC1)
+        write_numpy_deflated(
+            tmp_fname_bs, hdf[soc_fields[2]][:], grid = 'M01')
+        read_flat(tmp_fname_bs, SPARSE_M01_N, SOC2)
+        # Now, for litterfall (annual sum of NPP)
+        npp_field = config['data']['restart']['NPP']
+        write_numpy_deflated(
+            tmp_fname_bs, hdf[npp_field][:], grid = 'M01')
+        read_flat(tmp_fname_bs, SPARSE_M01_N, LITTERFALL)
 
     # NOTE: Calculating litterfall as average daily NPP (constant fraction of
     #   the annual NPP sum)
-    npp_field = config['data']['restart']['NPP'].encode('UTF-8')
-    # When reading in the litterfall data, we have to first accept it as
-    #   a uint8 because of deflate()
-    read_hdf5(restart_file_bs, npp_field, H5T_IEEE_F32LE, h5_litterfall)
-    LITTERFALL_UINT8 = deflate(h5_litterfall, DFNT_FLOAT32, 'M01'.encode('UTF-8'))
     for i in range(SPARSE_M01_N):
         # Set any negative values (really just -9999) to zero
-        SOC0[i] = fmax(0, <float>SOC0_UINT8[i])
-        SOC1[i] = fmax(0, <float>SOC1_UINT8[i])
-        SOC2[i] = fmax(0, <float>SOC2_UINT8[i])
-        LITTERFALL[i] = fmax(0, <float>LITTERFALL_UINT8[i])
-    PyMem_Free(LITTERFALL_UINT8)
-    PyMem_Free(SOC0_UINT8)
-    PyMem_Free(SOC1_UINT8)
-    PyMem_Free(SOC2_UINT8)
-    free(h5_litterfall)
-    free(h5_soc0)
-    free(h5_soc1)
-    free(h5_soc2)
+        SOC0[i] = fmax(0, SOC0[i])
+        SOC1[i] = fmax(0, SOC1[i])
+        SOC2[i] = fmax(0, SOC2[i])
+        LITTERFALL[i] = fmax(0, LITTERFALL[i])
 
 
 cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
