@@ -44,7 +44,7 @@ cdef inline unsigned char* deflate(unsigned char* grid_array, unsigned short dat
     Returns
     -------
     unsigned char*
-        Return type is a guess, but it is the deflated array
+        The deflated array
     '''
     # NOTE: The flat_array and grid_array are handled as uint8 regardless of
     #   what the actual data type is; it just works this way in spland.c
@@ -98,7 +98,7 @@ cdef inline unsigned char* inflate(unsigned char* flat_array, unsigned short dat
     Returns
     -------
     unsigned char*
-        Return type is a guess, but it is the inflated array
+        The inflated array
     '''
     # NOTE: The flat_array and grid_array are handled as uint8 regardless of
     #   what the actual data type is; it just works this way in spland.c

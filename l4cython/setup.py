@@ -45,12 +45,16 @@ reco = Extension(
     name = 'reco',
     sources = ['reco.pyx'],
     define_macros = MACROS,
-    libraries = ['dfalt'],
-    include_dirs = ['/usr/include', '/usr/include/hdf', './utils'],
-    extra_compile_args = [
-        '-fopenmp', '-DHAVE_HDF4', '-ldfalt', '-Wno-maybe-uninitialized', '-g1'
+    libraries = ['dfalt', 'hdf5'],
+    include_dirs = [
+        '/usr/include', '/usr/include/hdf', './utils',
+        '/usr/include/hdf5/openmpi/', # Also required for hdf5.pxd
+        '/usr/lib/x86_64-linux-gnu/openmpi/include/' # Also required for hdf5.pxd
     ],
-    extra_link_args = ['-fopenmp']
+    extra_compile_args = [
+        '-fopenmp', '-DHAVE_HDF4', '-ldfalt', '-lhdf5', '-Wno-maybe-uninitialized', '-g1'
+    ],
+    extra_link_args = ['-fopenmp', '-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']
 )
 
 spinup = Extension(

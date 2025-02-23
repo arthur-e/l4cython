@@ -1,4 +1,5 @@
 # cython: language_level=3
+# distutils: sources = ["utils/src/spland.c", "utils/src/uuta.c"]
 
 '''
 SMAP Level 4 Carbon (L4C) heterotrophic respiration (RH) and NEE calculation
@@ -31,14 +32,19 @@ import cython
 import datetime
 import yaml
 import numpy as np
+from libc.stdlib cimport calloc, free
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
+from tempfile import NamedTemporaryFile
+import h5py
 from l4cython.constraints cimport arrhenius, linear_constraint
 from l4cython.utils cimport BPLUT, open_fid, to_numpy
-from l4cython.utils.mkgrid import write_numpy_inflated
-from l4cython.utils.fixtures import READ, DFNT_FLOAT32, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
+from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE, H5T_IEEE_F32LE
+from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
+from l4cython.utils.mkgrid cimport deflate, size_in_bytes
+from l4cython.utils.fixtures import READ, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 from tqdm import tqdm
 
@@ -55,15 +61,24 @@ cdef:
     float TSOIL1 = 66.02 # deg K
     float TSOIL2 = 227.13 # deg K
     unsigned char* PFT
+    unsigned char* SOC0_UINT8
+    unsigned char* SOC1_UINT8
+    unsigned char* SOC2_UINT8
+    unsigned char* LITTERFALL_UINT8
     float* SOC0
     float* SOC1
     float* SOC2
     float* LITTERFALL
 PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+# Trying this out as a way to use deflate(), inflate() with non-uint8 data
+SOC0_UINT8 = <unsigned char*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+SOC1_UINT8 = <unsigned char*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+SOC2_UINT8 = <unsigned char*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+LITTERFALL_UINT8 = <unsigned char*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-LITTERFALL  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+LITTERFALL = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
 # Python arrays that want heap allocations must be global; this one is reused
 #   for any array that needs to be written to disk (using NumPy)
@@ -150,14 +165,20 @@ def main(config = None, verbose = True):
         date_str = date.strftime('%Y%m%d')
         doy = int(date.strftime('%j'))
         # Read in soil moisture ("smsf") and soil temperature ("tsoil") data
-        fid = open_fid(
-            (config['data']['drivers']['smsf'] % date_str).encode('UTF-8'), READ)
-        fread(smsf, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
-        fid = open_fid(
-            (config['data']['drivers']['tsoil'] % date_str).encode('UTF-8'), READ)
-        fread(tsoil, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
+        # We re-use a single NamedTemporaryFile(), overwriting its contents
+        #   without creating a new instance; there should be little risk in
+        #  this because each array is the same size
+        tmp = NamedTemporaryFile()
+        tmp_fname_bs = tmp.name.encode('UTF-8')
+        with h5py.File(
+                config['data']['drivers']['file'] % date_str, 'r') as hdf:
+            # SMSF
+            write_numpy_deflated(tmp_fname_bs, hdf['SM_SURFACE_WETNESS'][:])
+            read_flat(tmp_fname_bs, SPARSE_M09_N, smsf)
+            # Tsoil
+            write_numpy_deflated(tmp_fname_bs, hdf['SOIL_TEMP_LAYER1'][:])
+            read_flat(tmp_fname_bs, SPARSE_M09_N, tsoil)
+
         # Read in the GPP data
         fid = open_fid(
             (config['data']['drivers']['GPP'] % date_str).encode('UTF-8'), READ)
@@ -283,34 +304,54 @@ def load_state(config):
     config : dict
         The configuration data dictionary
     '''
+    # These have to be allocated differently for use with low-level functions;
+    #   note that the allocation type is uint8 but we use this array buffer
+    #   to store floats (sized appropriately)
+    in_bytes = size_in_bytes(DFNT_FLOAT32) * NCOL1KM * NROW1KM
+    h5_litterfall = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    h5_soc0 = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    h5_soc1 = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    h5_soc2 = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
     # Allocate space, read in 1-km PFT map
-    n_bytes = sizeof(unsigned char)*SPARSE_M01_N
-    fid = open_fid(config['data']['PFT_map'].encode('UTF-8'), READ)
-    fread(PFT, sizeof(unsigned char), <size_t>n_bytes, fid)
-    fclose(fid)
-    # Allocate space for floating-point state datasets
-    n_bytes = sizeof(float)*SPARSE_M01_N
+    ancillary_file_bs = config['data']['ancillary']['file'].encode('UTF-8')
+    pft_map_field = config['data']['ancillary']['PFT_map'].encode('UTF-8')
+    read_hdf5(ancillary_file_bs, pft_map_field, H5T_STD_U8LE, PFT)
+
+    # SOC and NPP are found in the restart file
+    restart_file_bs = config['data']['restart']['file'].encode('UTF-8')
     # Read in SOC datasets
-    fid = open_fid(config['data']['SOC'][0].encode('UTF-8'), READ)
-    fread(SOC0, sizeof(float), <size_t>n_bytes, fid)
-    fclose(fid)
-    fid = open_fid(config['data']['SOC'][1].encode('UTF-8'), READ)
-    fread(SOC1, sizeof(float), <size_t>n_bytes, fid)
-    fclose(fid)
-    fid = open_fid(config['data']['SOC'][2].encode('UTF-8'), READ)
-    fread(SOC2, sizeof(float), <size_t>n_bytes, fid)
-    fclose(fid)
+    soc_fields = config['data']['restart']['SOC']
+    read_hdf5(
+        restart_file_bs, soc_fields[0].encode('UTF-8'), H5T_IEEE_F32LE, h5_soc0)
+    read_hdf5(
+        restart_file_bs, soc_fields[1].encode('UTF-8'), H5T_IEEE_F32LE, h5_soc1)
+    read_hdf5(
+        restart_file_bs, soc_fields[2].encode('UTF-8'), H5T_IEEE_F32LE, h5_soc2)
+    SOC0_UINT8 = deflate(h5_soc0, DFNT_FLOAT32, 'M01'.encode('UTF-8'))
+    SOC1_UINT8 = deflate(h5_soc1, DFNT_FLOAT32, 'M01'.encode('UTF-8'))
+    SOC2_UINT8 = deflate(h5_soc2, DFNT_FLOAT32, 'M01'.encode('UTF-8'))
+
     # NOTE: Calculating litterfall as average daily NPP (constant fraction of
     #   the annual NPP sum)
-    fid = open_fid(config['data']['NPP_annual_sum'].encode('UTF-8'), READ)
-    fread(LITTERFALL, sizeof(float), <size_t>n_bytes, fid)
-    fclose(fid)
+    npp_field = config['data']['restart']['NPP'].encode('UTF-8')
+    # When reading in the litterfall data, we have to first accept it as
+    #   a uint8 because of deflate()
+    read_hdf5(restart_file_bs, npp_field, H5T_IEEE_F32LE, h5_litterfall)
+    LITTERFALL_UINT8 = deflate(h5_litterfall, DFNT_FLOAT32, 'M01'.encode('UTF-8'))
     for i in range(SPARSE_M01_N):
         # Set any negative values (really just -9999) to zero
-        SOC0[i] = fmax(0, SOC0[i])
-        SOC1[i] = fmax(0, SOC1[i])
-        SOC2[i] = fmax(0, SOC2[i])
-        LITTERFALL[i] = fmax(0, LITTERFALL[i])
+        SOC0[i] = fmax(0, <float>SOC0_UINT8[i])
+        SOC1[i] = fmax(0, <float>SOC1_UINT8[i])
+        SOC2[i] = fmax(0, <float>SOC2_UINT8[i])
+        LITTERFALL[i] = fmax(0, <float>LITTERFALL_UINT8[i])
+    PyMem_Free(LITTERFALL_UINT8)
+    PyMem_Free(SOC0_UINT8)
+    PyMem_Free(SOC1_UINT8)
+    PyMem_Free(SOC2_UINT8)
+    free(h5_litterfall)
+    free(h5_soc0)
+    free(h5_soc1)
+    free(h5_soc2)
 
 
 cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
@@ -343,7 +384,26 @@ cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
     return valid
 
 
-cdef void write_resampled(bytes output_filename, float* array_data, int inflated = 1):
+cdef inline void read_flat(char* filename, int n_elem, float* arr):
+    '''
+    Reads in global, 9-km data from a flat file (*.flt32).
+
+    Parameters
+    ----------
+    filename : char*
+        The filename to read
+    n_elem : int
+        The number of array elements
+    arr : float*
+        The destination array buffer
+    '''
+    fid = open_fid(filename, READ)
+    fread(arr, sizeof(float), <size_t>sizeof(float)*n_elem, fid)
+    fclose(fid)
+
+
+cdef void write_resampled(
+        bytes output_filename, float* array_data, int inflated = 1):
     '''
     Resamples a 1-km array to 9-km, then writes the output to a file.
 

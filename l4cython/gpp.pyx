@@ -2,6 +2,10 @@
 # distutils: sources = ["utils/src/spland.c", "utils/src/uuta.c"]
 
 '''
+TODO:
+
+- [ ] Confirm that rescaled SMRZ and f(SMRZ) look reasonable
+
 Assumptions:
 
 - The fPAR dataset (an HDF5 file) has a field "fpar_M01" that contains the
@@ -13,19 +17,19 @@ import datetime
 import yaml
 import numpy as np
 import h5py
-from bisect import bisect_right
-from tempfile import NamedTemporaryFile
 from libc.stdlib cimport calloc, free
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
+from bisect import bisect_right
+from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport linear_constraint
 from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
 from l4cython.utils cimport BPLUT, open_fid, to_numpy, to_numpy_char # FIXME
+from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE, H5T_IEEE_F32LE
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated, deflate_file
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
-from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE, H5T_IEEE_F32LE
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.fixtures import READ, DFNT_UINT8, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
@@ -183,10 +187,10 @@ def main(config = None, verbose = True):
         tmp_fname_bs = tmp.name.encode('UTF-8')
         # NOTE: Alternatively, try reading with read_hdf5, then copying the
         #   array (element-wise) into an unsigned char* buffer
-        # fname_bs = (config['data']['drivers']['other'] % date_str).encode('UTF-8')
+        # fname_bs = (config['data']['drivers']['file'] % date_str).encode('UTF-8')
         # read_hdf5(fname_bs, 'QV2M_M09_AVG', H5T_IEEE_F32LE, qv2m)
         with h5py.File(
-                config['data']['drivers']['other'] % date_str, 'r') as hdf:
+                config['data']['drivers']['file'] % date_str, 'r') as hdf:
             # SWRAD
             write_numpy_deflated(tmp_fname_bs, hdf['RADIATION_SHORTWAVE_DOWNWARD_FLUX'][:])
             read_flat(tmp_fname_bs, SPARSE_M09_N, swrad)
@@ -357,8 +361,6 @@ def load_state(config):
     config : dict
         The configuration data dictionary
     '''
-    in_bytes = size_in_bytes(DFNT_UINT8) * NCOL9KM * NROW9KM
-    h5_pft_mask = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
     # Allocate space, read in 1-km PFT map
     ancillary_file_bs = config['data']['ancillary']['file'].encode('UTF-8')
     pft_map_field = config['data']['ancillary']['PFT_map'].encode('UTF-8')
@@ -375,7 +377,6 @@ def load_state(config):
     with NamedTemporaryFile() as tmp:
         write_numpy_deflated(tmp.name.encode('UTF-8'), smrz_min)
         read_flat(tmp.name.encode('UTF-8'), SPARSE_M09_N, SMRZ_MIN)
-    free(h5_pft_mask)
 
 
 def mod15a2h_qc_fail(x):
