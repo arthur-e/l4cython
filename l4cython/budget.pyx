@@ -341,6 +341,7 @@ def main(config = None, verbose = True):
 
                 # Compute GPP and NPP
                 gpp[k] = fpar * par[i] * e_mult[k] * PARAMS.lue[pft]
+                gpp[k] = fmax(0, gpp[k]) # Guard against negative values
                 npp[k] = gpp[k] * PARAMS.cue[pft]
 
                 # Compute daily fraction of litterfall entering SOC pools

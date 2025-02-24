@@ -272,6 +272,7 @@ def main(config = None, verbose = True):
 
                 # Finally, compute GPP and NPP
                 gpp[k] = fpar * par[i] * e_mult[k] * PARAMS.lue[pft]
+                gpp[k] = fmax(0, gpp[k]) # Guard against negative values
                 npp[k] = gpp[k] * PARAMS.cue[pft]
 
 
@@ -306,9 +307,12 @@ def main(config = None, verbose = True):
             if 'F_FT' in output_fields:
                 output_filename = (output_fname_tpl % 'fFT').encode('UTF-8')
                 write_resampled(output_filename, ft, inflated)
+            # In DEBUG mode, output fields also include: fPAR, PAR
             if DEBUG == 1:
                 output_filename = (output_fname_tpl % 'fPAR').encode('UTF-8')
                 write_resampled(output_filename, fpar_final, inflated)
+                output_filename = (output_fname_tpl % 'PAR').encode('UTF-8')
+                write_numpy_inflated(output_filename, to_numpy(par, SPARSE_M09_N))
         else:
             if 'GPP' in output_fields:
                 OUT_M01 = to_numpy(gpp, SPARSE_M01_N)
