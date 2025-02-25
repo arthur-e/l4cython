@@ -43,11 +43,12 @@ from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from l4cython.constraints cimport arrhenius, linear_constraint
 from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
-from l4cython.utils cimport BPLUT, open_fid, to_numpy
+from l4cython.utils cimport BPLUT
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE, H5T_IEEE_F32LE
 from l4cython.utils.fixtures import READ, DFNT_UINT8, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
+from l4cython.utils.io cimport open_fid, read_flat, read_flat_short, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from tqdm import tqdm
@@ -114,10 +115,10 @@ def main(config = None, verbose = True):
         float k_mult
 
     # 9-km (M09) heap allocations, for RECO
-    smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    smsf  = <short int*> PyMem_Malloc(sizeof(short int) * SPARSE_M09_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     # For GPP
-    smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    smrz0 = <short int*> PyMem_Malloc(sizeof(short int) * SPARSE_M09_N)
     smrz  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     swrad = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     t2m   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -151,7 +152,7 @@ def main(config = None, verbose = True):
 
     # Read in configuration file, then load state data
     if config is None:
-        config = '../data/L4Cython_M01_config.yaml'
+        config = '../data/L4Cython_config.yaml'
     if isinstance(config, str) and verbose:
         print(f'Using config file: {config}')
     if isinstance(config, str):
@@ -214,8 +215,8 @@ def main(config = None, verbose = True):
 
         # Read in soil moisture ("smsf" and "smrz") and soil temperature ("tsoil") data
         drivers = config['data']['drivers']
-        read_flat((drivers['smsf'] % date_str).encode('UTF-8'), SPARSE_M09_N, smsf)
-        read_flat((drivers['smrz0'] % date_str).encode('UTF-8'), SPARSE_M09_N, smrz0)
+        read_flat_short((drivers['smsf'] % date_str).encode('UTF-8'), SPARSE_M09_N, smsf)
+        read_flat_short((drivers['smrz0'] % date_str).encode('UTF-8'), SPARSE_M09_N, smrz0)
         read_flat((drivers['tsoil'] % date_str).encode('UTF-8'), SPARSE_M09_N, tsoil)
         # MERRA-2 daily variables
         read_flat((drivers['tmin'] % (year, date_str)).encode('UTF-8'), SPARSE_M09_N, tmin)
@@ -279,8 +280,9 @@ def main(config = None, verbose = True):
         for i in prange(SPARSE_M09_N, nogil = True):
             par[i] = photosynth_active_radiation(swrad[i])
             vpd[i] = vapor_pressure_deficit(qv2m[i], ps[i], t2m[i])
+            # SMRZ is in parts-per-thousand, convert to wetness (%)
             smrz[i] = rescale_smrz(
-                100.0 * smrz0[i], 100.0 * SMRZ_MIN[i], 100.0 * SMRZ_MAX[i])
+                smrz0[i] / 10.0, 100.0 * SMRZ_MIN[i], 100.0 * SMRZ_MAX[i])
 
             # Iterate over each nested 1-km pixel
             for j in prange(M01_NESTED_IN_M09):
@@ -346,9 +348,10 @@ def main(config = None, verbose = True):
 
                 # Compute daily fraction of litterfall entering SOC pools
                 litter = LITTERFALL[k] * (fmax(0, litter_rate[k]) / n_litter_days)
-                # Compute daily RH based on moisture, temperature constraints
+                # Compute daily RH based on moisture, temperature constraints;
+                #   SMSF is in parts-per-thousand, convert to wetness (%)
                 w_mult[k] = linear_constraint(
-                    smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
+                    smsf[i] / 10.0, PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
                 t_mult[k] = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
                 k_mult = w_mult[k] * t_mult[k]
                 rh0[k] = k_mult * SOC0[k] * PARAMS.decay_rate[0][pft]
@@ -529,24 +532,6 @@ cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
     elif litter <= 0:
         valid = 0
     return valid
-
-
-cdef inline void read_flat(char* filename, int n_elem, float* arr):
-    '''
-    Reads in global, 9-km data from a flat file (*.flt32).
-
-    Parameters
-    ----------
-    filename : char*
-        The filename to read
-    n_elem : int
-        The number of array elements
-    arr : float*
-        The destination array buffer
-    '''
-    fid = open_fid(filename, READ)
-    fread(arr, sizeof(float), <size_t>sizeof(float)*n_elem, fid)
-    fclose(fid)
 
 
 cdef void write_resampled(bytes output_filename, float* array_data, int inflated = 1):

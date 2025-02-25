@@ -26,8 +26,8 @@ data:
   drivers:
     # fPAR (unsigned 8-bit integer, 0-100%), should be an L4CMOD granule
     fpar: /anx_lagr4/SMAP/L4C_drivers/Version7/L4C_MOD/L4_C_mod_%sT000000_Vv7042_001.h5 # Canopy fPAR
-    smrz0: /Stout1/SMAP/L4_SM/NRv11-4/L4_SM_gph_NRv11-4_smrz0_M09land_%s.flt32 # Root-zone soil wetness (%) on [0,100]
-    smsf: /Stout1/SMAP/L4_SM/NRv11-4/L4_SM_gph_NRv11-4_smsf_M09land_%s.flt32 # Surface soil wetness (%) on [0,100]
+    smrz0: /Stout1/SMAP/L4_SM/NRv11-4/L4_SM_gph_NRv11-4_smrz0_M09land_%s.int16 # Root-zone soil wetness (ppt) on [0,1000]
+    smsf: /Stout1/SMAP/L4_SM/NRv11-4/L4_SM_gph_NRv11-4_smsf_M09land_%s.int16 # Surface soil wetness (ppt) on [0,1000]
     tsoil: /Stout1/SMAP/L4_SM/NRv11-4/L4_SM_gph_NRv11-4_tsoil_M09land_%s.flt32 # Soil temperature [deg K]
     # MERRA-2 daily variables, in their original units
     tmin: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_Tmin_%s_M09land.flt32
@@ -40,7 +40,7 @@ model:
   litterfall:
     scheduled: false
     interval_days: 8 # Number of days represented by litterfall rate
-  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250212
+  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250225
   output_fields: # Valid output fields include: "RH", "NEE"
   - NEE
   - RH

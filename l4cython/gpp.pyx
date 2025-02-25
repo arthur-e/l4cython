@@ -32,7 +32,6 @@ import yaml
 import numpy as np
 import h5py
 from libc.stdlib cimport calloc, free
-from libc.stdio cimport FILE, fread, fclose
 from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
@@ -40,8 +39,9 @@ from bisect import bisect_right
 from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport linear_constraint
 from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
-from l4cython.utils cimport BPLUT, open_fid, to_numpy
+from l4cython.utils cimport BPLUT
 from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE, H5T_IEEE_F32LE
+from l4cython.utils.io cimport open_fid, read_flat, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.dec2bin cimport bits_from_uint32
@@ -52,7 +52,6 @@ from tqdm import tqdm
 # EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
 #   can't be Python numbers)
 cdef:
-    FILE* fid
     BPLUT PARAMS
     int   FILL_VALUE = -9999
     int   M01_NESTED_IN_M09 = 9 * 9
@@ -445,24 +444,6 @@ cdef inline char is_valid(char pft) nogil:
     if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
         valid = 0
     return valid
-
-
-cdef inline void read_flat(char* filename, int n_elem, float* arr):
-    '''
-    Reads in global, 9-km data from a flat file (*.flt32).
-
-    Parameters
-    ----------
-    filename : char*
-        The filename to read
-    n_elem : int
-        The number of array elements
-    arr : float*
-        The destination array buffer
-    '''
-    fid = open_fid(filename, READ)
-    fread(arr, sizeof(float), <size_t>sizeof(float)*n_elem, fid)
-    fclose(fid)
 
 
 cdef void write_resampled(

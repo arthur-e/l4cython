@@ -32,16 +32,16 @@ import cython
 import datetime
 import yaml
 import numpy as np
+import h5py
 from libc.stdlib cimport calloc, free
-from libc.stdio cimport FILE, fread, fclose
 from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from tempfile import NamedTemporaryFile
-import h5py
 from l4cython.constraints cimport arrhenius, linear_constraint
-from l4cython.utils cimport BPLUT, open_fid, to_numpy
+from l4cython.utils cimport BPLUT
 from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE
+from l4cython.utils.io cimport open_fid, read_flat, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.fixtures import READ, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
@@ -51,7 +51,6 @@ from tqdm import tqdm
 # EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
 #   can't be Python numbers)
 cdef:
-    FILE* fid
     BPLUT PARAMS
     int   FILL_VALUE = -9999
     int   M01_NESTED_IN_M09 = 9 * 9
@@ -171,19 +170,15 @@ def main(config = None, verbose = True):
             read_flat(tmp_fname_bs, SPARSE_M09_N, tsoil)
 
         # Read in the GPP data
-        fid = open_fid(
-            (config['data']['drivers']['GPP'] % date_str).encode('UTF-8'), READ)
-        fread(gpp, sizeof(float), <size_t>sizeof(float)*SPARSE_M09_N, fid)
-        fclose(fid)
+        fname_bs = (config['data']['drivers']['GPP'] % date_str).encode('UTF-8')
+        read_flat(fname_bs, SPARSE_M09_N, gpp)
 
         # Option to schedule the rate at which litterfall enters SOC pools
         if config['model']['litterfall']['scheduled']:
             # Get the file covering the 8-day period in which this DOY falls
             filename = config['data']['litterfall_schedule']\
                 % str(periods[doy-1]).zfill(2)
-            fid = open_fid(filename.encode('UTF-8'), READ)
-            fread(litter_rate, sizeof(float), <size_t>sizeof(float)*SPARSE_M01_N, fid)
-            fclose(fid)
+            read_flat(filename.encode('UTF-8'), SPARSE_M01_N, litter_rate)
 
         # Iterate over each 9-km pixel
         for i in prange(SPARSE_M09_N, nogil = True):
@@ -372,24 +367,6 @@ cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
     elif litter <= 0:
         valid = 0
     return valid
-
-
-cdef inline void read_flat(char* filename, int n_elem, float* arr):
-    '''
-    Reads in global, 9-km data from a flat file (*.flt32).
-
-    Parameters
-    ----------
-    filename : char*
-        The filename to read
-    n_elem : int
-        The number of array elements
-    arr : float*
-        The destination array buffer
-    '''
-    fid = open_fid(filename, READ)
-    fread(arr, sizeof(float), <size_t>sizeof(float)*n_elem, fid)
-    fclose(fid)
 
 
 cdef void write_resampled(
