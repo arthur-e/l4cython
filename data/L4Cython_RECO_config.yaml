@@ -23,8 +23,9 @@ data:
   drivers:
     # All others (from re-analysis data)
     #   SM_SURFACE_WETNESS in wetness units on [0,1] (proportion)
+    #   SOIL_TEMP_LAYER1 in deg K units
     file: /anx_lagr4/SMAP/L4C_drivers/Version8/L4C_MET/L4_C_met_%sT000000_Vv8020_001.h5
-    # GPP [g C m-2 day-1], only used to calculate NEE
+    # GPP [g C m-2 day-1], only used to calculate NEE; a flat file in M09land format
     GPP: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250224/L4Cython_GPP_%s_M09land.flt32
 model:
   litterfall:

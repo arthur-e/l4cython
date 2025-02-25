@@ -2,6 +2,24 @@
 # distutils: sources = ["utils/src/spland.c", "utils/src/uuta.c"]
 
 '''
+SMAP Level 4 Carbon (L4C) gross primary production (GPP) at 1-km spatial
+resolution. The `main()` routine is optimized for model execution but it may
+take several seconds to load the state data.
+
+After the initial state data are loaded it takes about 15-30 seconds per
+data day when writing one or two fluxes out. Time increases considerably
+with more daily output variables.
+
+Required daily driver data:
+
+- SM_ROOTZONE_WETNESS in wetness units on [0,1] (proportion)
+- RADIATION_SHORTWAVE_DOWNWARD_FLUX [MJ m-2 day-1]
+- T2M_M09_MIN [deg K]
+- T2M_M09_AVG [deg K]
+- QV2M_M09_AVG [dim.]
+- SURFACE_PRESSURE [Pa]
+- TS_M09_DEGC_AVG [deg C]
+
 Assumptions:
 
 - The fPAR dataset (an HDF5 file) has a field "fpar_M01" that contains the
@@ -14,17 +32,17 @@ import yaml
 import numpy as np
 import h5py
 from libc.stdlib cimport calloc, free
-from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
+from libc.stdio cimport FILE, fread, fclose
 from libc.math cimport fmax
 from cython.parallel import prange
-from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
+from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from bisect import bisect_right
 from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport linear_constraint
 from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
-from l4cython.utils cimport BPLUT, open_fid, to_numpy, to_numpy_char # FIXME
+from l4cython.utils cimport BPLUT, open_fid, to_numpy
 from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE, H5T_IEEE_F32LE
-from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated, deflate_file
+from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.fixtures import READ, DFNT_UINT8, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
@@ -65,7 +83,9 @@ PERIODS_DATES_LEAP = [
 @cython.wraparound(False)
 def main(config = None, verbose = True):
     '''
-    Forward run...
+    Forward run of the SMAP Level 4 Carbon (L4C) gross primary productivity
+    (GPP) model. Starts on "origin_date" and continues for the specified
+    number of time steps.
 
     Parameters
     ----------

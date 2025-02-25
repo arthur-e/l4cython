@@ -12,8 +12,8 @@ with more daily output variables.
 
 Required daily driver data:
 
-- Surface soil wetness ("SMSF"), in percentage units [0,100]
-- Soil temperature, in degrees K
+- SM_SURFACE_WETNESS, in percentage units [0,100]
+- SOIL_TEMP_LAYER1, in degrees K
 - Gross primary productivity (GPP), in [g C m-2 day-1]
 
 Developer notes:
@@ -33,10 +33,10 @@ import datetime
 import yaml
 import numpy as np
 from libc.stdlib cimport calloc, free
-from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
+from libc.stdio cimport FILE, fread, fclose
 from libc.math cimport fmax
 from cython.parallel import prange
-from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
+from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from tempfile import NamedTemporaryFile
 import h5py
 from l4cython.constraints cimport arrhenius, linear_constraint
@@ -80,9 +80,9 @@ OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
 @cython.wraparound(False)
 def main(config = None, verbose = True):
     '''
-    Forward run of the L4C soil decomposition and heterotrophic respiration
-    algorithm. Starts on "origin_date" and continues for the specified number
-    of time steps.
+    Forward run of the SMAP Level 4 Carbon (L4C) soil decomposition and
+    heterotrophic respiration algorithm. Starts on "origin_date" and
+    continues for the specified number of time steps.
 
     Parameters
     ----------

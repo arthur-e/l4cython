@@ -19,6 +19,12 @@ data:
   drivers:
     # All others (from re-analysis data)
     #   SM_ROOTZONE_WETNESS in wetness units on [0,1] (proportion)
+    #   RADIATION_SHORTWAVE_DOWNWARD_FLUX [MJ m-2 day-1]
+    #   T2M_M09_MIN [deg K]
+    #   T2M_M09_AVG [deg K]
+    #   QV2M_M09_AVG [dim.]
+    #   SURFACE_PRESSURE [Pa]
+    #   TS_M09_DEGC_AVG [deg C]
     file: /anx_lagr4/SMAP/L4C_drivers/Version8/L4C_MET/L4_C_met_%sT000000_Vv8020_001.h5
     # fPAR (unsigned 8-bit integer, 0-100%)
     fpar: /anx_lagr4/SMAP/L4C_drivers/Version8/L4C_MOD/L4_C_mod_%sT000000_Vv8020_001.h5 # Canopy fPAR
