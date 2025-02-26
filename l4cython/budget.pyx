@@ -50,7 +50,7 @@ from l4cython.utils.fixtures import READ, DFNT_UINT8, DFNT_FLOAT32, NCOL1KM, NRO
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 from l4cython.utils.io cimport open_fid, read_flat, read_flat_short, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated
-from l4cython.utils.mkgrid cimport deflate, size_in_bytes
+from l4cython.utils.mkgrid cimport deflate, resample, size_in_bytes
 from tqdm import tqdm
 
 # EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
@@ -534,33 +534,25 @@ cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
     return valid
 
 
-cdef void write_resampled(bytes output_filename, float* array_data, int inflated = 1):
+cdef void write_resampled(
+        bytes output_filename, float* array_data, int inflated = 1):
     '''
     Resamples a 1-km array to 9-km, then writes the output to a file.
 
     Parameters
     ----------
+    config : dict
     output_filename : bytes
     array_data : *float
     inflated : int
         1 if the output array should be inflated to a 2D global EASE-Grid 2.0
     '''
-    data_resampled = FILL_VALUE * np.ones((SPARSE_M09_N,), np.float32)
-    for i in range(0, SPARSE_M09_N):
-        value = 0
-        count = 0
-        for j in range(0, M01_NESTED_IN_M09):
-            k = (M01_NESTED_IN_M09 * i) + j
-            if array_data[k] == FILL_VALUE:
-                continue # Skip invalid PFTs
-            value += array_data[k]
-            count += 1
-        if count == 0:
-            continue
-        value /= count
-        data_resampled[i] = value
+    cdef float* data_resampled
+    data_resampled = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    data_resampled_np = to_numpy(resample(array_data, data_resampled), SPARSE_M09_N)
     # Write a flat (1D) file or inflate the file and then write
     if inflated == 0:
-        data_resampled.tofile(output_filename.decode('UTF-8'))
+        data_resampled_np.tofile(output_filename.decode('UTF-8'))
     else:
-        write_numpy_inflated(output_filename, data_resampled, grid = 'M09')
+        write_numpy_inflated(output_filename, data_resampled_np, grid = 'M09')
+    PyMem_Free(data_resampled)

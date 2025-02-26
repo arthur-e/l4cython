@@ -6,6 +6,7 @@ from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 
 # EASE-Grid 2.0 params used here can't be Python numbers
 cdef:
+    int  FILL_VALUE = -9999
     int  M01_NESTED_IN_M09 = 9 * 9
     long SPARSE_M09_N = PY_SPARSE_M09_N # Number of grid cells in sparse ("land") arrays
     long SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
@@ -29,7 +30,8 @@ cdef extern from "src/spland.h":
     void set_fillval_UUTA(void* vDest_p, const unsigned int dataType, const size_t atSlot)
 
 
-cdef inline unsigned char* deflate(unsigned char* grid_array, unsigned short data_type, bytes grid):
+cdef inline unsigned char* deflate(
+        unsigned char* grid_array, unsigned short data_type, bytes grid):
     '''
     Parameters
     ----------
@@ -78,7 +80,8 @@ cdef inline unsigned char* deflate(unsigned char* grid_array, unsigned short dat
     return flat_array
 
 
-cdef inline unsigned char* inflate(unsigned char* flat_array, unsigned short data_type, bytes grid):
+cdef inline unsigned char* inflate(
+        unsigned char* flat_array, unsigned short data_type, bytes grid):
     '''
     The inflated array can be written to an output file using, e.g.:
 
@@ -132,3 +135,28 @@ cdef inline unsigned char* inflate(unsigned char* flat_array, unsigned short dat
     free(lookup.row)
     free(lookup.col)
     return grid_array
+
+
+cdef inline float* resample(float* array_data, float* result):
+    '''
+    Resamples a 1-km array to 9-km.
+
+    Parameters
+    ----------
+    array_data : *float
+    result : *float
+    '''
+    for i in range(0, SPARSE_M09_N):
+        value = 0
+        count = 0
+        for j in range(0, M01_NESTED_IN_M09):
+            k = (M01_NESTED_IN_M09 * i) + j
+            if array_data[k] == FILL_VALUE:
+                continue # Skip invalid PFTs
+            value += array_data[k]
+            count += 1
+        if count == 0:
+            continue
+        value /= count
+        result[i] = value
+    return result

@@ -297,7 +297,7 @@ def write_numpy_inflated(
     # Inflate to a 2D grid, then write to file
     if hasattr(grid, 'encode'):
         grid = grid.encode('UTF-8')
-    inflated_array = inflate(flat_array, DFNT_FLOAT32, grid)
+    inflated_array = inflate(flat_array, data_type, grid)
     ofname = output_filename
     fid = open_fid(ofname, WRITE)
     fwrite(inflated_array, sizeof(unsigned char), <size_t>out_bytes, fid)
