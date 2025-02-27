@@ -136,16 +136,17 @@ cdef inline void write_hdf5_dataset(
     '''
     cdef hid_t dest, gid
     # If there is no intermediate group, destination is the file
-    dset_name = field
+    dset_name = field.decode('UTF-8')
     dest = fid
     # In case of an intermediate group, i.e., "group/dataset_name"
-    if '/' in field.decode('UTF-8'):
+    if '/' in dset_name:
         group, dset_name = field.decode('UTF-8').split('/')
-        gid = H5Gcreate(fid, group.encode('UTF-8'), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
-        dset_name = dset_name.encode('UTF-8')
+        gid = H5Gcreate(
+            fid, group.encode('UTF-8'), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
         dest = gid
 
     dset_id = H5Dcreate( # Using H5P_DEFAULT for lcpl_id, dcpl_id, dapl_id
-        dest, dset_name, dtype, dspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
+        dest, dset_name.encode('UTF-8'), dtype, dspace,
+        H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
     H5Dwrite(dset_id, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, buff)
     H5Dclose(dset_id)

@@ -468,7 +468,8 @@ cdef void write_resampled(
     # If writing a binary flat (1D) file, we're already pretty much done
     if output_type == 'BINARY':
         output_filename = (
-            '%s/L4Cython_%s_%s.flt32' % (output_dir, field, _file_stub))
+            '%s/L4Cython_%s_%s.flt32' % (output_dir, field, _file_stub))\
+            .encode('UTF-8')
         if inflated == 1:
             write_numpy_inflated(
                 output_filename, d_resampled_np, grid = 'M09')
