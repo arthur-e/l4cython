@@ -135,28 +135,3 @@ cdef inline unsigned char* inflate(
     free(lookup.row)
     free(lookup.col)
     return grid_array
-
-
-cdef inline float* resample(float* array_data, float* result):
-    '''
-    Resamples a 1-km array to 9-km.
-
-    Parameters
-    ----------
-    array_data : *float
-    result : *float
-    '''
-    for i in range(0, SPARSE_M09_N):
-        value = 0
-        count = 0
-        for j in range(0, M01_NESTED_IN_M09):
-            k = (M01_NESTED_IN_M09 * i) + j
-            if array_data[k] == FILL_VALUE:
-                continue # Skip invalid PFTs
-            value += array_data[k]
-            count += 1
-        if count == 0:
-            continue
-        value /= count
-        result[i] = value
-    return result

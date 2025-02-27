@@ -43,7 +43,7 @@ from l4cython.utils cimport BPLUT
 from l4cython.utils.hdf5 cimport close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset, H5T_STD_U8LE, H5T_IEEE_F32LE
 from l4cython.utils.io cimport open_fid, read_flat, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
-from l4cython.utils.mkgrid cimport deflate, resample, size_in_bytes
+from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.fixtures import READ, DFNT_UINT8, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
@@ -307,29 +307,29 @@ def main(config = None, verbose = True):
             inflated = 1 if fmt == 'M09' else 0
             if 'GPP' in output_fields:
                 output_filename = (output_fname_tpl % 'GPP').encode('UTF-8')
-                write_resampled(output_filename, gpp, inflated)
+                write_resampled(config, output_filename, gpp, inflated)
             if 'NPP' in output_fields:
                 output_filename = (output_fname_tpl % 'NPP').encode('UTF-8')
-                write_resampled(output_filename, npp, inflated)
+                write_resampled(config, output_filename, npp, inflated)
             if 'EMULT' in output_fields:
                 output_filename = (output_fname_tpl % 'Emult').encode('UTF-8')
-                write_resampled(output_filename, e_mult, inflated)
+                write_resampled(config, output_filename, e_mult, inflated)
             if 'F_TMIN' in output_fields:
                 output_filename = (output_fname_tpl % 'fTmin').encode('UTF-8')
-                write_resampled(output_filename, f_tmin, inflated)
+                write_resampled(config, output_filename, f_tmin, inflated)
             if 'F_VPD' in output_fields:
                 output_filename = (output_fname_tpl % 'fVPD').encode('UTF-8')
-                write_resampled(output_filename, f_vpd, inflated)
+                write_resampled(config, output_filename, f_vpd, inflated)
             if 'F_SMRZ' in output_fields:
                 output_filename = (output_fname_tpl % 'fSMRZ').encode('UTF-8')
-                write_resampled(output_filename, f_smrz, inflated)
+                write_resampled(config, output_filename, f_smrz, inflated)
             if 'F_FT' in output_fields:
                 output_filename = (output_fname_tpl % 'fFT').encode('UTF-8')
-                write_resampled(output_filename, ft, inflated)
+                write_resampled(config, output_filename, ft, inflated)
             # In DEBUG mode, output fields also include: fPAR, PAR
             if DEBUG == 1:
                 output_filename = (output_fname_tpl % 'fPAR').encode('UTF-8')
-                write_resampled(output_filename, fpar_final, inflated)
+                write_resampled(config, output_filename, fpar_final, inflated)
                 output_filename = (output_fname_tpl % 'PAR').encode('UTF-8')
                 write_numpy_inflated(output_filename, to_numpy(par, SPARSE_M09_N))
         else:
@@ -447,7 +447,7 @@ cdef inline char is_valid(char pft) nogil:
 
 
 cdef void write_resampled(
-        bytes output_filename, float* array_data, int inflated = 1):
+        dict config, bytes output_filename, float* array_data, int inflated = 1):
     '''
     Resamples a 1-km array to 9-km, then writes the output to a file.
 
@@ -459,12 +459,23 @@ cdef void write_resampled(
     inflated : int
         1 if the output array should be inflated to a 2D global EASE-Grid 2.0
     '''
-    cdef float* data_resampled
-    data_resampled = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    data_resampled_np = to_numpy(resample(array_data, data_resampled), SPARSE_M09_N)
+    data_resampled = FILL_VALUE * np.ones((SPARSE_M09_N,), np.float32)
+    for i in range(0, SPARSE_M09_N):
+        value = 0
+        count = 0
+        for j in range(0, M01_NESTED_IN_M09):
+            k = (M01_NESTED_IN_M09 * i) + j
+            if array_data[k] == FILL_VALUE:
+                continue # Skip invalid PFTs
+            value += array_data[k]
+            count += 1
+        if count == 0:
+            continue
+        value /= count
+        data_resampled[i] = value
+
     # Write a flat (1D) file or inflate the file and then write
     if inflated == 0:
-        data_resampled_np.tofile(output_filename.decode('UTF-8'))
+        data_resampled.tofile(output_filename.decode('UTF-8'))
     else:
-        write_numpy_inflated(output_filename, data_resampled_np, grid = 'M09')
-    PyMem_Free(data_resampled)
+        write_numpy_inflated(output_filename, data_resampled, grid = 'M09')
