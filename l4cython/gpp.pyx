@@ -40,7 +40,7 @@ from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport linear_constraint
 from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
 from l4cython.utils cimport BPLUT
-from l4cython.utils.hdf5 cimport close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset, H5T_STD_U8LE, H5T_IEEE_F32LE
+from l4cython.utils.hdf5 cimport hid_t, hsize_t, create_1d_space, create_2d_space, close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset, H5T_STD_U8LE, H5T_IEEE_F32LE
 from l4cython.utils.io cimport open_fid, read_flat, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
 from l4cython.utils.mkgrid cimport deflate, resample, size_in_bytes
@@ -297,42 +297,30 @@ def main(config = None, verbose = True):
 
         # If averaging from 1-km to 9-km resolution is requested...
         fmt = config['model']['output_format']
-        out_dir = config['model']['output_dir']
-        output_fname_tpl = (
-            '%s/L4Cython_%%s_%s_%s.flt32' % (out_dir, date_str, fmt))
+        file_stub = '%s_%s' % (date_str, fmt) # e.g., "*_YYYYMMDD_M09land_*"
+        file_stub = file_stub.encode('UTF-8')
         output_fields = list(map(
             lambda x: x.upper(), config['model']['output_fields']))
 
         if fmt in ('M09', 'M09land'):
             inflated = 1 if fmt == 'M09' else 0
             if 'GPP' in output_fields:
-                output_filename = (output_fname_tpl % 'GPP').encode('UTF-8')
-                write_resampled(output_filename, gpp, inflated)
+                write_resampled(config, gpp, file_stub, 'GPP', inflated)
             if 'NPP' in output_fields:
-                output_filename = (output_fname_tpl % 'NPP').encode('UTF-8')
-                write_resampled(output_filename, npp, inflated)
+                write_resampled(config, npp, file_stub, 'NPP', inflated)
             if 'EMULT' in output_fields:
-                output_filename = (output_fname_tpl % 'Emult').encode('UTF-8')
-                write_resampled(output_filename, e_mult, inflated)
+                write_resampled(config, e_mult, file_stub, 'Emult', inflated)
             if 'F_TMIN' in output_fields:
-                output_filename = (output_fname_tpl % 'fTmin').encode('UTF-8')
-                write_resampled(output_filename, f_tmin, inflated)
+                write_resampled(config, f_tmin, file_stub, 'f_Tmin', inflated)
             if 'F_VPD' in output_fields:
-                output_filename = (output_fname_tpl % 'fVPD').encode('UTF-8')
-                write_resampled(output_filename, f_vpd, inflated)
+                write_resampled(config, f_vpd, file_stub, 'f_VPD', inflated)
             if 'F_SMRZ' in output_fields:
-                output_filename = (output_fname_tpl % 'fSMRZ').encode('UTF-8')
-                write_resampled(output_filename, f_smrz, inflated)
+                write_resampled(config, f_smrz, file_stub, 'f_SMRZ', inflated)
             if 'F_FT' in output_fields:
-                output_filename = (output_fname_tpl % 'fFT').encode('UTF-8')
-                write_resampled(output_filename, ft, inflated)
-            # In DEBUG mode, output fields also include: fPAR, PAR
-            if DEBUG == 1:
-                output_filename = (output_fname_tpl % 'fPAR').encode('UTF-8')
-                write_resampled(output_filename, fpar_final, inflated)
-                output_filename = (output_fname_tpl % 'PAR').encode('UTF-8')
-                write_numpy_inflated(output_filename, to_numpy(par, SPARSE_M09_N))
+                write_resampled(config, ft, file_stub, 'f_FT', inflated)
         else:
+            output_dir = config['model']['output_dir']
+            output_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
             if 'GPP' in output_fields:
                 OUT_M01 = to_numpy(gpp, SPARSE_M01_N)
                 OUT_M01.tofile(output_fname_tpl % 'GPP')
@@ -447,24 +435,75 @@ cdef inline char is_valid(char pft) nogil:
 
 
 cdef void write_resampled(
-        bytes output_filename, float* array_data, int inflated = 1):
+        dict config, float* array_data, char* file_stub, char* field = '', int inflated = 1):
     '''
     Resamples a 1-km array to 9-km, then writes the output to a file.
 
     Parameters
     ----------
     config : dict
-    output_filename : bytes
-    array_data : *float
+    array_data : float*
+    field : char*
+        Well-known name of the dataset to be written; optional for BINARY
+        output
+    file_stub : char*
     inflated : int
         1 if the output array should be inflated to a 2D global EASE-Grid 2.0
     '''
-    cdef float* data_resampled
-    data_resampled = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    data_resampled_np = to_numpy(resample(array_data, data_resampled), SPARSE_M09_N)
-    # Write a flat (1D) file or inflate the file and then write
-    if inflated == 0:
-        data_resampled_np.tofile(output_filename.decode('UTF-8'))
+    cdef float* d_resampled
+    cdef float* d_inflated
+    cdef hid_t fid
+    cdef hid_t space_id
+
+    output_type = config['model']['output_type'].upper()
+    output_dir = config['model']['output_dir']
+    assert output_type in ('HDF5', 'BINARY')
+    assert field.decode('UTF-8') != '' or output_type == 'BINARY'
+    _file_stub = file_stub.decode('UTF-8')
+
+    # Resample the data from M01land to M09land
+    d_resampled = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    d_resampled_np = to_numpy(resample(array_data, d_resampled), SPARSE_M09_N)
+
+    # If writing a binary flat (1D) file, we're already pretty much done
+    if output_type == 'BINARY':
+        output_filename = (
+            '%s/L4Cython_%s_%s.flt32' % (output_dir, field, _file_stub))
+        if inflated == 1:
+            write_numpy_inflated(
+                output_filename, d_resampled_np, grid = 'M09')
+        else:
+            d_resampled_np.tofile(output_filename.decode('UTF-8'))
+        PyMem_Free(d_resampled)
+        return
+
+    # Otherwise, it's HDF5 output; create the output HDF5 file
+    output_filename = ('%s/L4Cython_%s.h5' % (output_dir, _file_stub))\
+        .encode('UTF-8')
+    fid = open_hdf5(output_filename)
+
+    # Determine the output field name
+    _field = field.decode('UTF-8')
+    if _field in ('GPP', 'NPP'):
+        _field = '%s/%s_mean' % (_field, _field.lower()) # e.g., 'GPP/gpp_mean'
     else:
-        write_numpy_inflated(output_filename, data_resampled_np, grid = 'M09')
-    PyMem_Free(data_resampled)
+        _field = 'EC/%s_mean' % _field.lower() # e.g., "EC/emult_mean"
+
+    if inflated == 1:
+        space_id = create_2d_space(2, NROW9KM, NCOL9KM)
+        d_inflated = <float*> PyMem_Malloc(sizeof(float) * NCOL9KM * NROW9KM)
+        # For HDF5 output, we'll first write the data to a temporary file
+        tmp = NamedTemporaryFile()
+        tmp_filename = tmp.name.encode('UTF-8')
+        write_numpy_inflated(tmp_filename, d_resampled_np, grid = 'M09')
+        read_flat(tmp_filename, NCOL9KM * NROW9KM, d_inflated)
+        # Write the inflated data to a new HDF5 dataset
+        write_hdf5_dataset(
+            fid, _field.encode('UTF-8'), H5T_IEEE_F32LE, space_id, d_inflated)
+    else:
+        space_id = create_1d_space(1, SPARSE_M09_N)
+        write_hdf5_dataset(
+            fid, _field.encode('UTF-8'), H5T_IEEE_F32LE, space_id, d_resampled)
+
+    PyMem_Free(d_resampled)
+    PyMem_Free(d_inflated)
