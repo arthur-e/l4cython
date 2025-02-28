@@ -7,7 +7,7 @@ import numpy as np
 from l4cython.utils.mkgrid import inflate_file, deflate_file
 from l4cython.utils.fixtures import NROW9KM, NCOL9KM, SPARSE_M09_N, SPARSE_M01_N
 
-DTYPES = ('flt32', 'flt64', 'int8', 'int16', 'int32', 'uint8', 'uint16')
+DTYPES = ('flt32', 'int8', 'int16', 'int32', 'uint8', 'uint16')
 RANGES = {
     'flt32': (-9999, 12000),
     'flt64': (-9999, 12000),

@@ -19,7 +19,7 @@ import numpy as np
 from libc.stdlib cimport free, calloc
 from libc.stdio cimport fopen, fread, fclose, fwrite
 from l4cython.utils.io cimport open_fid
-from l4cython.utils.fixtures import SPARSE_M09_N, SPARSE_M01_N, NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32, DFNT_INT64, READ, WRITE
+from l4cython.utils.fixtures import READ, WRITE
 # Implicit importing of inflate(), deflate(), and spland_*() functions from mkgrid.pxd
 
 @cython.boundscheck(False)

@@ -1,19 +1,18 @@
 # cython: language_level=3
 
 from libc.stdlib cimport calloc, free
-from l4cython.utils.fixtures import NCOL9KM, NROW9KM, NCOL1KM, NROW1KM, DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32
-from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
-
-# EASE-Grid 2.0 params used here can't be Python numbers
-cdef:
-    int  M01_NESTED_IN_M09 = 9 * 9
-    long SPARSE_M09_N = PY_SPARSE_M09_N # Number of grid cells in sparse ("land") arrays
-    long SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
 
 cdef extern from "src/spland.h":
     ctypedef struct spland_ref_struct:
         unsigned short* row # NOTE: 16-bit unsigned integer
         unsigned short* col
+
+    int M01_NESTED_IN_M09
+    int SPARSE_M09_N
+    int SPARSE_M01_N
+    int FILL_VALUE
+    int NCOL1KM, NROW1KM, NCOL9KM, NROW9KM
+    int DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32, DFNT_INT64
 
     int spland_load_9km_rc(spland_ref_struct* SPLAND)
     int size_in_bytes(long number_type)
