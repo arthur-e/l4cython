@@ -16,8 +16,9 @@ cdef extern from "utils/src/spland.h":
     int NCOL1KM, NROW1KM, NCOL9KM, NROW9KM
 
 
-cdef inline void write_resampled(
-        dict config, float* array_data, char* suffix, char* field, int inflated):
+cdef inline hid_t write_resampled(
+        dict config, float* array_data, char* suffix, char* field,
+        int inflated, hid_t file_id):
     '''
     Resamples a 1-km array to 9-km, then writes the output to a file.
 
@@ -31,10 +32,22 @@ cdef inline void write_resampled(
     suffix : char*
     inflated : int
         1 if the output array should be inflated to a 2D global EASE-Grid 2.0
+    file_id : hid_t
+        For HDF5 output, 0 if a new HDF5 file should be created; otherwise,
+        pass the <hid_t> for an open HDF5 file
+
+    Returns
+    -------
+    hid_t
+        The file ID of the open HDF5 file, or 0 if no HDF5 file was used
     '''
     cdef float* data_inflated
     cdef hid_t fid
     cdef hid_t space_id
+    if file_id > 0:
+        fid = file_id
+    else:
+        fid = 0 # Nothing is open yet
 
     output_type = config['model']['output_type'].upper()
     output_dir = config['model']['output_dir']
@@ -68,12 +81,13 @@ cdef inline void write_resampled(
                 output_filename, data_resampled, grid = 'M09')
         else:
             data_resampled.tofile(output_filename)
-        return
+        return fid
 
     # Otherwise, it's HDF5 output; create the output HDF5 file
     output_filename = ('%s/L4Cython_%s.h5' % (output_dir, _suffix))\
         .encode('UTF-8')
-    fid = open_hdf5(output_filename)
+    if fid == 0:
+        fid = open_hdf5(output_filename)
 
     # Determine the output field name
     if _field in ('GPP', 'NPP'):
@@ -97,3 +111,4 @@ cdef inline void write_resampled(
             'No support for writing deflated arrays to HDF5')
 
     PyMem_Free(data_inflated)
+    return fid

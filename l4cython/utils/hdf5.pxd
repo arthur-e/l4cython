@@ -1,12 +1,17 @@
 # cython: language_level=3
 
+cdef extern from "stdio.h":
+    int remove(char* filename)
+
 cdef extern from "src/hdf5.h":
     ctypedef long long int hid_t # int64
     ctypedef unsigned long long int hsize_t # uint6
     ctypedef int herr_t
+    ctypedef int htri_t
 
     int H5P_DEFAULT # Default property list
     int H5S_ALL
+    int H5F_ACC_TRUNC # Flag to "truncate" the file, "if it already exists, erasing all data previously stored in the file"
     int H5F_ACC_EXCL # Flag to fail on creating a file that already exists
     int H5S_SIMPLE # An n-dimensional data space
     hid_t H5T_IEEE_F32LE
@@ -21,8 +26,9 @@ cdef extern from "src/hdf5.h":
     herr_t H5Dread(hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id,
         hid_t file_space_id, hid_t plist_id, void* buf)
     herr_t H5Dclose(hid_t dset_id)
+    htri_t H5Fis_hdf5(char* filename) # Is it an HDF5 file?
 
-    # To close an HDF5 file
+    # To close or delete an HDF5 file
     herr_t H5Fclose(hid_t file_id)
 
     # To write an HDF5 file
@@ -111,6 +117,8 @@ cdef inline hid_t open_hdf5(char* filename):
     hid_t
         The file ID
     '''
+    if H5Fis_hdf5(filename) >= 0:
+        remove(filename) # Delete the file
     # Using H5P_DEFAULT for args fcpl_id, fapl_id
     return H5Fcreate(filename, H5F_ACC_EXCL, H5P_DEFAULT, H5P_DEFAULT)
 

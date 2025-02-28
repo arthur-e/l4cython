@@ -34,4 +34,6 @@ model:
   # Valid output fields include: "GPP", "NPP", "Emult", "f_Tmin", "f_VPD", "f_SMRZ", "f_FT"
   output_fields:
   - GPP
+  - NPP
+  - Emult
   output_format: M09 # "M09land" for flat (1D) output

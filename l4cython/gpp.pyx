@@ -86,6 +86,7 @@ def main(config = None, verbose = True):
     '''
     cdef:
         Py_ssize_t i, j, k, pft
+        hid_t fid # For open HDF5 files
         int DEBUG
         float fpar
 
@@ -296,21 +297,23 @@ def main(config = None, verbose = True):
             lambda x: x.upper(), config['model']['output_fields']))
 
         if fmt in ('M09', 'M09land'):
+            fid = 0
             inflated = 1 if fmt == 'M09' else 0
             if 'GPP' in output_fields:
-                write_resampled(config, gpp, suffix, 'GPP', inflated)
+                fid = write_resampled(config, gpp, suffix, 'GPP', inflated, fid)
             if 'NPP' in output_fields:
-                write_resampled(config, npp, suffix, 'NPP', inflated)
+                fid = write_resampled(config, npp, suffix, 'NPP', inflated, fid)
             if 'EMULT' in output_fields:
-                write_resampled(config, e_mult, suffix, 'Emult', inflated)
+                fid = write_resampled(config, e_mult, suffix, 'Emult', inflated, fid)
             if 'F_TMIN' in output_fields:
-                write_resampled(config, f_tmin, suffix, 'f_Tmin', inflated)
+                fid = write_resampled(config, f_tmin, suffix, 'f_Tmin', inflated, fid)
             if 'F_VPD' in output_fields:
-                write_resampled(config, f_vpd, suffix, 'f_VPD', inflated)
+                fid = write_resampled(config, f_vpd, suffix, 'f_VPD', inflated, fid)
             if 'F_SMRZ' in output_fields:
-                write_resampled(config, f_smrz, suffix, 'f_SMRZ', inflated)
+                fid = write_resampled(config, f_smrz, suffix, 'f_SMRZ', inflated, fid)
             if 'F_FT' in output_fields:
-                write_resampled(config, ft, suffix, 'f_FT', inflated)
+                fid = write_resampled(config, ft, suffix, 'f_FT', inflated, fid)
+            close_hdf5(fid)
         else:
             output_dir = config['model']['output_dir']
             out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
@@ -372,35 +375,6 @@ def load_state(config):
     with NamedTemporaryFile() as tmp:
         write_numpy_deflated(tmp.name, smrz_min)
         read_flat(tmp.name.encode('UTF-8'), SPARSE_M09_N, SMRZ_MIN)
-
-
-def mod15a2h_qc_fail(x):
-    '''
-    Returns pass/fail for QC flags based on the L4C fPAR QC protocol for the
-    `FparLai_QC` band: Bad pixels have either `1` in the first bit ("Pixel not
-    produced at all") or anything other than `00` ("clear") in bits 3-4.
-    Output array is True wherever the array fails QC criteria. Compare to:
-
-        np.vectorize(lambda v: v[0] == 1 or v[3:5] != '00')
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        Array where the last axis enumerates the unpacked bits
-        (ones and zeros)
-
-    Returns
-    -------
-    numpy.ndarray
-        Boolean array with True wherever QC criteria are failed
-    '''
-    y = np.unpackbits(x[...,None], axis = 1)[...,-8:]
-    # Emit 1 = FAIL if these two bits are not == "00"
-    c1 = y[...,3:5].sum(axis = -1).astype(np.uint8)
-    # Emit 1 = FAIL if 1st bit == 1 ("Pixel not produced at all")
-    c2 = y[...,0]
-    # Intermediate arrays are 1 = FAIL, 0 = PASS
-    return (c1 + c2) > 0
 
 
 cdef inline char is_valid(char pft) nogil:
