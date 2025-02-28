@@ -58,9 +58,9 @@ spinup = Extension(
     extra_link_args = ['-fopenmp']
 )
 
-resample = Extension(
-    name = 'resample',
-    sources = ['resample.pyx'],
+core = Extension(
+    name = 'core',
+    sources = ['core.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
     include_dirs = ['./utils', *HDF_DIRS],
@@ -70,4 +70,4 @@ resample = Extension(
     extra_link_args = ['-fopenmp', '-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']
 )
 
-setup(ext_modules = cythonize([budget, gpp, reco, spinup, resample]))
+setup(ext_modules = cythonize([core, gpp, reco, budget, spinup]))

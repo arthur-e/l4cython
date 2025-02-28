@@ -9,14 +9,11 @@ from utils.hdf5 cimport hid_t, hsize_t, create_1d_space, create_2d_space, close_
 from utils.io cimport read_flat
 from tempfile import NamedTemporaryFile
 
-
-# EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
-#   can't be Python numbers)
-cdef:
-    int   FILL_VALUE = -9999
-    int   M01_NESTED_IN_M09 = 9 * 9
-    long  SPARSE_M09_N = PY_SPARSE_M09_N # Number of grid cells in sparse ("land") arrays
-    long  SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
+cdef extern from "utils/src/spland.h":
+    int M01_NESTED_IN_M09
+    int SPARSE_M09_N
+    int SPARSE_M01_N
+    int FILL_VALUE
 
 
 cdef inline void write_resampled(
@@ -89,9 +86,8 @@ cdef inline void write_resampled(
         data_inflated = <float*> PyMem_Malloc(sizeof(float) * NCOL9KM * NROW9KM)
         # For HDF5 output, we'll first write the data to a temporary file
         tmp = NamedTemporaryFile()
-        tmp_filename = tmp.name.encode('UTF-8')
-        write_numpy_inflated(tmp_filename, data_resampled, grid = 'M09')
-        read_flat(tmp_filename, NCOL9KM * NROW9KM, data_inflated)
+        write_numpy_inflated(tmp.name, data_resampled, grid = 'M09')
+        read_flat(tmp.name.encode('UTF-8'), NCOL9KM * NROW9KM, data_inflated)
         # Write the inflated data to a new HDF5 dataset
         write_hdf5_dataset(
             fid, _field.encode('UTF-8'), H5T_IEEE_F32LE, space_id,

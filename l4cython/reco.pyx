@@ -39,11 +39,12 @@ from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport arrhenius, linear_constraint
+from l4cython.core cimport write_resampled
 from l4cython.utils cimport BPLUT
 from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE
 from l4cython.utils.io cimport open_fid, read_flat, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
-from l4cython.utils.mkgrid cimport deflate, resample, size_in_bytes
+from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.fixtures import READ, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 from tqdm import tqdm
@@ -69,10 +70,6 @@ SOC0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 SOC2 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 LITTERFALL = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
-
-# Python arrays that want heap allocations must be global; this one is reused
-#   for any array that needs to be written to disk (using NumPy)
-OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
 
 
 @cython.boundscheck(False)
@@ -226,51 +223,38 @@ def main(config = None, verbose = True):
                 nee[k] = reco - gpp[i]
 
         # If averaging from 1-km to 9-km resolution is requested...
-        out_dir = config['model']['output_dir']
-        if config['model']['output_format'] in ('M09', 'M09land'):
-            fmt = config['model']['output_format']
+        fmt = config['model']['output_format']
+        suffix = '%s_%s' % (date_str, fmt) # e.g., "*_YYYYMMDD_M09land_*"
+        suffix = suffix.encode('UTF-8')
+        output_fields = list(map(
+            lambda x: x.upper(), config['model']['output_fields']))
+
+        if fmt in ('M09', 'M09land'):
             inflated = 1 if fmt == 'M09' else 0
             if 'RH' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_RH_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
-                write_resampled(output_filename, rh_total, inflated)
+                write_resampled(config, rh_total, suffix, 'RH', inflated)
             if 'NEE' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_NEE_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
-                write_resampled(output_filename, nee, inflated)
+                write_resampled(config, nee, suffix, 'NEE', inflated)
             if 'Tmult' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_Tmult_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
-                write_resampled(output_filename, t_mult, inflated)
+                write_resampled(config, t_mult, suffix, 'Tmult', inflated)
             if 'Wmult' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_Wmult_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
-                write_resampled(output_filename, w_mult, inflated)
+                write_resampled(config, w_mult, suffix, 'Wmult', inflated)
             if 'SOC' in config['model']['output_fields']:
-                output_filename = ('%s/L4Cython_SOC_%s_%s.flt32' % (out_dir, date_str, fmt))\
-                    .encode('UTF-8')
-                write_resampled(output_filename, soc_total, inflated)
+                write_resampled(config, soc_total, suffix, 'SOC', inflated)
         else:
+            output_dir = config['model']['output_dir']
+            out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
             if 'RH' in config['model']['output_fields']:
-                OUT_M01 = to_numpy(rh_total, SPARSE_M01_N)
-                OUT_M01.tofile(
-                    '%s/L4Cython_RH_%s_M01land.flt32' % (out_dir, date_str))
+                to_numpy(rh_total, SPARSE_M01_N).tofile(out_fname_tpl % 'RH')
             if 'NEE' in config['model']['output_fields']:
-                OUT_M01 = to_numpy(nee, SPARSE_M01_N)
-                OUT_M01.tofile(
-                    '%s/L4Cython_NEE_%s_M01land.flt32' % (out_dir, date_str))
+                to_numpy(nee, SPARSE_M01_N).tofile(out_fname_tpl % 'NEE')
             if 'Tmult' in config['model']['output_fields']:
-                OUT_M01 = to_numpy(t_mult, SPARSE_M01_N)
-                OUT_M01.tofile(
-                    '%s/L4Cython_Tmult_%s_M01land.flt32' % (out_dir, date_str))
+                to_numpy(t_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Tmult')
             if 'Wmult' in config['model']['output_fields']:
-                OUT_M01 = to_numpy(w_mult, SPARSE_M01_N)
-                OUT_M01.tofile(
-                    '%s/L4Cython_Wmult_%s_M01land.flt32' % (out_dir, date_str))
+                to_numpy(w_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Wmult')
             if 'SOC' in config['model']['output_fields']:
-                OUT_M01 = to_numpy(soc_total, SPARSE_M01_N)
-                OUT_M01.tofile(
-                    '%s/L4Cython_SOC_%s_M01land.flt32' % (out_dir, date_str))
+                to_numpy(soc_total, SPARSE_M01_N).tofile(out_fname_tpl % 'SOC')
+
     PyMem_Free(PFT)
     PyMem_Free(LITTERFALL)
     PyMem_Free(SOC0)
@@ -367,27 +351,3 @@ cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
     elif litter <= 0:
         valid = 0
     return valid
-
-
-cdef void write_resampled(
-        bytes output_filename, float* array_data, int inflated = 1):
-    '''
-    Resamples a 1-km array to 9-km, then writes the output to a file.
-
-    Parameters
-    ----------
-    config : dict
-    output_filename : bytes
-    array_data : *float
-    inflated : int
-        1 if the output array should be inflated to a 2D global EASE-Grid 2.0
-    '''
-    cdef float* data_resampled
-    data_resampled = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    data_resampled_np = to_numpy(resample(array_data, data_resampled), SPARSE_M09_N)
-    # Write a flat (1D) file or inflate the file and then write
-    if inflated == 0:
-        data_resampled_np.tofile(output_filename.decode('UTF-8'))
-    else:
-        write_numpy_inflated(output_filename, data_resampled_np, grid = 'M09')
-    PyMem_Free(data_resampled)

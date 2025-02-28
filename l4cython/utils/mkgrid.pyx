@@ -209,7 +209,6 @@ def write_numpy_deflated(
     '''
     cdef:
         char* fname
-        char* ofname
         unsigned char* grid_array
         unsigned char* deflated_array
 
@@ -237,8 +236,7 @@ def write_numpy_deflated(
     if hasattr(grid, 'encode'):
         grid = grid.encode('UTF-8')
     deflated_array = deflate(grid_array, data_type, grid)
-    ofname = output_filename
-    fid = open_fid(ofname, WRITE)
+    fid = open_fid(output_filename.encode('UTF-8'), WRITE)
     fwrite(deflated_array, sizeof(unsigned char), <size_t>out_bytes, fid)
     fclose(fid)
     free(grid_array)
@@ -270,7 +268,6 @@ def write_numpy_inflated(
     '''
     cdef:
         char* fname
-        char* ofname
         unsigned char* flat_array
         unsigned char* inflated_array
 
@@ -298,8 +295,7 @@ def write_numpy_inflated(
     if hasattr(grid, 'encode'):
         grid = grid.encode('UTF-8')
     inflated_array = inflate(flat_array, data_type, grid)
-    ofname = output_filename
-    fid = open_fid(ofname, WRITE)
+    fid = open_fid(output_filename.encode('UTF-8'), WRITE)
     fwrite(inflated_array, sizeof(unsigned char), <size_t>out_bytes, fid)
     fclose(fid)
     free(flat_array)

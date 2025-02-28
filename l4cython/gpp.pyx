@@ -39,6 +39,7 @@ from bisect import bisect_right
 from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport linear_constraint
 from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
+from l4cython.core cimport write_resampled
 from l4cython.utils cimport BPLUT
 from l4cython.utils.hdf5 cimport hid_t, hsize_t, create_1d_space, create_2d_space, close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset, H5T_STD_U8LE, H5T_IEEE_F32LE
 from l4cython.utils.io cimport open_fid, read_flat, to_numpy
@@ -47,7 +48,6 @@ from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.fixtures import READ, DFNT_UINT8, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
-from l4cython.resample cimport write_resampled
 from tqdm import tqdm
 
 # EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
@@ -66,9 +66,6 @@ PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
 SMRZ_MAX = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
 SMRZ_MIN = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
 
-# Python arrays that want heap allocations must be global; this one is reused
-#   for any array that needs to be written to disk (using NumPy)
-OUT_M01 = np.full((SPARSE_M01_N,), np.nan, dtype = np.float32)
 # 8-day composite periods, as ordinal days of a 365-day year
 PERIODS = np.arange(1, 365, 8)
 PERIODS_DATES = [
@@ -208,26 +205,26 @@ def main(config = None, verbose = True):
         with h5py.File(
                 config['data']['drivers']['file'] % date_str, 'r') as hdf:
             # SWRAD
-            write_numpy_deflated(tmp_fname_bs, hdf['RADIATION_SHORTWAVE_DOWNWARD_FLUX'][:])
+            write_numpy_deflated(tmp.name, hdf['RADIATION_SHORTWAVE_DOWNWARD_FLUX'][:])
             read_flat(tmp_fname_bs, SPARSE_M09_N, swrad)
             # T2M_M09_MIN (tmin)
-            write_numpy_deflated(tmp_fname_bs, hdf['T2M_M09_MIN'][:])
+            write_numpy_deflated(tmp.name, hdf['T2M_M09_MIN'][:])
             read_flat(tmp_fname_bs, SPARSE_M09_N, tmin)
             # T2M_M09_AVG (t2m)
-            write_numpy_deflated(tmp_fname_bs, hdf['T2M_M09_AVG'][:])
+            write_numpy_deflated(tmp.name, hdf['T2M_M09_AVG'][:])
             read_flat(tmp_fname_bs, SPARSE_M09_N, t2m)
             # QV2M
-            write_numpy_deflated(tmp_fname_bs, hdf['QV2M_M09_AVG'][:])
+            write_numpy_deflated(tmp.name, hdf['QV2M_M09_AVG'][:])
             read_flat(tmp_fname_bs, SPARSE_M09_N, qv2m)
             # PS
-            write_numpy_deflated(tmp_fname_bs, hdf['SURFACE_PRESSURE'][:])
+            write_numpy_deflated(tmp.name, hdf['SURFACE_PRESSURE'][:])
             read_flat(tmp_fname_bs, SPARSE_M09_N, ps)
             # SMRZ (before rescaling)
-            write_numpy_deflated(tmp_fname_bs, hdf['SM_ROOTZONE_WETNESS'][:])
+            write_numpy_deflated(tmp.name, hdf['SM_ROOTZONE_WETNESS'][:])
             read_flat(tmp_fname_bs, SPARSE_M09_N, smrz0)
             # NOTE: TS/Tsurf is stored in deg C, to great annoyance
             # TS/Tsurf
-            write_numpy_deflated(tmp_fname_bs, hdf['TS_M09_DEGC_AVG'][:])
+            write_numpy_deflated(tmp.name, hdf['TS_M09_DEGC_AVG'][:])
             read_flat(tmp_fname_bs, SPARSE_M09_N, tsurf)
 
         # Iterate over 9-km grid
@@ -321,16 +318,13 @@ def main(config = None, verbose = True):
                 write_resampled(config, ft, suffix, 'f_FT', inflated)
         else:
             output_dir = config['model']['output_dir']
-            output_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
+            out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
             if 'GPP' in output_fields:
-                OUT_M01 = to_numpy(gpp, SPARSE_M01_N)
-                OUT_M01.tofile(output_fname_tpl % 'GPP')
+                to_numpy(gpp, SPARSE_M01_N).tofile(out_fname_tpl % 'GPP')
             if 'NPP' in output_fields:
-                OUT_M01 = to_numpy(npp, SPARSE_M01_N)
-                OUT_M01.tofile(output_fname_tpl % 'NPP')
+                to_numpy(npp, SPARSE_M01_N).tofile(out_fname_tpl % 'NPP')
             if 'EMULT' in output_fields:
-                OUT_M01 = to_numpy(e_mult, SPARSE_M01_N)
-                OUT_M01.tofile(output_fname_tpl % 'Emult')
+                to_numpy(e_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Emult')
 
 
     PyMem_Free(smrz0)
@@ -378,10 +372,10 @@ def load_state(config):
         smrz_max = hdf[config['data']['restart']['smrz_max']][:]
         smrz_min = hdf[config['data']['restart']['smrz_min']][:]
     with NamedTemporaryFile() as tmp:
-        write_numpy_deflated(tmp.name.encode('UTF-8'), smrz_max)
+        write_numpy_deflated(tmp.name, smrz_max)
         read_flat(tmp.name.encode('UTF-8'), SPARSE_M09_N, SMRZ_MAX)
     with NamedTemporaryFile() as tmp:
-        write_numpy_deflated(tmp.name.encode('UTF-8'), smrz_min)
+        write_numpy_deflated(tmp.name, smrz_min)
         read_flat(tmp.name.encode('UTF-8'), SPARSE_M09_N, SMRZ_MIN)
 
 

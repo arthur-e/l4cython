@@ -11,6 +11,8 @@ floating-point precision. L4Cython achieves the closest results with version
 operational product.
 
 - [ ] Single place for constants, e.g., `DFNT_FLOAT32`
+- [ ] Move MODIS QA logic out of `gpp.pyx`, `budget.pyx`
+- [ ] MOVE `BPLUT` from `utils.__init__.pxd`, and all of `fixtures.py`, into `core.pxd` and `core.pyx`
 - https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html?highlight=packaging#distributing-cython-modules
 
 
