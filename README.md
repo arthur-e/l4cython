@@ -10,10 +10,10 @@ floating-point precision. L4Cython achieves the closest results with version
 7.4.1 of the SMAP L4C operational code and Version 7 (Vv7040/Vv7042) of the
 operational product.
 
-- [ ] Single place for constants, e.g., `DFNT_FLOAT32`
+- [x] Single place for constants, e.g., `DFNT_FLOAT32`
 - [ ] Move MODIS QA logic out of `gpp.pyx`, `budget.pyx`
 - [x] MOVE `BPLUT` from `utils.__init__.pxd` into `core.pxd`
-- [ ] MOVE all of `fixtures.py` into `core.pyx`
+- [x] MOVE all of `fixtures.py` into `core.pyx`
 - https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html?highlight=packaging#distributing-cython-modules
 
 

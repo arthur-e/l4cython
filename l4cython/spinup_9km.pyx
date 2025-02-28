@@ -41,8 +41,8 @@ from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from l4cython.constraints cimport arrhenius, linear_constraint
 from l4cython.core cimport BPLUT, SPARSE_M09_N, N_PFT
+from l4cython.core import load_parameters_table
 from l4cython.utils.io cimport READ, open_fid, to_numpy_double
-from l4cython.utils.fixtures import load_parameters_table
 from tqdm import tqdm
 
 cdef:

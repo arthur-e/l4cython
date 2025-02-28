@@ -44,10 +44,10 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
 from l4cython.constraints cimport arrhenius, linear_constraint
 from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
 from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, SPARSE_M09_N, SPARSE_M01_N, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, DFNT_UINT8, DFNT_FLOAT32
+from l4cython.core import load_parameters_table
 from l4cython.resample cimport write_resampled
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, read_hdf5
-from l4cython.utils.fixtures import load_parameters_table
 from l4cython.utils.io cimport READ, open_fid, read_flat, read_flat_short, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
