@@ -39,8 +39,8 @@ from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport arrhenius, linear_constraint
-from l4cython.core cimport write_resampled
-from l4cython.utils cimport BPLUT
+from l4cython.core cimport BPLUT
+from l4cython.resample cimport write_resampled
 from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE
 from l4cython.utils.io cimport open_fid, read_flat, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated

@@ -6,7 +6,6 @@ from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
 
 # EASE-Grid 2.0 params used here can't be Python numbers
 cdef:
-    int  FILL_VALUE = -9999
     int  M01_NESTED_IN_M09 = 9 * 9
     long SPARSE_M09_N = PY_SPARSE_M09_N # Number of grid cells in sparse ("land") arrays
     long SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N

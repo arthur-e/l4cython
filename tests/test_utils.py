@@ -42,10 +42,12 @@ def test_inflate_M01land_random_all_dtypes():
         dtype = getattr(np, ext.replace('flt', 'float'))
         arr = np.random.randint(*RANGES[ext], size = SPARSE_M01_N)
         arr.astype(dtype).tofile(fname0)
-        inflate_file(fname0)
-        new = np.fromfile(fname.format(ext = ext), dtype)
+        inflate_file(fname0, grid = 'M01')
+        new = np.fromfile(fname, dtype)
         assert arr[arr > 0].min() == new[new > 0].min()
-        assert arr.max() == new.max()
+        # The "or" clauses here are because inflated, unsigned data types
+        #   introduce positive NoData values
+        assert arr.max() == new.max() or new.max() == 255 or new.max() == 65535
         os.remove(fname0)
         os.remove(fname.format(ext = ext))
 

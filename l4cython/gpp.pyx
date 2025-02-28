@@ -39,8 +39,8 @@ from bisect import bisect_right
 from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport linear_constraint
 from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
-from l4cython.core cimport write_resampled
-from l4cython.utils cimport BPLUT
+from l4cython.core cimport BPLUT
+from l4cython.resample cimport write_resampled
 from l4cython.utils.hdf5 cimport hid_t, hsize_t, create_1d_space, create_2d_space, close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset, H5T_STD_U8LE, H5T_IEEE_F32LE
 from l4cython.utils.io cimport open_fid, read_flat, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated

@@ -80,7 +80,7 @@ enum NumericTypes {
   isInt64        = DFNT_INT64  ,
   isUint64       = DFNT_UINT64 ,
   isFloat32      = DFNT_FLOAT32,
- isFloat64      = DFNT_FLOAT64
+  isFloat64      = DFNT_FLOAT64
 } ;
 
 // type-independent union (translation-layer) of pointers to atomic types

@@ -15,7 +15,7 @@ mkgrid = Extension(
     sources = ['mkgrid.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'mfhdfalt'],
-    include_dirs = ['/usr/include', '/usr/include/hdf', '/usr/lib'],
+    include_dirs = ['/usr/include', '/usr/include/hdf'],
     extra_compile_args = [
         '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
         '-ldfalt', '-lmfhdfalt', '-lz', '-lsz', '-luuid', '-lm', '-lutil'
@@ -27,7 +27,7 @@ hdf5 = Extension(
     sources = ['hdf5.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'mfhdfalt', 'hdf5'],
-    include_dirs = ['/usr/include', '/usr/include/hdf5/openmpi/', '/usr/lib', '/usr/lib/x86_64-linux-gnu/openmpi/include/'],
+    include_dirs = ['/usr/include', '/usr/include/hdf5/openmpi/', '/usr/lib/x86_64-linux-gnu/openmpi/include/'],
     extra_compile_args = [
         '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
         '-ldfalt', '-lmfhdfalt', '-lhdf5', '-lz', '-lsz', '-luuid', '-lm', '-lutil'

@@ -12,7 +12,8 @@ operational product.
 
 - [ ] Single place for constants, e.g., `DFNT_FLOAT32`
 - [ ] Move MODIS QA logic out of `gpp.pyx`, `budget.pyx`
-- [ ] MOVE `BPLUT` from `utils.__init__.pxd`, and all of `fixtures.py`, into `core.pxd` and `core.pyx`
+- [x] MOVE `BPLUT` from `utils.__init__.pxd` into `core.pxd`
+- [ ] MOVE all of `fixtures.py` into `core.pyx`
 - https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html?highlight=packaging#distributing-cython-modules
 
 
