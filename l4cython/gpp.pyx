@@ -47,6 +47,7 @@ from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.fixtures import READ, DFNT_UINT8, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
 from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
+from l4cython.resample cimport write_resampled
 from tqdm import tqdm
 
 # EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
@@ -432,87 +433,3 @@ cdef inline char is_valid(char pft) nogil:
     if pft not in (1, 2, 3, 4, 5, 6, 7, 8):
         valid = 0
     return valid
-
-
-cdef void write_resampled(
-        dict config, float* array_data, char* suffix, char* field = '', int inflated = 1):
-    '''
-    Resamples a 1-km array to 9-km, then writes the output to a file.
-
-    Parameters
-    ----------
-    config : dict
-    array_data : float*
-    field : char*
-        Well-known name of the dataset to be written; optional for BINARY
-        output
-    suffix : char*
-    inflated : int
-        1 if the output array should be inflated to a 2D global EASE-Grid 2.0
-    '''
-    cdef float* data_inflated
-    cdef hid_t fid
-    cdef hid_t space_id
-
-    output_type = config['model']['output_type'].upper()
-    output_dir = config['model']['output_dir']
-    assert output_type in ('HDF5', 'BINARY')
-    assert field.decode('UTF-8') != '' or output_type == 'BINARY'
-    _suffix = suffix.decode('UTF-8')
-    _field = field.decode('UTF-8')
-
-    # Resample the data from M01land to M09land
-    data_resampled = FILL_VALUE * np.ones((SPARSE_M09_N,), np.float32)
-    for i in range(0, SPARSE_M09_N):
-        value = 0
-        count = 0
-        for j in range(0, M01_NESTED_IN_M09):
-            k = (M01_NESTED_IN_M09 * i) + j
-            if array_data[k] == FILL_VALUE:
-                continue # Skip invalid PFTs
-            value += array_data[k]
-            count += 1
-        if count == 0:
-            continue
-        value /= count
-        data_resampled[i] = value
-
-    # If writing a binary flat (1D) file, we're already pretty much done
-    if output_type == 'BINARY':
-        output_filename = (
-            '%s/L4Cython_%s_%s.flt32' % (output_dir, _field, _suffix))
-        if inflated == 1:
-            write_numpy_inflated(
-                output_filename, data_resampled, grid = 'M09')
-        else:
-            data_resampled.tofile(output_filename)
-        return
-
-    # Otherwise, it's HDF5 output; create the output HDF5 file
-    output_filename = ('%s/L4Cython_%s.h5' % (output_dir, _suffix))\
-        .encode('UTF-8')
-    fid = open_hdf5(output_filename)
-
-    # Determine the output field name
-    if _field in ('GPP', 'NPP'):
-        _field = '%s/%s_mean' % (_field, _field.lower()) # e.g., 'GPP/gpp_mean'
-    else:
-        _field = 'EC/%s_mean' % _field.lower() # e.g., "EC/emult_mean"
-
-    if inflated == 1:
-        space_id = create_2d_space(2, NROW9KM, NCOL9KM)
-        data_inflated = <float*> PyMem_Malloc(sizeof(float) * NCOL9KM * NROW9KM)
-        # For HDF5 output, we'll first write the data to a temporary file
-        tmp = NamedTemporaryFile()
-        tmp_filename = tmp.name.encode('UTF-8')
-        write_numpy_inflated(tmp_filename, data_resampled, grid = 'M09')
-        read_flat(tmp_filename, NCOL9KM * NROW9KM, data_inflated)
-        # Write the inflated data to a new HDF5 dataset
-        write_hdf5_dataset(
-            fid, _field.encode('UTF-8'), H5T_IEEE_F32LE, space_id,
-            data_inflated)
-    else:
-        raise NotImplementedError(
-            'No support for writing deflated arrays to HDF5')
-
-    PyMem_Free(data_inflated)
