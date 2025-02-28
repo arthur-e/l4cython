@@ -2,7 +2,10 @@
 
 import numpy as np
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
-from l4cython.utils.fixtures import READ
+
+cdef extern from "src/io.h":
+    char* READ
+    char* WRITE
 
 cdef:
     FILE* fid

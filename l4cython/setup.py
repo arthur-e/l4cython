@@ -6,7 +6,7 @@ from Cython.Build import cythonize
 MACROS = [ # Avoids warning "Using deprecated NumPy API"
     ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION'), # https://stackoverflow.com/questions/52749662/using-deprecated-numpy-api
 ]
-HDF4_DIRS = [
+HDF5_DIRS = [
     '/usr/include', '/usr/include/hdf',
     '/usr/include/hdf5/openmpi/', # Also required for hdf5.pxd
     '/usr/lib/x86_64-linux-gnu/openmpi/include/' # Also required for hdf5.pxd
@@ -23,7 +23,7 @@ budget = Extension(
     sources = ['budget.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
-    include_dirs = ['./utils', *HDF4_DIRS],
+    include_dirs = ['./utils', *HDF5_DIRS],
     extra_compile_args = ['-Wno-maybe-uninitialized'],
     extra_link_args = ['-fopenmp', '-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']
 )
@@ -43,7 +43,7 @@ gpp = Extension(
     sources = ['gpp.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
-    include_dirs = ['./utils', *HDF4_DIRS],
+    include_dirs = ['./utils', *HDF5_DIRS],
     extra_compile_args = ['-Wno-maybe-uninitialized'],
     extra_link_args = ['-fopenmp', '-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']
 )
@@ -53,7 +53,7 @@ reco = Extension(
     sources = ['reco.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
-    include_dirs = ['./utils', *HDF4_DIRS],
+    include_dirs = ['./utils', *HDF5_DIRS],
     extra_compile_args = ['-Wno-maybe-uninitialized'],
     extra_link_args = ['-fopenmp', '-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']
 )
@@ -63,7 +63,7 @@ resample = Extension(
     sources = ['resample.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
-    include_dirs = ['./utils', *HDF4_DIRS],
+    include_dirs = ['./utils', *HDF5_DIRS],
     extra_compile_args = [
         '-DHAVE_HDF4', '-ldfalt', '-lhdf5', '-Wno-maybe-uninitialized'
     ],
@@ -75,7 +75,7 @@ spinup = Extension(
     sources = ['spinup_9km.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'mfhdfalt'],
-    include_dirs = ['/usr/include', '/usr/include/hdf'],
+    include_dirs = ['./utils', '/usr/include', '/usr/include/hdf'],
     extra_compile_args = HDF4_ARGS,
     extra_link_args = ['-fopenmp']
 )

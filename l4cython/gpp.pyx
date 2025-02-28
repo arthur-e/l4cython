@@ -39,25 +39,20 @@ from bisect import bisect_right
 from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport linear_constraint
 from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
-from l4cython.core cimport BPLUT
+from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, SPARSE_M09_N, SPARSE_M01_N, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, DFNT_UINT8, DFNT_FLOAT32
 from l4cython.resample cimport write_resampled
-from l4cython.utils.hdf5 cimport hid_t, hsize_t, create_1d_space, create_2d_space, close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset, H5T_STD_U8LE, H5T_IEEE_F32LE
-from l4cython.utils.io cimport open_fid, read_flat, to_numpy
+from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, hid_t, hsize_t, create_1d_space, create_2d_space, close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset
+from l4cython.utils.io cimport READ, open_fid, read_flat, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.dec2bin cimport bits_from_uint32
-from l4cython.utils.fixtures import READ, DFNT_UINT8, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
-from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
+from l4cython.utils.fixtures import load_parameters_table
 from tqdm import tqdm
 
 # EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
 #   can't be Python numbers)
 cdef:
     BPLUT PARAMS
-    int   FILL_VALUE = -9999
-    int   M01_NESTED_IN_M09 = 9 * 9
-    long  SPARSE_M09_N = PY_SPARSE_M09_N # Number of grid cells in sparse ("land") arrays
-    long  SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
     unsigned char* PFT
     unsigned char* PFT_MASK
     float* SMRZ_MAX

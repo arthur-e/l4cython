@@ -1,11 +1,13 @@
 # cython: language_level=3
 
 cdef extern from "utils/src/spland.h":
+    int N_PFT
     int M01_NESTED_IN_M09
     int SPARSE_M09_N
     int SPARSE_M01_N
     int FILL_VALUE
     int NCOL1KM, NROW1KM, NCOL9KM, NROW9KM
+    int DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32, DFNT_INT64
 
 
 # Biome Properties Lookup Table (BPLUT)

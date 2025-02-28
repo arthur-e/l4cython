@@ -50,6 +50,7 @@
 #define   SPARSE_M09_N       1664040ul
 #define   SPARSE_M01_N     134787240ul
 #define   FILL_VALUE             -9999
+#define   N_PFT                      8 // Number of PFTs
 
 // From hntdfs.h, HDF4 library
 #define   DFNT_FLOAT32  5

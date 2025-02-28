@@ -39,24 +39,19 @@ from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from tempfile import NamedTemporaryFile
 from l4cython.constraints cimport arrhenius, linear_constraint
-from l4cython.core cimport BPLUT
+from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, SPARSE_M09_N, SPARSE_M01_N, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, DFNT_FLOAT32
 from l4cython.resample cimport write_resampled
 from l4cython.utils.hdf5 cimport read_hdf5, H5T_STD_U8LE
-from l4cython.utils.io cimport open_fid, read_flat, to_numpy
+from l4cython.utils.io cimport READ, open_fid, read_flat, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
-from l4cython.utils.fixtures import READ, DFNT_FLOAT32, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, load_parameters_table
-from l4cython.utils.fixtures import SPARSE_M09_N as PY_SPARSE_M09_N
+from l4cython.utils.fixtures import load_parameters_table
 from tqdm import tqdm
 
 # EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
 #   can't be Python numbers)
 cdef:
     BPLUT PARAMS
-    int   FILL_VALUE = -9999
-    int   M01_NESTED_IN_M09 = 9 * 9
-    long  SPARSE_M09_N = PY_SPARSE_M09_N # Number of grid cells in sparse ("land") arrays
-    long  SPARSE_M01_N = M01_NESTED_IN_M09 * SPARSE_M09_N
     # Additional Tsoil parameter (fixed for all PFTs)
     float TSOIL1 = 66.02 # deg K
     float TSOIL2 = 227.13 # deg K

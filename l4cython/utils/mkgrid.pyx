@@ -18,8 +18,7 @@ import tempfile
 import numpy as np
 from libc.stdlib cimport free, calloc
 from libc.stdio cimport fopen, fread, fclose, fwrite
-from l4cython.utils.io cimport open_fid
-from l4cython.utils.fixtures import READ, WRITE
+from l4cython.utils.io cimport READ, WRITE, open_fid
 # Implicit importing of inflate(), deflate(), and spland_*() functions from mkgrid.pxd
 
 @cython.boundscheck(False)
