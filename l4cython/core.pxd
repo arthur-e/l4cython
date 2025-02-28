@@ -82,7 +82,7 @@ cdef inline void write_resampled(
         _field = 'EC/%s_mean' % _field.lower() # e.g., "EC/emult_mean"
 
     if inflated == 1:
-        space_id = create_2d_space(2, NROW9KM, NCOL9KM)
+        space_id = create_2d_space(NROW9KM, NCOL9KM)
         data_inflated = <float*> PyMem_Malloc(sizeof(float) * NCOL9KM * NROW9KM)
         # For HDF5 output, we'll first write the data to a temporary file
         tmp = NamedTemporaryFile()

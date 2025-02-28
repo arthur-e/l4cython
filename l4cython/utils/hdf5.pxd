@@ -26,7 +26,6 @@ cdef extern from "src/hdf5.h":
     herr_t H5Fclose(hid_t file_id)
 
     # To write an HDF5 file
-    # TODO Is H5Fflush() needed?
     hid_t H5Fcreate(
         char* filename, unsigned char flags, hid_t fcpl_id, hid_t fapl_id)
     herr_t H5Dset_extent(hid_t dset_id, hsize_t* size)
@@ -44,10 +43,20 @@ cdef extern from "src/hdf5.h":
     # To write data into an HDF5 dataset from a buffer
     herr_t H5Dwrite(
         hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t dxpl_id, void* buff)
-    # herr_t H5LTmake_dataset(hid_t loc_id, char* dset_name, int rank, hsize_t* dims, hid_t type_id, void* buff)
 
 
-cdef inline hid_t create_1d_space(int rank, int nelem):
+cdef inline hid_t create_1d_space(int nelem):
+    '''
+    Parameters
+    ----------
+    nelem : int
+        The number of elements
+
+    Returns
+    -------
+    hid_t
+        The data space ID
+    '''
     cdef hsize_t dims[1]
     cdef hsize_t max_dims[1]
     dims[:] = [nelem]
@@ -55,7 +64,20 @@ cdef inline hid_t create_1d_space(int rank, int nelem):
     return H5Screate_simple(1, dims, max_dims)
 
 
-cdef inline hid_t create_2d_space(int rank, int nrow, int ncol):
+cdef inline hid_t create_2d_space(int nrow, int ncol):
+    '''
+    Parameters
+    ----------
+    nrow : int
+        The number of rows
+    ncol : int
+        The number of columns
+
+    Returns
+    -------
+    hid_t
+        The data space ID
+    '''
     cdef hsize_t dims[2]
     cdef hsize_t max_dims[2]
     dims[:] = [nrow, ncol]
@@ -97,6 +119,8 @@ cdef inline hid_t open_hdf5(char* filename):
 cdef inline void read_hdf5(
         char* filename, char* field, hid_t dtype, void* buff):
     '''
+    Opens an HDF5 file and reads a given dataset.
+
     Parameters
     ----------
     filename : char*
@@ -122,6 +146,8 @@ cdef inline void read_hdf5(
 cdef inline void write_hdf5_dataset(
         hid_t fid, char* field, hid_t dtype, hid_t dspace, void* buff):
     '''
+    Writes a dataset into an (already open) HDF5 file.
+
     Parameters
     ----------
     fid : hid_t
