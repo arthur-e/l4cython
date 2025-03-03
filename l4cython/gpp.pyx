@@ -37,10 +37,9 @@ from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from bisect import bisect_right
 from tempfile import NamedTemporaryFile
-from l4cython.constraints cimport linear_constraint
-from l4cython.science cimport rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
 from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, SPARSE_M09_N, SPARSE_M01_N, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, DFNT_UINT8, DFNT_FLOAT32
 from l4cython.core import load_parameters_table
+from l4cython.science cimport arrhenius, linear_constraint, rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
 from l4cython.resample cimport write_resampled
 from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, hid_t, hsize_t, create_1d_space, create_2d_space, close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset
 from l4cython.utils.io cimport READ, open_fid, read_flat, to_numpy

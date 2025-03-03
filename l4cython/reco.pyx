@@ -38,9 +38,9 @@ from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from tempfile import NamedTemporaryFile
-from l4cython.constraints cimport arrhenius, linear_constraint
 from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, SPARSE_M09_N, SPARSE_M01_N, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, DFNT_FLOAT32
 from l4cython.core import load_parameters_table
+from l4cython.science cimport arrhenius, linear_constraint
 from l4cython.resample cimport write_resampled
 from l4cython.utils.hdf5 cimport H5T_STD_U8LE, hid_t, read_hdf5
 from l4cython.utils.io cimport READ, open_fid, read_flat, to_numpy

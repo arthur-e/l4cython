@@ -39,9 +39,9 @@ from libc.math cimport isnan, fabs, fmax
 from libc.stdio cimport FILE, fread, fclose
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
-from l4cython.constraints cimport arrhenius, linear_constraint
 from l4cython.core cimport BPLUT, SPARSE_M09_N, N_PFT
 from l4cython.core import load_parameters_table
+from l4cython.science cimport arrhenius, linear_constraint
 from l4cython.utils.io cimport READ, open_fid, to_numpy_double
 from tqdm import tqdm
 
@@ -262,9 +262,10 @@ cdef analytical_spinup(
             #   a sum of 365 equal increments
             litter[i] += (
                 AVAIL_NPP[i] * fmax(0, litter_rate[i] / n_litter_days))
-            # Compute and increment annual k_mult sum
+            # Compute and increment annual k_mult sum; convert SMSF from ppt
+            #   to % wetness
             w_mult[i] = linear_constraint(
-                smsf[i], PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
+                smsf[i] / 10.0, PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
             t_mult[i] = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
             k_mult[i] += (w_mult[i] * t_mult[i])
 
