@@ -47,7 +47,7 @@ from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, SPARSE_M09_N, S
 from l4cython.core import load_parameters_table
 from l4cython.resample cimport write_resampled
 from l4cython.utils.dec2bin cimport bits_from_uint32
-from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, read_hdf5
+from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, hid_t, read_hdf5
 from l4cython.utils.io cimport READ, open_fid, read_flat, read_flat_short, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
@@ -100,11 +100,11 @@ def main(config = None, verbose = True):
     cdef:
         Py_ssize_t i, j, k, pft
         Py_ssize_t doy # Day of year, on [1,365]
+        hid_t fid # For open HDF5 files
         int DEBUG, n_litter_days
         float fpar # Current fPAR value
         float litter # Amount of litterfall entering SOC pools
         float reco # Ecosystem respiration
-        char* ofname # Output filename
         float k_mult
 
     # 9-km (M09) heap allocations, for RECO
@@ -376,21 +376,22 @@ def main(config = None, verbose = True):
             lambda x: x.upper(), config['model']['output_fields']))
 
         if fmt in ('M09', 'M09land'):
+            fid = 0
             inflated = 1 if fmt == 'M09' else 0
             if 'GPP' in config['model']['output_fields']:
-                write_resampled(config, gpp, suffix, 'GPP', inflated)
+                fid = write_resampled(config, gpp, suffix, 'GPP', inflated, fid)
             if 'NPP' in output_fields:
-                write_resampled(config, npp, suffix, 'NPP', inflated)
+                fid = write_resampled(config, npp, suffix, 'NPP', inflated, fid)
             if 'EMULT' in output_fields:
-                write_resampled(config, e_mult, suffix, 'Emult', inflated)
+                fid = write_resampled(config, e_mult, suffix, 'Emult', inflated, fid)
             if 'RH' in output_fields:
-                write_resampled(config, rh_total, suffix, 'RH', inflated)
+                fid = write_resampled(config, rh_total, suffix, 'RH', inflated, fid)
             if 'NEE' in output_fields:
-                write_resampled(config, nee, suffix, 'NEE', inflated)
+                fid = write_resampled(config, nee, suffix, 'NEE', inflated, fid)
             if 'TMULT' in output_fields:
-                write_resampled(config, t_mult, suffix, 'Tmult', inflated)
+                fid = write_resampled(config, t_mult, suffix, 'Tmult', inflated, fid)
             if 'WMULT' in output_fields:
-                write_resampled(config, w_mult, suffix, 'Wmult', inflated)
+                fid = write_resampled(config, w_mult, suffix, 'Wmult', inflated, fid)
         else:
             output_dir = config['model']['output_dir']
             out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)

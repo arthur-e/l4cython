@@ -6,8 +6,9 @@ from Cython.Build import cythonize
 MACROS = [ # Avoids warning "Using deprecated NumPy API"
     ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION'), # https://stackoverflow.com/questions/52749662/using-deprecated-numpy-api
 ]
+HDF4_DIRS = ['/usr/include', '/usr/include/hdf']
 HDF5_DIRS = [
-    '/usr/include', '/usr/include/hdf',
+    *HDF4_DIRS,
     '/usr/include/hdf5/openmpi/', # Also required for hdf5.pxd
     '/usr/lib/x86_64-linux-gnu/openmpi/include/' # Also required for hdf5.pxd
 ]
@@ -33,7 +34,7 @@ core = Extension(
     sources = ['core.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'mfhdfalt'],
-    include_dirs = ['/usr/include', '/usr/include/hdf'],
+    include_dirs = HDF4_DIRS,
     extra_compile_args = HDF4_ARGS,
     extra_link_args = ['-fopenmp']
 )
@@ -75,10 +76,9 @@ spinup = Extension(
     sources = ['spinup_9km.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'mfhdfalt'],
-    include_dirs = ['./utils', '/usr/include', '/usr/include/hdf'],
+    include_dirs = ['./utils', *HDF4_DIRS],
     extra_compile_args = HDF4_ARGS,
     extra_link_args = ['-fopenmp']
 )
 
-# setup(ext_modules = cythonize([core, gpp, reco, budget, resample, spinup]))
-setup(ext_modules = cythonize([core, gpp, resample]))
+setup(ext_modules = cythonize([core, gpp, reco, budget, resample, spinup]))
