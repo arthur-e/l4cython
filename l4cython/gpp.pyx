@@ -37,12 +37,12 @@ from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from bisect import bisect_right
 from tempfile import NamedTemporaryFile
-from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, SPARSE_M09_N, SPARSE_M01_N, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, DFNT_UINT8, DFNT_FLOAT32
+from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, M03_NESTED_IN_M09, SPARSE_M09_N, SPARSE_M03_N, SPARSE_M01_N, NCOL1KM, NROW1KM, NCOL3KM, NROW3KM, NCOL9KM, NROW9KM, N_PFT, DFNT_UINT8, DFNT_FLOAT32
 from l4cython.core import load_parameters_table
 from l4cython.science cimport arrhenius, linear_constraint, rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
 from l4cython.resample cimport write_resampled
 from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, hid_t, hsize_t, create_1d_space, create_2d_space, close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset
-from l4cython.utils.io cimport READ, open_fid, read_flat, to_numpy
+from l4cython.utils.io cimport READ, open_fid, read_flat, read_flat_char, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.dec2bin cimport bits_from_uint32
@@ -84,7 +84,7 @@ def main(config = None, verbose = True):
     verbose : bool
     '''
     cdef:
-        Py_ssize_t i, j, k, pft
+        Py_ssize_t i, j, k, j3, k3, pft
         hid_t fid # For open HDF5 files
         int DEBUG
         float fpar
@@ -109,6 +109,8 @@ def main(config = None, verbose = True):
     fpar0 = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
     fpar_qc = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
     fpar_clim = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
+    # The 3-km binary FT state
+    ft_state= <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M03_N)
 
     # These have to be allocated differently for use with low-level functions
     in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
@@ -217,10 +219,14 @@ def main(config = None, verbose = True):
             # SMRZ (before rescaling)
             write_numpy_deflated(tmp.name, hdf['SM_ROOTZONE_WETNESS'][:])
             read_flat(tmp_fname_bs, SPARSE_M09_N, smrz0)
-            # NOTE: TS/Tsurf is stored in deg C, to great annoyance
-            # TS/Tsurf
-            write_numpy_deflated(tmp.name, hdf['TS_M09_DEGC_AVG'][:])
-            read_flat(tmp_fname_bs, SPARSE_M09_N, tsurf)
+            # Read the FT state from the 3-km array; it is bit-packed
+            #   but only two states matter: 53=Frozen, 52=Thawed
+            #   by the least-significant bit: 1=Frozen, 0=Thaweds
+            tmp_3km = NamedTemporaryFile()
+            tmp_3km_fname_bs = tmp_3km.name.encode('UTF-8')
+            write_numpy_deflated(
+                tmp_3km.name, hdf['FT_STATE_UM_M03'][:], DFNT_UINT8, 'M03')
+            read_flat_char(tmp_3km_fname_bs, SPARSE_M03_N, ft_state)
 
         # Iterate over 9-km grid
         for i in prange(SPARSE_M09_N, nogil = True):
@@ -229,63 +235,67 @@ def main(config = None, verbose = True):
             smrz[i] = rescale_smrz(
                 100.0 * smrz0[i], 100.0 * SMRZ_MIN[i], 100.0 * SMRZ_MAX[i])
 
-            # TODO See if it is actually faster to do this in a single thread
-            #   i.e., with range(); could be overhead assoc. with small task
-            # Iterate over each nested 1-km pixel
-            for j in prange(M01_NESTED_IN_M09):
-                # Hence, (i) indexes the 9-km pixel and k the 1-km pixel
-                k = (M01_NESTED_IN_M09 * i) + j
-                pft = PFT[k]
-                # Make sure to fill output grids with the FILL_VALUE,
-                #   otherwise they may contain zero (0) at invalid data
-                e_mult[k] = FILL_VALUE
-                ft[k] = FILL_VALUE
-                f_tmin[k] = FILL_VALUE
-                f_vpd[k] = FILL_VALUE
-                f_smrz[k] = FILL_VALUE
-                gpp[k] = FILL_VALUE
-                npp[k] = FILL_VALUE
-                if is_valid(pft) == 0:
-                    continue # Skip invalid PFTs
-                # If surface soil temp. is above freezing, mark Thawed (=1),
-                #   otherwise Frozen (=0)
-                ft[k] = PARAMS.ft0[pft]
-                # NOTE: TS/Tsurf is stored in deg C, to great annoyance
-                if tsurf[i] >= 0:
-                    ft[k] = PARAMS.ft1[pft]
+            # A special 3-km nested loop, just for discerning FT status
+            for j3 in prange(M03_NESTED_IN_M09):
+                k3 = (M03_NESTED_IN_M09 * i) + j3
 
-                # Compute the environmental constraints
-                f_tmin[k] = linear_constraint(
-                    tmin[i], PARAMS.tmin0[pft], PARAMS.tmin1[pft], 0)
-                f_vpd[k] = linear_constraint(
-                    vpd[i], PARAMS.vpd0[pft], PARAMS.vpd1[pft], 1)
-                f_smrz[k] = linear_constraint(
-                    smrz[i], PARAMS.smrz0[pft], PARAMS.smrz1[pft], 0)
-                e_mult[k] = ft[k] * f_tmin[k] * f_vpd[k] * f_smrz[k]
+                # TODO See if it is actually faster to do this in a single thread
+                #   i.e., with range(); could be overhead assoc. with small task
+                # Iterate over each nested 1-km pixel
+                for j in prange(M01_NESTED_IN_M09):
+                    # Hence, (i) indexes the 9-km pixel and k the 1-km pixel
+                    k = (M01_NESTED_IN_M09 * i) + j
+                    pft = PFT[k]
+                    # Make sure to fill output grids with the FILL_VALUE,
+                    #   otherwise they may contain zero (0) at invalid data
+                    e_mult[k] = FILL_VALUE
+                    ft[k] = FILL_VALUE
+                    f_tmin[k] = FILL_VALUE
+                    f_vpd[k] = FILL_VALUE
+                    f_smrz[k] = FILL_VALUE
+                    gpp[k] = FILL_VALUE
+                    npp[k] = FILL_VALUE
+                    if is_valid(pft) == 0:
+                        continue # Skip invalid PFTs
+                    # If surface soil temp. is above freezing, mark Thawed (=1),
+                    #   otherwise Frozen (=0)
+                    ft[k] = PARAMS.ft0[pft]
+                    # NOTE: The 3-km FT state is flipped, so 0=Thawed
+                    if bits_from_uint32(0, 0, ft_state[k3]) == 0:
+                        ft[k] = PARAMS.ft1[pft]
 
-                # Determine the value of fPAR based on QC flag;
-                #   bad pixels have either:
-                #   1 in the left-most bit (SCF_QC bit = "Pixel not produced at all")
-                if bits_from_uint32(7, 7, fpar_qc[k]) == 1:
-                    fpar = <float>fpar_clim[k]
-                #   Or, anything other than 00 ("Clear") in bits 3-4
-                elif bits_from_uint32(3, 4, fpar_qc[k]) > 0:
-                    fpar = <float>fpar_clim[k]
-                else:
-                    fpar = <float>fpar0[k] # Otherwise, we're good
-                # Then, check that we're not out of range
-                if fpar0[k] > 100 and fpar_clim[k] <= 100:
-                    fpar = <float>fpar_clim[k]
-                elif fpar0[k] > 100:
-                    continue # Skip this pixel
-                fpar = fpar / 100.0 # Convert from [0,100] to [0,1]
-                if DEBUG == 1:
-                    fpar_final[k] = fpar
+                    # Compute the environmental constraints
+                    f_tmin[k] = linear_constraint(
+                        tmin[i], PARAMS.tmin0[pft], PARAMS.tmin1[pft], 0)
+                    f_vpd[k] = linear_constraint(
+                        vpd[i], PARAMS.vpd0[pft], PARAMS.vpd1[pft], 1)
+                    f_smrz[k] = linear_constraint(
+                        smrz[i], PARAMS.smrz0[pft], PARAMS.smrz1[pft], 0)
+                    e_mult[k] = ft[k] * f_tmin[k] * f_vpd[k] * f_smrz[k]
 
-                # Finally, compute GPP and NPP
-                gpp[k] = fpar * par[i] * e_mult[k] * PARAMS.lue[pft]
-                gpp[k] = fmax(0, gpp[k]) # Guard against negative values
-                npp[k] = gpp[k] * PARAMS.cue[pft]
+                    # Determine the value of fPAR based on QC flag;
+                    #   bad pixels have either:
+                    #   1 in the left-most bit (SCF_QC bit = "Pixel not produced at all")
+                    if bits_from_uint32(7, 7, fpar_qc[k]) == 1:
+                        fpar = <float>fpar_clim[k]
+                    #   Or, anything other than 00 ("Clear") in bits 3-4
+                    elif bits_from_uint32(3, 4, fpar_qc[k]) > 0:
+                        fpar = <float>fpar_clim[k]
+                    else:
+                        fpar = <float>fpar0[k] # Otherwise, we're good
+                    # Then, check that we're not out of range
+                    if fpar0[k] > 100 and fpar_clim[k] <= 100:
+                        fpar = <float>fpar_clim[k]
+                    elif fpar0[k] > 100:
+                        continue # Skip this pixel
+                    fpar = fpar / 100.0 # Convert from [0,100] to [0,1]
+                    if DEBUG == 1:
+                        fpar_final[k] = fpar
+
+                    # Finally, compute GPP and NPP
+                    gpp[k] = fpar * par[i] * e_mult[k] * PARAMS.lue[pft]
+                    gpp[k] = fmax(0, gpp[k]) # Guard against negative values
+                    npp[k] = gpp[k] * PARAMS.cue[pft]
 
 
         # If averaging from 1-km to 9-km resolution is requested...
@@ -344,6 +354,7 @@ def main(config = None, verbose = True):
     PyMem_Free(fpar0)
     PyMem_Free(fpar_qc)
     PyMem_Free(fpar_clim)
+    PyMem_Free(ft_state)
     free(h5_fpar0)
     free(h5_fpar_qc)
     free(h5_fpar_clim)

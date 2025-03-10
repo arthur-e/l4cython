@@ -49,6 +49,24 @@ cdef inline void read_flat(char* filename, int n_elem, float* arr):
     fclose(fid)
 
 
+cdef inline void read_flat_char(char* filename, int n_elem, unsigned char* arr):
+    '''
+    Reads in global, 9-km data from a flat file (*.uint8).
+
+    Parameters
+    ----------
+    filename : char*
+        The filename to read
+    n_elem : int
+        The number of array elements
+    arr : short int*
+        The destination array buffer
+    '''
+    fid = open_fid(filename, READ)
+    fread(arr, sizeof(unsigned char), <size_t>sizeof(unsigned char)*n_elem, fid)
+    fclose(fid)
+
+
 cdef inline void read_flat_short(char* filename, int n_elem, short int* arr):
     '''
     Reads in global, 9-km data from a flat file (*.int16).

@@ -68,7 +68,10 @@ def deflate_file(filename, grid = 'M09'):
     # Assume 9-km grid, this also helps avoid warnings when compiling
     in_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
     out_bytes = size_in_bytes(data_type) * SPARSE_M09_N
-    if grid == 'M01':
+    if grid == 'M03':
+        in_bytes = size_in_bytes(data_type) * NCOL3KM * NROW3KM
+        out_bytes = size_in_bytes(data_type) * SPARSE_M03_N
+    elif grid == 'M01':
         in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
         out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
     grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
@@ -154,9 +157,12 @@ def inflate_file(filename, grid = 'M09'):
     # Assume 9-km grid, this also helps avoid warnings when compiling
     in_bytes = size_in_bytes(data_type) * SPARSE_M09_N
     out_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
-    if grid == 'M01':
-        in_bytes = size_in_bytes(data_type) * SPARSE_M01_N
-        out_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
+    if grid == 'M03':
+        in_bytes = size_in_bytes(data_type) * NCOL3KM * NROW3KM
+        out_bytes = size_in_bytes(data_type) * SPARSE_M03_N
+    elif grid == 'M01':
+        in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
+        out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
     flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
 
     # Read in the deflated array
@@ -214,7 +220,10 @@ def write_numpy_deflated(
     # Assume 9-km grid, this also helps avoid warnings when compiling
     in_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
     out_bytes = size_in_bytes(data_type) * SPARSE_M09_N
-    if grid == 'M01':
+    if grid == 'M03':
+        in_bytes = size_in_bytes(data_type) * NCOL3KM * NROW3KM
+        out_bytes = size_in_bytes(data_type) * SPARSE_M03_N
+    elif grid == 'M01':
         in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
         out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
     grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
@@ -273,9 +282,12 @@ def write_numpy_inflated(
     # Assume 9-km grid, this also helps avoid warnings when compiling
     in_bytes = size_in_bytes(data_type) * SPARSE_M09_N
     out_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
-    if grid == 'M01':
-        in_bytes = size_in_bytes(data_type) * SPARSE_M01_N
-        out_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
+    if grid == 'M03':
+        in_bytes = size_in_bytes(data_type) * NCOL3KM * NROW3KM
+        out_bytes = size_in_bytes(data_type) * SPARSE_M03_N
+    elif grid == 'M01':
+        in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
+        out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
     flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
     inflated_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
 

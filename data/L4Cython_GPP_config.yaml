@@ -29,11 +29,12 @@ data:
     # fPAR (unsigned 8-bit integer, 0-100%)
     fpar: /anx_lagr4/SMAP/L4C_drivers/Version8/L4C_MOD/L4_C_mod_%sT000000_Vv8020_001.h5 # Canopy fPAR
 model:
-  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250227
+  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250310
   output_type: 'HDF5'
   # Valid output fields include: "GPP", "NPP", "Emult", "f_Tmin", "f_VPD", "f_SMRZ", "f_FT"
   output_fields:
   - GPP
   - NPP
   - Emult
+  - f_FT
   output_format: M09 # "M09land" for flat (1D) output

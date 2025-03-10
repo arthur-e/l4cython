@@ -47,7 +47,9 @@
 
 // More user-friendly definitions, should be consistent with above
 #define   M01_NESTED_IN_M09         81 // Number of 1-km cells in a 9-km cell
+#define   M03_NESTED_IN_M09          9 // Number of 3-km cells in a 9-km cell
 #define   SPARSE_M09_N       1664040ul
+#define   SPARSE_M03_N      14976360ul
 #define   SPARSE_M01_N     134787240ul
 #define   FILL_VALUE             -9999
 #define   N_PFT                      8 // Number of PFTs

@@ -7,10 +7,9 @@ cdef extern from "src/spland.h":
         unsigned short* row # NOTE: 16-bit unsigned integer
         unsigned short* col
 
-    int M01_NESTED_IN_M09
-    int SPARSE_M09_N
-    int SPARSE_M01_N
-    int NCOL1KM, NROW1KM, NCOL9KM, NROW9KM
+    int M01_NESTED_IN_M09, M03_NESTED_IN_M09
+    int SPARSE_M09_N, SPARSE_M03_N, SPARSE_M01_N
+    int NCOL1KM, NROW1KM, NCOL3KM, NROW3KM, NCOL9KM, NROW9KM
     int DFNT_FLOAT32, DFNT_FLOAT64, DFNT_UINT8, DFNT_INT8, DFNT_UINT16, DFNT_INT16, DFNT_UINT32, DFNT_INT32, DFNT_INT64
 
     int spland_load_9km_rc(spland_ref_struct* SPLAND)
@@ -54,7 +53,10 @@ cdef inline unsigned char* deflate(
     # Assume 9-km grid, this also helps avoid warnings when compiling
     in_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
     out_bytes = size_in_bytes(data_type) * SPARSE_M09_N
-    if grid.decode('UTF-8') == 'M01':
+    if grid.decode('UTF-8') == 'M03':
+        in_bytes = size_in_bytes(data_type) * NCOL3KM * NROW3KM
+        out_bytes = size_in_bytes(data_type) * SPARSE_M03_N
+    elif grid.decode('UTF-8') == 'M01':
         in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
         out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
 
@@ -109,9 +111,12 @@ cdef inline unsigned char* inflate(
     # Assume 9-km grid, this also helps avoid warnings when compiling
     in_bytes = size_in_bytes(data_type) * SPARSE_M09_N
     out_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
-    if grid.decode('UTF-8') == 'M01':
-        in_bytes = size_in_bytes(data_type) * SPARSE_M01_N
-        out_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
+    if grid.decode('UTF-8') == 'M03':
+        in_bytes = size_in_bytes(data_type) * NCOL3KM * NROW3KM
+        out_bytes = size_in_bytes(data_type) * SPARSE_M03_N
+    elif grid.decode('UTF-8') == 'M01':
+        in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
+        out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
 
     grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
     # NOTE: Using 9-km row/col for both 9-km and 1-km nested grids
