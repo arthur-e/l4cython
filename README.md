@@ -39,11 +39,19 @@ cd l4cython
 make
 ```
 
-**If you have C dependency issues at compile time, note that some shared libraries have name variants on Ubuntu GNU/Linux and possibly other systems.** Symbolic linking is a simple fix.
+**If you have C dependency issues at compile time, note that some shared libraries have name variants on Ubuntu GNU/Linux and possibly other systems.** Symbolic linking is a simple fix, though the details will vary across systems. Here's an example from Ubuntu Linux 22.04.
 
 ```sh
+# For HDF4 shared libraries
 sudo ln -s /usr/lib/libdfalt.so.0 /usr/lib/libdfalt.so
 sudo ln -s /usr/lib/libmfhdfalt.so.0 /usr/lib/libmfhdfalt.so
+
+# For HDF5 shared libraries
+ln -s /usr/lib/x86_64-linux-gnu/libhdf5_openmpi.so.103 /usr/lib/x86_64-linux-gnu/libhdf5.so
+ln -s /usr/lib/x86_64-linux-gnu/libhdf5_openmpi_hl.so.100 /usr/lib/x86_64-linux-gnu/libhdf5_openmpi_hl.so
+
+# For libgctp; General Cartographic Transformation Package
+sudo ln -s /usr/lib/x86_64-linux-gnu/libgctp.so /usr/lib/x86_64-linux-gnu/libGctp.so
 ```
 
 **To test program modes, run `pytest` independently on each test suite** (there are issues with having `pytest` run them all at once:

@@ -33,7 +33,7 @@ cdef:
     float rh0[SPARSE_N]
 
 # Heap allocation
-cdef
+cdef:
     float* rh0
 rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_N)
 ```
@@ -70,6 +70,10 @@ setup(ext_modules = cythonize(respiration))
 [Then see this resource for tips on debugging.](https://github.com/cython/cython/wiki/DebuggingTechniques)
 
 
+
+Typical Exceptions
+----------------------------
+
 ### Operations Not Permitted without the GIL
 
 Some things to check if you get an error related to Cython code being interpreted as Python code inside a `prange()` loop, when the GIL is released:
@@ -100,6 +104,18 @@ However, it's when we run code in the parent module that we see this error. It t
 ```python
 # distutils: sources = ["utils/src/spland.c", "utils/src/uuta.c"]
 ```
+
+
+### `lvalue` required as left operand of assignment
+
+You may encounter the error message:
+
+```
+lvalue required as left operand of assignment
+```
+
+This occurs when a variable is defined in both C and Python within the same module; i.e., it is defined as a C variable in a `*.pxd` file but as a Python variable in a `*.pyx` file. This could even be a result of imports; i.e., a `cimport` of a variable with the same name as a Python-defined variable.
+
 
 
 Implementation Details
@@ -138,10 +154,10 @@ Fortunately, the performance hit is small; for 9-km data:
 Concurrency
 -------------------
 
-OpenMP can be used for concurrency only if the contents of the inner-most loop (e.g., where `prange()` is used) contains only C code.
+OpenMP can be used for concurrency only if the contents of the inner-most loop (e.g., where `prange()` is used) contains only C code. Use these compiler arguments:
 
 ```
-respration = Extension(
+respiration = Extension(
     ...
     extra_compile_args = ['-fopenmp'],
     extra_link_args = ['-fopenmp'])
