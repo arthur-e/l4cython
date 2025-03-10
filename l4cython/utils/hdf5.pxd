@@ -8,15 +8,22 @@ cdef extern from "src/hdf5.h":
     ctypedef unsigned long long int hsize_t # uint6
     ctypedef int herr_t
     ctypedef int htri_t
+    ctypedef herr_t H5E_auto1_t
+    ctypedef herr_t H5E_auto2_t
 
+    int H5E_DEFAULT # Default error stack
     int H5P_DEFAULT # Default property list
     int H5S_ALL
     int H5F_ACC_TRUNC # Flag to "truncate" the file, "if it already exists, erasing all data previously stored in the file"
     int H5F_ACC_EXCL # Flag to fail on creating a file that already exists
     int H5S_SIMPLE # An n-dimensional data space
+    int H5I_INVALID_HID # Is -1 for error return
     hid_t H5T_IEEE_F32LE
     hid_t H5T_NATIVE_UINT8
     hid_t H5T_STD_U8LE
+
+    # For error handling
+    herr_t H5Eset_auto2(hid_t estack_id, H5E_auto2_t func, void* client_data)
 
     # To open an HDF5 file
     hid_t H5Fopen(char* filename, unsigned flags, hid_t access_plist)
@@ -39,8 +46,9 @@ cdef extern from "src/hdf5.h":
     # To create a "data space"
     hid_t H5Screate_simple(int rank, hsize_t dims[], hsize_t maxdims[])
 
-    # To create a group
+    # To create or open a group
     hid_t H5Gcreate(hid_t loc_id, char* name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id)
+    hid_t H5Gopen1(hid_t loc_id, char* name)
 
     # To create an HDF5 dataset
     hid_t H5Dcreate(
@@ -117,6 +125,9 @@ cdef inline hid_t open_hdf5(char* filename):
     hid_t
         The file ID
     '''
+    # NOTE: Turning off error printing here because we already know (and
+    #   handle appropriately) exceptions related to existing files
+    H5Eset_auto2(H5E_DEFAULT, <H5E_auto2_t>NULL, NULL)
     if H5Fis_hdf5(filename) >= 0:
         remove(filename) # Delete the file
     # Using H5P_DEFAULT for args fcpl_id, fapl_id
@@ -169,14 +180,20 @@ cdef inline void write_hdf5_dataset(
         A pointer to an array buffer from which to read the data
     '''
     cdef hid_t dest, gid
+    # NOTE: Turning off error printing here because we already know (and
+    #   handle appropriately) exceptions related to existing groups
+    H5Eset_auto2(H5E_DEFAULT, <H5E_auto2_t>NULL, NULL)
     # If there is no intermediate group, destination is the file
     dset_name = field.decode('UTF-8')
     dest = fid
     # In case of an intermediate group, i.e., "group/dataset_name"
     if '/' in dset_name:
         group, dset_name = field.decode('UTF-8').split('/')
-        gid = H5Gcreate(
-            fid, group.encode('UTF-8'), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
+        gid = H5Gopen1(fid, group.encode('UTF-8'))
+        # If the group doesn't exist, we'll get an error return value (-1)
+        if gid < 0:
+            gid = H5Gcreate(
+                fid, group.encode('UTF-8'), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
         dest = gid
 
     dset_id = H5Dcreate( # Using H5P_DEFAULT for lcpl_id, dcpl_id, dapl_id

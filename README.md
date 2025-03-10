@@ -10,6 +10,10 @@ floating-point precision. L4Cython achieves the closest results with version
 7.4.1 of the SMAP L4C operational code and Version 7 (Vv7040/Vv7042) of the
 operational product.
 
+- [ ] **The remaining difference between L4Cython GPP calculation and the
+  current (Version 7) official L4CMDL GPP calculation is that the latter does
+  not use the surface temperature from L4_SM but instead a field
+  `FT_STATE_UM_M03` that depends on GMAO GEOS5.**
 - [TODO: Changing static links to dynamic links](https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html?highlight=packaging#distributing-cython-modules)
 
 
