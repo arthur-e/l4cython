@@ -99,12 +99,15 @@ int spland_load_9km_rc(spland_ref_struct *SPLAND);
 int size_in_bytes(int32 number_type);
 
 void spland_deflate_9km(spland_ref_struct SPLAND, void *src_p, void *dest_p, const unsigned int dataType);
+void spland_deflate_3km(spland_ref_struct SPLAND, void *src_p, void *dest_p, const unsigned int dataType);
 void spland_deflate_1km(spland_ref_struct SPLAND, void *src_p, void *dest_p, const unsigned int dataType);
 
 void spland_inflate_9km(spland_ref_struct SPLAND, void *src_p, void *dest_p, const unsigned int dataType);
+void spland_inflate_3km(spland_ref_struct SPLAND, void *src_p, void *dest_p, const unsigned int dataType);
 void spland_inflate_1km(spland_ref_struct SPLAND, void *src_p, void *dest_p, const unsigned int dataType);
 
 void spland_inflate_init_9km(void *dest_p, const unsigned int dataType);
+void spland_inflate_init_3km(void *dest_p, const unsigned int dataType);
 void spland_inflate_init_1km(void *dest_p, const unsigned int dataType);
 void set_fillval_UUTA(void *vDest_p, const signed int dataType, const size_t atSlot);
 

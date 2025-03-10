@@ -16,12 +16,15 @@ cdef extern from "src/spland.h":
     int size_in_bytes(long number_type)
 
     void spland_deflate_9km(spland_ref_struct SPLAND, void* src_p, void* dest_p, const unsigned int dataType)
+    void spland_deflate_3km(spland_ref_struct SPLAND, void* src_p, void* dest_p, const unsigned int dataType)
     void spland_deflate_1km(spland_ref_struct SPLAND, void* src_p, void* dest_p, const unsigned int dataType)
 
     void spland_inflate_9km(spland_ref_struct SPLAND, void* src_p, void* dest_p, const unsigned int dataType)
+    void spland_inflate_3km(spland_ref_struct SPLAND, void* src_p, void* dest_p, const unsigned int dataType)
     void spland_inflate_1km(spland_ref_struct SPLAND, void* src_p, void* dest_p, const unsigned int dataType)
 
     void spland_inflate_init_9km(void* dest_p, const unsigned int dataType)
+    void spland_inflate_init_3km(void* dest_p, const unsigned int dataType)
     void spland_inflate_init_1km(void* dest_p, const unsigned int dataType)
     void set_fillval_UUTA(void* vDest_p, const unsigned int dataType, const size_t atSlot)
 
@@ -71,6 +74,8 @@ cdef inline unsigned char* deflate(
     # Inflate the output array
     if grid.decode('UTF-8') == 'M09':
         spland_deflate_9km(lookup, &grid_array, &flat_array, data_type)
+    elif grid.decode('UTF-8') == 'M03':
+        spland_deflate_3km(lookup, &grid_array, &flat_array, data_type)
     elif grid.decode('UTF-8') == 'M01':
         spland_deflate_1km(lookup, &grid_array, &flat_array, data_type)
 
@@ -130,6 +135,9 @@ cdef inline unsigned char* inflate(
     if grid.decode('UTF-8') == 'M09':
         spland_inflate_init_9km(&grid_array, data_type)
         spland_inflate_9km(lookup, &flat_array, &grid_array, data_type)
+    elif grid.decode('UTF-8') == 'M03':
+        spland_inflate_init_3km(&grid_array, data_type)
+        spland_inflate_3km(lookup, &flat_array, &grid_array, data_type)
     elif grid.decode('UTF-8') == 'M01':
         spland_inflate_init_1km(&grid_array, data_type)
         spland_inflate_1km(lookup, &flat_array, &grid_array, data_type)

@@ -113,10 +113,12 @@ def main(config = None, verbose = True):
     ft_state= <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M03_N)
 
     # These have to be allocated differently for use with low-level functions
-    in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
-    h5_fpar0     = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-    h5_fpar_qc   = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
-    h5_fpar_clim = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    in_bytes_1km = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
+    in_bytes_3km = size_in_bytes(DFNT_UINT8) * NCOL3KM * NROW3KM
+    h5_fpar0     = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes_1km)
+    h5_fpar_qc   = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes_1km)
+    h5_fpar_clim = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes_1km)
+    h5_ft_state  = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes_3km)
 
     # Read in configuration file, then load the global state variables
     if config is None:
@@ -219,14 +221,13 @@ def main(config = None, verbose = True):
             # SMRZ (before rescaling)
             write_numpy_deflated(tmp.name, hdf['SM_ROOTZONE_WETNESS'][:])
             read_flat(tmp_fname_bs, SPARSE_M09_N, smrz0)
-            # Read the FT state from the 3-km array; it is bit-packed
-            #   but only two states matter: 53=Frozen, 52=Thawed
-            #   by the least-significant bit: 1=Frozen, 0=Thaweds
-            tmp_3km = NamedTemporaryFile()
-            tmp_3km_fname_bs = tmp_3km.name.encode('UTF-8')
-            write_numpy_deflated(
-                tmp_3km.name, hdf['FT_STATE_UM_M03'][:], DFNT_UINT8, 'M03')
-            read_flat_char(tmp_3km_fname_bs, SPARSE_M03_N, ft_state)
+
+        fname_bs = (config['data']['drivers']['file'] % date_str).encode('UTF-8')
+        # Read the FT state from the 3-km array; it is bit-packed
+        #   but only two states matter: 53=Frozen, 52=Thawed
+        #   by the least-significant bit: 1=Frozen, 0=Thaweds
+        read_hdf5(fname_bs, 'FT_STATE_UM_M03', H5T_STD_U8LE, h5_ft_state)
+        ft_state = deflate(h5_ft_state, DFNT_UINT8, 'M03'.encode('UTF-8'))
 
         # Iterate over 9-km grid
         for i in prange(SPARSE_M09_N, nogil = True):
@@ -257,12 +258,13 @@ def main(config = None, verbose = True):
                     npp[k] = FILL_VALUE
                     if is_valid(pft) == 0:
                         continue # Skip invalid PFTs
+
                     # If surface soil temp. is above freezing, mark Thawed (=1),
                     #   otherwise Frozen (=0)
-                    ft[k] = PARAMS.ft0[pft]
-                    # NOTE: The 3-km FT state is flipped, so 0=Thawed
-                    if bits_from_uint32(0, 0, ft_state[k3]) == 0:
-                        ft[k] = PARAMS.ft1[pft]
+                    ft[k] = PARAMS.ft1[pft] # Assume Thawed
+                    # NOTE: The 3-km FT state is flipped, so 1=Frozen
+                    if bits_from_uint32(0, 0, ft_state[k3]) == 1:
+                        ft[k] = PARAMS.ft0[pft] # Frozen
 
                     # Compute the environmental constraints
                     f_tmin[k] = linear_constraint(

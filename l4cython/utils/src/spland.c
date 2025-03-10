@@ -1,4 +1,3 @@
-
 #include "spland.h"
 
 /*DEFLATE function for 9km grid*/
@@ -6,10 +5,8 @@ void spland_deflate_9km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
                         const unsigned int dataType) {
 
   unsigned int l;
-
   size_t srcSlot;
   size_t destSlot;
-
   size_t nelem = 1;
 
   /*Transfer cells from 2D 9km grid to 9km sparse land vector*/
@@ -23,18 +20,47 @@ void spland_deflate_9km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
   } // end:: land vec loop
 }
 
+/*DEFLATE function for nested 3km grid*/
+void spland_deflate_3km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
+                        const uint32 dataType) {
+
+  uint32 l;
+  uint8 rn, cn;
+  uint8 serialIdx_nested;
+  size_t srcSlot;
+  size_t destSlot;
+  size_t nelem = 1;
+
+  /*Transfer cells from 2D 9km grid to 9km sparse land vector*/
+  for (l = 0; l < LLAND9KM; l++) {
+    for (rn = 0; rn < NESTED_3KM_IN_9KM; rn++) {
+      for (cn = 0; cn < NESTED_3KM_IN_9KM; cn++) {
+
+        // reference 3km nested grid
+        srcSlot = (size_t)M_2D_N9_B0(SPLAND.row[l], SPLAND.col[l], rn, cn,
+                                     NESTED_3KM_IN_9KM, NCOL3KM);
+
+        // keep 3km nested cells in same relative orientation
+        serialIdx_nested = M_2D_B0(rn, cn, NESTED_3KM_IN_9KM);
+        destSlot = (size_t)M_2D_B0(l, serialIdx_nested, NESTED_3KM_IN_9KM_SQ);
+
+        // transfer data element from global grid to land vector
+        copyUUTA(src_p, dest_p, srcSlot, destSlot, dataType, nelem);
+
+      } // end:: col loop nested 3km
+    }   // end:: row loop nested 3km
+  }     // end:: land vec loop
+}
+
 /*DEFLATE function for nested 1km grid*/
 void spland_deflate_1km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
                         const unsigned int dataType) {
 
   unsigned int l;
-
   unsigned char rn, cn;
   unsigned char serialIdx_nested;
-
   size_t srcSlot;
   size_t destSlot;
-
   size_t nelem = 1;
 
   /*Transfer cells from 2D 9km grid to 9km sparse land vector*/
@@ -63,10 +89,8 @@ void spland_inflate_9km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
                         const unsigned int dataType) {
 
   unsigned int l;
-
   size_t srcSlot;
   size_t destSlot;
-
   size_t nelem = 1;
 
   /*Transfer cells from 2D 9km grid to 9km sparse land vector*/
@@ -80,6 +104,39 @@ void spland_inflate_9km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
   } // end:: land vec loop
 }
 
+/*INFLATE function for nested 3km grid*/
+/*NOTE: Really just the same as the deflate functions with the source and dest
+ * (and their respective indicies) swapped*/
+void spland_inflate_3km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
+                        const uint32 dataType) {
+
+  uint32 l;
+  uint8 rn, cn;
+  uint8 serialIdx_nested;
+  size_t srcSlot;
+  size_t destSlot;
+  size_t nelem = 1;
+
+  /*Transfer cells from 2D 9km grid to 9km sparse land vector*/
+  for (l = 0; l < LLAND9KM; l++) {
+    for (rn = 0; rn < NESTED_3KM_IN_9KM; rn++) {
+      for (cn = 0; cn < NESTED_3KM_IN_9KM; cn++) {
+        // Reference 3km nested grid
+        destSlot = (size_t)M_2D_N9_B0(SPLAND.row[l], SPLAND.col[l], rn, cn,
+                                      NESTED_3KM_IN_9KM, NCOL3KM);
+
+        // Keep 3km nested cells in same relative orientation
+        serialIdx_nested = M_2D_B0(rn, cn, NESTED_3KM_IN_9KM);
+        srcSlot = (size_t)M_2D_B0(l, serialIdx_nested, NESTED_3KM_IN_9KM_SQ);
+
+        // Transfer data element from global grid to land vector
+        copyUUTA(src_p, dest_p, srcSlot, destSlot, dataType, nelem);
+
+      } // end:: col loop nested 3km
+    }   // end:: row loop nested 3km
+  }     // end:: land vec 9km loop
+}
+
 /*INFLATE function for nested 1km grid*/
 /*NOTE: Really just the same as the deflate functions with the source and dest
  * (and their respective indicies) swapped*/
@@ -87,13 +144,10 @@ void spland_inflate_1km(spland_ref_struct SPLAND, void *src_p, void *dest_p,
                         const unsigned int dataType) {
 
   unsigned int l;
-
   unsigned char rn, cn;
   unsigned char serialIdx_nested;
-
   size_t srcSlot;
   size_t destSlot;
-
   size_t nelem = 1;
 
   /*Transfer cells from 9km sparse land vector to 2D 9km grid*/
@@ -154,6 +208,30 @@ void spland_inflate_init_9km(void *dest_p, const uint32 dataType) {
       destSlot = (size_t)M_2D_B0(r, c, NCOL9KM);
 
       set_fillval_UUTA(dest_p, dataType, destSlot);
+
+    } // end:: col 9km loop
+  }   // end:: row 9km loop
+}
+
+void spland_inflate_init_3km(void *dest_p, const uint32 dataType) {
+
+  uint32 r, c, rn, cn;
+
+  size_t destSlot;
+
+  for (r = 0; r < NROW9KM; r++) {
+    for (c = 0; c < NCOL9KM; c++) {
+      for (rn = 0; rn < NESTED_3KM_IN_9KM; rn++) {
+        for (cn = 0; cn < NESTED_3KM_IN_9KM; cn++) {
+
+          // reference 3km nested grid
+          destSlot =
+              (size_t)M_2D_N9_B0(r, c, rn, cn, NESTED_3KM_IN_9KM, NCOL3KM);
+
+          set_fillval_UUTA(dest_p, dataType, destSlot);
+
+        } // end:: col 3km nested loop
+      }   // end:: row 3km nested loop
 
     } // end:: col 9km loop
   }   // end:: row 9km loop
@@ -227,38 +305,37 @@ void set_fillval_UUTA(void *vDest_p, const int32 dataType,
   } // end switch on datatype
 }
 
-
 /************************************************************
  * Substitute for HDF4's DFKNTsize()
  *   Determine the size, given the number type
  ************************************************************/
 int size_in_bytes(int32 number_type) {
-    // No support for little-endian machines
-    switch (number_type) {
-        /* HDF types */
-        case DFNT_UCHAR:
-            return (SIZE_UCHAR);
-        case DFNT_CHAR:
-            return (SIZE_CHAR);
-        case DFNT_INT8:
-            return (SIZE_INT8);
-        case DFNT_UINT8:
-            return (SIZE_UINT8);
-        case DFNT_INT16:
-            return (SIZE_INT16);
-        case DFNT_UINT16:
-            return (SIZE_UINT16);
-        case DFNT_INT32:
-            return (SIZE_INT32);
-        case DFNT_UINT32:
-            return (SIZE_UINT32);
-        case DFNT_FLOAT32:
-            return (SIZE_FLOAT32);
-        case DFNT_FLOAT64:
-            return (SIZE_FLOAT64);
-        /* Unknown types */
-        default:
-            break;
-    } /* switch */
-    return -1;
+  // No support for little-endian machines
+  switch (number_type) {
+  /* HDF types */
+  case DFNT_UCHAR:
+    return (SIZE_UCHAR);
+  case DFNT_CHAR:
+    return (SIZE_CHAR);
+  case DFNT_INT8:
+    return (SIZE_INT8);
+  case DFNT_UINT8:
+    return (SIZE_UINT8);
+  case DFNT_INT16:
+    return (SIZE_INT16);
+  case DFNT_UINT16:
+    return (SIZE_UINT16);
+  case DFNT_INT32:
+    return (SIZE_INT32);
+  case DFNT_UINT32:
+    return (SIZE_UINT32);
+  case DFNT_FLOAT32:
+    return (SIZE_FLOAT32);
+  case DFNT_FLOAT64:
+    return (SIZE_FLOAT64);
+  /* Unknown types */
+  default:
+    break;
+  } /* switch */
+  return -1;
 }
