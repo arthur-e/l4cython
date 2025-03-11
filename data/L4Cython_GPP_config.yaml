@@ -37,4 +37,7 @@ model:
   - NPP
   - Emult
   - f_FT
+  - f_VPD
+  - f_SMRZ
+  - f_Tmin
   output_format: M09 # "M09land" for flat (1D) output

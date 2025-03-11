@@ -37,10 +37,12 @@ def main(cython_granule, mdl_granule, field = None, grid = 'M09'):
         date = HDF5_RX.match(os.path.basename(cython_granule)).groups()
 
     # Determine the HDF5 field name
-    if field in ('Tmult', 'Wmult', 'Emult'):
+    if field in ('Tmult', 'Wmult', 'Emult') or field.lower().startswith('f_'):
         field_name = f'EC/{field.lower()}_mean'
+        field_name_official = 'EC/emult_mean'
     else:
         field_name = f'{field}/{field.lower()}_mean'
+        field_name_official = field_name
 
     # Open the recent file
     if 'h5' in cython_granule:
@@ -50,12 +52,12 @@ def main(cython_granule, mdl_granule, field = None, grid = 'M09'):
         recent = np.fromfile(
             cython_granule, dtype = dtype).reshape((1624, 3856))
     recent[recent < -900] = np.nan
-    if field in ('Tmult', 'Wmult', 'Emult'):
+    if field in ('Tmult', 'Wmult', 'Emult') or field.lower().startswith('f_'):
         recent *= 100
 
     # Open the official V7 file
     with h5py.File(mdl_granule, 'r') as hdf:
-        official = hdf[field_name][:]
+        official = hdf[field_name_official][:]
     official[official < -900] = np.nan
 
     # Statistics
@@ -69,6 +71,11 @@ def main(cython_granule, mdl_granule, field = None, grid = 'M09'):
         print('Zero diff within tolerance of 1e-3')
     else:
         print(f'Global maximum (mean) difference: {np.nanmax(np.abs(diff)).round(3)} ({np.nanmean(np.abs(diff)).round(3)})')
+    pct_diff = ', '.join([
+        '%.1f%%' % (100 * (diff[np.abs(diff) > thresh].size / diff.size) )
+        for thresh in (1e-3, 1e-2, 1e-1)
+    ])
+    print(f'Percent differing by greater than (1e-3, 1e-2, 1e-1): {pct_diff}')
 
     vlimit = max(np.nanmax(diff), np.nanmin(diff))
     pyplot.imshow(
