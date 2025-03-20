@@ -41,7 +41,7 @@ from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, M03_NESTED_IN_M
 from l4cython.core import load_parameters_table
 from l4cython.science cimport arrhenius, linear_constraint, rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
 from l4cython.resample cimport write_resampled
-from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, hid_t, hsize_t, create_1d_space, create_2d_space, close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset
+from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, hid_t, hsize_t, create_1d_space, create_2d_space, close_hdf5, open_hdf5, read_hdf5
 from l4cython.utils.io cimport READ, open_fid, read_flat, read_flat_char, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes

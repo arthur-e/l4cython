@@ -10,9 +10,17 @@ cdef extern from "src/hdf5.h":
     ctypedef int htri_t
     ctypedef herr_t H5E_auto1_t
     ctypedef herr_t H5E_auto2_t
+    ctypedef enum H5D_layout_t:
+        H5D_LAYOUT_ERROR
+        H5D_COMPACT
+        H5D_CONTIGUOUS
+        H5D_CHUNKED
+        H5D_VIRTUAL
+        H5D_NLAYOUTS
 
     int H5E_DEFAULT # Default error stack
     int H5P_DEFAULT # Default property list
+    int H5P_DATASET_CREATE # Default property list for dataset creation
     int H5S_ALL
     int H5F_ACC_TRUNC # Flag to "truncate" the file, "if it already exists, erasing all data previously stored in the file"
     int H5F_ACC_EXCL # Flag to fail on creating a file that already exists
@@ -57,6 +65,11 @@ cdef extern from "src/hdf5.h":
     # To write data into an HDF5 dataset from a buffer
     herr_t H5Dwrite(
         hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t dxpl_id, void* buff)
+
+    # For property lists and dataset compression
+    hid_t H5Pcreate(hid_t cls_id)
+    herr_t H5Pset_layout(hid_t plist_id, H5D_layout_t layout)
+    herr_t H5Pset_chunk(hid_t plist_id, int ndims, hsize_t dim[])
 
 
 cdef inline hid_t create_1d_space(int nelem):
@@ -163,7 +176,8 @@ cdef inline void read_hdf5(
 
 # Based (loosely) on frm_hdf5_WriteData()
 cdef inline void write_hdf5_dataset(
-        hid_t fid, char* field, hid_t dtype, hid_t dspace, void* buff):
+        hid_t fid, char* field, hid_t dtype, hid_t dspace, int res,
+        void* buff):
     '''
     Writes a dataset into an (already open) HDF5 file.
 
@@ -176,13 +190,28 @@ cdef inline void write_hdf5_dataset(
     dtype : hid_t
         The data type, e.g., H5T_IEEE_F32LE
     dspace : hid_t
+        The dataspace identifier
+    res : int
+        The resolution of the (EASE-Grid 2.0) dataset in meters, e.g., 9000
+        for an "M09" (9-km) grid
     buff : void*
         A pointer to an array buffer from which to read the data
     '''
     cdef hid_t dest, gid
+    cdef hsize_t chunk_size[2]
+
+    # Determine chunk size based on the resolution of the grid
+    if res >= 3000:
+        chunk_size[0] = 300
+        chunk_size[1] = 100
+    else:
+        chunk_size[0] = 3000
+        chunk_size[1] = 1000
+
     # NOTE: Turning off error printing here because we already know (and
     #   handle appropriately) exceptions related to existing groups
-    H5Eset_auto2(H5E_DEFAULT, <H5E_auto2_t>NULL, NULL)
+    # H5Eset_auto2(H5E_DEFAULT, <H5E_auto2_t>NULL, NULL)
+
     # If there is no intermediate group, destination is the file
     dset_name = field.decode('UTF-8')
     dest = fid
@@ -196,8 +225,12 @@ cdef inline void write_hdf5_dataset(
                 fid, group.encode('UTF-8'), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
         dest = gid
 
-    dset_id = H5Dcreate( # Using H5P_DEFAULT for lcpl_id, dcpl_id, dapl_id
+    # Create the dataset property list, to allow for chunking
+    dcpl = H5Pcreate(H5P_DATASET_CREATE)
+    H5Pset_layout(dcpl, H5D_CHUNKED)
+    H5Pset_chunk(dcpl, 2, chunk_size)
+    dset_id = H5Dcreate( # Using H5P_DEFAULT for lcpl_id, ..., dapl_id
         dest, dset_name.encode('UTF-8'), dtype, dspace,
-        H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
+        H5P_DEFAULT, dcpl, H5P_DEFAULT)
     H5Dwrite(dset_id, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, buff)
     H5Dclose(dset_id)

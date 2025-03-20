@@ -44,6 +44,7 @@ cdef inline hid_t write_resampled(
     cdef float* data_inflated
     cdef hid_t fid
     cdef hid_t space_id
+    cdef int grid_size
     if file_id > 0:
         fid = file_id
     else:
@@ -51,10 +52,18 @@ cdef inline hid_t write_resampled(
 
     output_type = config['model']['output_type'].upper()
     output_dir = config['model']['output_dir']
+    output_grid = config['model']['output_format']
     assert output_type in ('HDF5', 'BINARY')
     assert field.decode('UTF-8') != '' or output_type == 'BINARY'
     _suffix = suffix.decode('UTF-8')
     _field = field.decode('UTF-8')
+
+    # Specify the output resolution
+    grid_size = 1000
+    if 'M09' in output_grid:
+        grid_size = 9000
+    elif 'M03' in output_grid:
+        grid_size = 3000
 
     # Resample the data from M01land to M09land
     data_resampled = FILL_VALUE * np.ones((SPARSE_M09_N,), np.float32)
@@ -105,7 +114,7 @@ cdef inline hid_t write_resampled(
         # Write the inflated data to a new HDF5 dataset
         write_hdf5_dataset(
             fid, _field.encode('UTF-8'), H5T_IEEE_F32LE, space_id,
-            data_inflated)
+            grid_size, data_inflated)
     else:
         raise NotImplementedError(
             'No support for writing deflated arrays to HDF5')
