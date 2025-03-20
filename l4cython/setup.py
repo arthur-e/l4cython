@@ -66,7 +66,7 @@ resample = Extension(
     libraries = ['dfalt', 'hdf5'],
     include_dirs = ['./utils', *HDF5_DIRS],
     extra_compile_args = [
-        '-DHAVE_HDF4', '-ldfalt', '-lhdf5', '-Wno-maybe-uninitialized'
+        '-DHAVE_HDF4', '-ldfalt', '-lhdf5', '-Wno-maybe-uninitialized', '-lz'
     ],
     extra_link_args = ['-fopenmp', '-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']
 )

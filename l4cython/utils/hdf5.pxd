@@ -21,20 +21,6 @@ cdef extern from "src/hdf5.h":
         H5D_CHUNKED
         H5D_VIRTUAL
         H5D_NLAYOUTS
-    ctypedef enum H5FD_mpio_collective_opt_t:
-        H5FD_MPIO_COLLECTIVE_IO
-        H5FD_MPIO_INDIVIDUAL_IO
-    ctypedef enum H5FD_mpio_xfer_t:
-        H5FD_MPIO_INDEPENDENT
-        H5FD_MPIO_COLLECTIVE
-    ctypedef int MPI_Comm
-    ctypedef int MPI_Info
-
-    # Defined in mpi.h
-    # https://support.hdfgroup.org/documentation/hdf5/latest/_intro_par_h_d_f5.html
-    int MPI_COMM_WORLD
-    int MPI_INFO_NULL
-    int MPI_Init(int* argc, char** argv[])
 
     int H5E_DEFAULT # Default error stack
     int H5P_DEFAULT # Default property list
@@ -75,7 +61,7 @@ cdef extern from "src/hdf5.h":
     # To create a "data space"
     hid_t H5Screate_simple(int rank, hsize_t dims[], hsize_t maxdims[])
 
-    # To create or open a group
+    # To create a group or check that a group exists
     hid_t H5Gcreate(hid_t loc_id, char* name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id)
     htri_t H5Lexists(hid_t loc_id, char* name, hid_t lapl_id)
 
@@ -91,13 +77,10 @@ cdef extern from "src/hdf5.h":
     hid_t H5Pcreate(hid_t cls_id)
     hid_t H5Pcopy(hid_t plist_id)
     hid_t H5Pclose(hid_t plist_id)
-    herr_t H5Pset_dxpl_mpio(hid_t dxpl_id, H5FD_mpio_xfer_t xfer_mode)
     herr_t H5Pset_layout(hid_t plist_id, H5D_layout_t layout)
     herr_t H5Pset_chunk(hid_t plist_id, int ndims, hsize_t dim[])
     herr_t H5Pset_fill_value(hid_t plist_id, hid_t type_id, void* value)
     herr_t H5Pset_deflate(hid_t plist_id, unsigned char level)
-
-    herr_t H5Pset_fapl_mpio(hid_t fapl_id, MPI_Comm comm, MPI_Info info)
 
 
 cdef inline hid_t create_1d_space(int nelem):
@@ -167,28 +150,12 @@ cdef inline hid_t open_hdf5(char* filename):
     hid_t
         The file ID
     '''
-    # cdef:
-    #     int args_num
-    #     int* args_num_p
-    #     char** args
-    #     MPI_Comm comm = MPI_COMM_WORLD
-    #     MPI_Info info = MPI_INFO_NULL
-    # args_num = 0
-    # args_num_p = &args_num
-
-    # NOTE: Turning off error printing here because we already know (and
-    #   handle appropriately) exceptions related to existing files
-    # H5Eset_auto2(H5E_DEFAULT, <H5E_auto2_t>NULL, NULL)
-
     # In both cases, using H5P_DEFAULT for args fcpl_id, fapl_id
     if access(filename, F_OK) == 0:
         # If file already exists, delete it; unfortunately, this is necessary
         #   because H5F_ACC_RDWR is determined to be an invalid flag
         remove(filename)
 
-    # MPI_Init(args_num_p, &args)
-    # fapl = H5Pcreate(H5P_FILE_ACCESS)
-    # H5Pset_fapl_mpio(fapl, comm, info)
     return H5Fcreate(filename, H5F_ACC_EXCL, H5P_DEFAULT, H5P_DEFAULT)
 
 
@@ -234,6 +201,7 @@ cdef inline void write_hdf5_dataset(
     dtype : hid_t
         The data type, e.g., H5T_IEEE_F32LE
     dspace : hid_t
+        The data space identifier
     buff : void*
         A pointer to an array buffer from which to read the data
     '''
@@ -252,16 +220,13 @@ cdef inline void write_hdf5_dataset(
     # In case of an intermediate group, i.e., "group/dataset_name"
     if '/' in dset_name:
         group, dset_name = field.decode('UTF-8').split('/')
+        # NOTE: H5Lexists() return value of 0 may mean something different
+        #   in the future
         if H5Lexists(fid, group.encode('UTF-8'), H5P_DEFAULT) <= 0:
             gid = H5Gcreate(
                 fid, group.encode('UTF-8'), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
         dest = gid
 
-    # Create the data transfer property list;
-    #   https://support.hdfgroup.org/documentation/hdf5/latest/_par_compr.html
-    # dxpl = H5Pcreate(H5P_DATASET_XFER)
-    # H5Pset_dxpl_mpio(dxpl, H5FD_MPIO_COLLECTIVE)
-    # Create the dataset property list
     dcpl = H5Pcreate(H5P_DATASET_CREATE)
     if H5Pset_layout(dcpl, H5D_CHUNKED) < 0:
         print('ERROR in setting layout')
@@ -279,4 +244,3 @@ cdef inline void write_hdf5_dataset(
         print('ERROR in writing HDF5 file')
     H5Dclose(dset_id)
     H5Pclose(dcpl)
-    # H5Pclose(dxpl)
