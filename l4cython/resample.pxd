@@ -1,12 +1,27 @@
 # cython: language_level=3
 
+'''
+This module is a bit of a hack because it relies on Python objects but must
+be defined as a C function to accept C arrays.
+
+When using anything from the resample module, the module calling it must have
+the following imports, otherwise you will get a `NameError` at runtime:
+
+    import numpy as np
+    from tempfile import NamedTemporaryFile
+    from utils.mkgrid import write_numpy_inflated
+
+These imports are *also* here to satisfy name resolution but that is *not*
+sufficient to avoid a `NameError` at runtime.
+'''
+
 import numpy as np
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 # NOTE: For some inexplicable reason, relative imports are needed here
-from utils.mkgrid import write_numpy_inflated, write_numpy_deflated
-from utils.hdf5 cimport hid_t, hsize_t, create_1d_space, create_2d_space, close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset, H5T_STD_U8LE, H5T_IEEE_F32LE
-from utils.io cimport read_flat
 from tempfile import NamedTemporaryFile
+from utils.mkgrid import write_numpy_inflated
+from utils.hdf5 cimport hid_t, hsize_t, create_1d_space, create_2d_space, close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset, H5T_STD_U8LE, H5T_IEEE_F32LE
+from utils.io cimport read_flat, to_numpy
 
 cdef extern from "utils/src/spland.h":
     int M01_NESTED_IN_M09
@@ -14,6 +29,86 @@ cdef extern from "utils/src/spland.h":
     int SPARSE_M01_N
     int FILL_VALUE
     int NCOL1KM, NROW1KM, NCOL9KM, NROW9KM
+
+
+cdef inline hid_t write_fullres(
+        dict config, float* array_data, char* suffix, char* field,
+        char* grid, hid_t file_id):
+    '''
+    Inflates and writes a full-resolution dataset to an HDF5 file. It is
+    always an HDF5 file because full-resolution "land" files are not
+    supported.
+
+    Parameters
+    ----------
+    config : dict
+    array_data : float*
+    field : char*
+        Well-known name of the dataset to be written
+    suffix : char*
+    grid : char*
+    file_id : hid_t
+        For HDF5 output, 0 if a new HDF5 file should be created; otherwise,
+        pass the <hid_t> for an open HDF5 file
+
+    Returns
+    -------
+    hid_t
+        The file ID of the open HDF5 file, or 0 if no HDF5 file was used
+    '''
+    cdef float* data_inflated
+    cdef hid_t fid
+    cdef hid_t space_id
+    cdef int grid_size
+    if file_id > 0:
+        fid = file_id
+    else:
+        fid = 0 # Nothing is open yet
+
+    output_dir = config['model']['output_dir']
+    output_grid = config['model']['output_format']
+    output_gzip = config['model']['compression']['level']
+    _suffix = suffix.decode('UTF-8')
+    _field = field.decode('UTF-8')
+
+    # Otherwise, it's HDF5 output; create the output HDF5 file
+    output_filename = ('%s/L4Cython_%s.h5' % (output_dir, _suffix))\
+        .encode('UTF-8')
+    if fid == 0:
+        fid = open_hdf5(output_filename)
+
+    # Determine the output field name
+    if _field in ('GPP', 'NPP'):
+        _field = '%s/%s_mean' % (_field, _field.lower()) # e.g., 'GPP/gpp_mean'
+    else:
+        _field = 'EC/%s_mean' % _field.lower() # e.g., "EC/emult_mean"
+
+    if grid.decode('UTF-8') == 'M09':
+        grid_size = 9000
+        space_id = create_2d_space(NROW9KM, NCOL9KM)
+        data_inflated = <float*> PyMem_Malloc(sizeof(float) * NCOL9KM * NROW9KM)
+    else:
+        grid_size = 1000
+        space_id = create_2d_space(NROW1KM, NCOL1KM)
+        data_inflated = <float*> PyMem_Malloc(sizeof(float) * NCOL1KM * NROW1KM)
+
+    # For HDF5 output, we'll first write the data to a temporary file
+    tmp = NamedTemporaryFile()
+    if grid.decode('UTF-8') == 'M09':
+        write_numpy_inflated(
+            tmp.name, to_numpy(array_data, SPARSE_M09_N), grid = grid)
+        read_flat(tmp.name.encode('UTF-8'), NCOL9KM * NROW9KM, data_inflated)
+    else:
+        write_numpy_inflated(
+            tmp.name, to_numpy(array_data, SPARSE_M01_N), grid = grid)
+        read_flat(tmp.name.encode('UTF-8'), NCOL1KM * NROW1KM, data_inflated)
+    # Write the inflated data to a new HDF5 dataset
+    write_hdf5_dataset(
+        fid, _field.encode('UTF-8'), H5T_IEEE_F32LE, space_id,
+        grid_size, output_gzip, data_inflated)
+
+    PyMem_Free(data_inflated)
+    return fid
 
 
 cdef inline hid_t write_resampled(

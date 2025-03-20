@@ -40,9 +40,14 @@ model:
   litterfall:
     scheduled: false
     interval_days: 8 # Number of days represented by litterfall rate
-  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250225
+  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250320
+  output_format: M01 # "M09land" for flat (1D) output
+  output_type: 'HDF5' # "HDF5" or "BINARY"
+  compression:
+    type: 'gzip' # Currently the only option
+    level: 5 # Suggest something between 3 and 5; 0 being "no compression"
   output_fields: # Valid output fields include: "RH", "NEE"
   - NEE
   - RH
   - GPP
-  output_format: M09 # "M09land" for flat (1D) output
+  - SOC

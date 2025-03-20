@@ -68,6 +68,27 @@ pytest tests/test_spinup.py
 ```
 
 
+Output Data
+----------------------------
+
+1-km binary files in geographic space (2D) will only be generated for soil-organic carbon spin-up. Otherwise, the file must be 9-km resolution or must an HDF5 output type. Additionally, land-format (1D, e.g, `M09land` or `M01land`) data will never be written to an HDF5 file.
+
+| Module         | Output format | Output file type | Implemented?                 |
+|:---------------|:--------------|:-----------------|:-----------------------------|
+| `gpp.pyx`      | `M09`         | HDF5             | Yes, with `write_resampled()`|
+| `gpp.pyx`      | `M09land`     | binary           | Yes, with `write_resampled()`|
+| `gpp.pyx`      | `M01`         | HDF5             | No                           |
+| `gpp.pyx`      | `M01land`     | binary           | Yes, with `to_numpy()`       |
+| `reco.pyx`     | `M09`         | HDF5             | Yes, with `write_resampled()`|
+| `reco.pyx`     | `M09land`     | binary           | Yes, with `write_resampled()`|
+| `reco.pyx`     | `M01`         | HDF5             | No                           |
+| `reco.pyx`     | `M01land`     | binary           | Yes, with `to_numpy()`       |
+| `budget.pyx`   | `M09`         | HDF5             | Yes, with `write_resampled()`|
+| `budget.pyx`   | `M09land`     | binary           | Yes, with `write_resampled()`|
+| `budget.pyx`   | `M01`         | HDF5             | No                           |
+| `budget.pyx`   | `M01land`     | binary           | Yes, with `to_numpy()`       |
+
+
 Troubleshooting
 ----------------------------
 

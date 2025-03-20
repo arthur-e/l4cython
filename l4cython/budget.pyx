@@ -41,10 +41,11 @@ from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
+from tempfile import NamedTemporaryFile
 from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, SPARSE_M09_N, SPARSE_M01_N, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, DFNT_UINT8, DFNT_FLOAT32
 from l4cython.core import load_parameters_table
 from l4cython.science cimport arrhenius, linear_constraint, rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
-from l4cython.resample cimport write_resampled
+from l4cython.resample cimport write_resampled, write_fullres
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, hid_t, read_hdf5
 from l4cython.utils.io cimport READ, open_fid, read_flat, read_flat_short, to_numpy
@@ -374,10 +375,12 @@ def main(config = None, verbose = True):
         output_fields = list(map(
             lambda x: x.upper(), config['model']['output_fields']))
 
+        output_dir = config['model']['output_dir']
+        output_type = config['model']['output_type'].upper()
         if fmt in ('M09', 'M09land'):
             fid = 0
             inflated = 1 if fmt == 'M09' else 0
-            if 'GPP' in config['model']['output_fields']:
+            if 'GPP' in output_fields:
                 fid = write_resampled(config, gpp, suffix, 'GPP', inflated, fid)
             if 'NPP' in output_fields:
                 fid = write_resampled(config, npp, suffix, 'NPP', inflated, fid)
@@ -391,8 +394,11 @@ def main(config = None, verbose = True):
                 fid = write_resampled(config, t_mult, suffix, 'Tmult', inflated, fid)
             if 'WMULT' in output_fields:
                 fid = write_resampled(config, w_mult, suffix, 'Wmult', inflated, fid)
+        elif output_type == 'HDF5':
+            grid = 'M01'.encode('UTF-8')
+            if 'GPP' in output_fields:
+                fid = write_fullres(config, gpp, suffix, 'GPP', grid, fid)
         else:
-            output_dir = config['model']['output_dir']
             out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
             if 'GPP' in output_fields:
                 to_numpy(gpp, SPARSE_M01_N).tofile(out_fname_tpl % 'GPP')
