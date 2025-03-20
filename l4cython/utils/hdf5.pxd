@@ -230,7 +230,7 @@ cdef inline void write_hdf5_dataset(
     dxpl = H5Pcreate(H5P_DATASET_XFER)
     H5Pset_dxpl_mpio(dxpl, H5FD_MPIO_COLLECTIVE)
     # Create the dataset property list
-    dcpl = H5Pcopy(H5P_DATASET_CREATE)
+    dcpl = H5Pcreate(H5P_DATASET_CREATE)
     H5Pset_layout(dcpl, H5D_CHUNKED)
     H5Pset_chunk(dcpl, 2, chunk_size)
     H5Pset_fill_value(dcpl, H5T_IEEE_F32LE, fill_value)
