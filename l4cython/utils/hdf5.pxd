@@ -10,9 +10,24 @@ cdef extern from "src/hdf5.h":
     ctypedef int htri_t
     ctypedef herr_t H5E_auto1_t
     ctypedef herr_t H5E_auto2_t
+    ctypedef enum H5D_layout_t:
+        H5D_LAYOUT_ERROR
+        H5D_COMPACT
+        H5D_CONTIGUOUS
+        H5D_CHUNKED
+        H5D_VIRTUAL
+        H5D_NLAYOUTS
+    ctypedef enum H5FD_mpio_collective_opt_t:
+        H5FD_MPIO_COLLECTIVE_IO
+        H5FD_MPIO_INDIVIDUAL_IO
+    ctypedef enum H5FD_mpio_xfer_t:
+        H5FD_MPIO_INDEPENDENT
+        H5FD_MPIO_COLLECTIVE
 
     int H5E_DEFAULT # Default error stack
     int H5P_DEFAULT # Default property list
+    int H5P_DATASET_CREATE # Default property list for dataset creation
+    int H5P_DATASET_XFER # Dataset transfer property list class
     int H5S_ALL
     int H5F_ACC_TRUNC # Flag to "truncate" the file, "if it already exists, erasing all data previously stored in the file"
     int H5F_ACC_EXCL # Flag to fail on creating a file that already exists
@@ -57,6 +72,15 @@ cdef extern from "src/hdf5.h":
     # To write data into an HDF5 dataset from a buffer
     herr_t H5Dwrite(
         hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t dxpl_id, void* buff)
+
+    # For compression
+    hid_t H5Pcreate(hid_t cls_id)
+    hid_t H5Pcopy(hid_t plist_id)
+    herr_t H5Pset_dxpl_mpio(hid_t dxpl_id, H5FD_mpio_xfer_t xfer_mode)
+    herr_t H5Pset_layout(hid_t plist_id, H5D_layout_t layout)
+    herr_t H5Pset_chunk(hid_t plist_id, int ndims, hsize_t dim[])
+    herr_t H5Pset_fill_value(hid_t plist_id, hid_t type_id, void* value)
+    herr_t H5Pset_deflate(hid_t plist_id, unsigned char level)
 
 
 cdef inline hid_t create_1d_space(int nelem):
@@ -180,9 +204,14 @@ cdef inline void write_hdf5_dataset(
         A pointer to an array buffer from which to read the data
     '''
     cdef hid_t dest, gid
+    cdef hsize_t chunk_size[2]
+    cdef float fill_value[1]
+    fill_value[0] = <float>-9999
+    chunk_size[0] = 300
+    chunk_size[1] = 100
     # NOTE: Turning off error printing here because we already know (and
     #   handle appropriately) exceptions related to existing groups
-    H5Eset_auto2(H5E_DEFAULT, <H5E_auto2_t>NULL, NULL)
+    # H5Eset_auto2(H5E_DEFAULT, <H5E_auto2_t>NULL, NULL)
     # If there is no intermediate group, destination is the file
     dset_name = field.decode('UTF-8')
     dest = fid
@@ -196,8 +225,19 @@ cdef inline void write_hdf5_dataset(
                 fid, group.encode('UTF-8'), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
         dest = gid
 
-    dset_id = H5Dcreate( # Using H5P_DEFAULT for lcpl_id, dcpl_id, dapl_id
+    # Create the data transfer property list;
+    #   https://support.hdfgroup.org/documentation/hdf5/latest/_par_compr.html
+    dxpl = H5Pcreate(H5P_DATASET_XFER)
+    H5Pset_dxpl_mpio(dxpl, H5FD_MPIO_COLLECTIVE)
+    # Create the dataset property list
+    dcpl = H5Pcopy(H5P_DATASET_CREATE)
+    H5Pset_layout(dcpl, H5D_CHUNKED)
+    H5Pset_chunk(dcpl, 2, chunk_size)
+    H5Pset_fill_value(dcpl, H5T_IEEE_F32LE, fill_value)
+    if H5Pset_deflate(dcpl, 3) < 0:
+        print('ERROR in setting gzip filter')
+    dset_id = H5Dcreate( # Using H5P_DEFAULT for lcpl_id, ..., dapl_id
         dest, dset_name.encode('UTF-8'), dtype, dspace,
-        H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
-    H5Dwrite(dset_id, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, buff)
+        H5P_DEFAULT, dcpl, H5P_DEFAULT)
+    H5Dwrite(dset_id, dtype, H5S_ALL, H5S_ALL, dxpl, buff)
     H5Dclose(dset_id)
