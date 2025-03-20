@@ -27,6 +27,14 @@ cdef extern from "src/hdf5.h":
     ctypedef enum H5FD_mpio_xfer_t:
         H5FD_MPIO_INDEPENDENT
         H5FD_MPIO_COLLECTIVE
+    ctypedef int MPI_Comm
+    ctypedef int MPI_Info
+
+    # Defined in mpi.h
+    # https://support.hdfgroup.org/documentation/hdf5/latest/_intro_par_h_d_f5.html
+    int MPI_COMM_WORLD
+    int MPI_INFO_NULL
+    int MPI_Init(int* argc, char** argv[])
 
     int H5E_DEFAULT # Default error stack
     int H5P_DEFAULT # Default property list
@@ -88,6 +96,8 @@ cdef extern from "src/hdf5.h":
     herr_t H5Pset_chunk(hid_t plist_id, int ndims, hsize_t dim[])
     herr_t H5Pset_fill_value(hid_t plist_id, hid_t type_id, void* value)
     herr_t H5Pset_deflate(hid_t plist_id, unsigned char level)
+
+    herr_t H5Pset_fapl_mpio(hid_t fapl_id, MPI_Comm comm, MPI_Info info)
 
 
 cdef inline hid_t create_1d_space(int nelem):
@@ -157,6 +167,15 @@ cdef inline hid_t open_hdf5(char* filename):
     hid_t
         The file ID
     '''
+    # cdef:
+    #     int args_num
+    #     int* args_num_p
+    #     char** args
+    #     MPI_Comm comm = MPI_COMM_WORLD
+    #     MPI_Info info = MPI_INFO_NULL
+    # args_num = 0
+    # args_num_p = &args_num
+
     # NOTE: Turning off error printing here because we already know (and
     #   handle appropriately) exceptions related to existing files
     # H5Eset_auto2(H5E_DEFAULT, <H5E_auto2_t>NULL, NULL)
@@ -166,7 +185,10 @@ cdef inline hid_t open_hdf5(char* filename):
         # If file already exists, delete it; unfortunately, this is necessary
         #   because H5F_ACC_RDWR is determined to be an invalid flag
         remove(filename)
-        # return H5Fcreate(filename, H5F_ACC_RDWR, H5P_DEFAULT, H5P_DEFAULT)
+
+    # MPI_Init(args_num_p, &args)
+    # fapl = H5Pcreate(H5P_FILE_ACCESS)
+    # H5Pset_fapl_mpio(fapl, comm, info)
     return H5Fcreate(filename, H5F_ACC_EXCL, H5P_DEFAULT, H5P_DEFAULT)
 
 
@@ -237,21 +259,24 @@ cdef inline void write_hdf5_dataset(
 
     # Create the data transfer property list;
     #   https://support.hdfgroup.org/documentation/hdf5/latest/_par_compr.html
-    dxpl = H5Pcreate(H5P_DATASET_XFER)
-    H5Pset_dxpl_mpio(dxpl, H5FD_MPIO_COLLECTIVE)
+    # dxpl = H5Pcreate(H5P_DATASET_XFER)
+    # H5Pset_dxpl_mpio(dxpl, H5FD_MPIO_COLLECTIVE)
     # Create the dataset property list
     dcpl = H5Pcreate(H5P_DATASET_CREATE)
-    H5Pset_layout(dcpl, H5D_CHUNKED)
-    H5Pset_chunk(dcpl, 2, chunk_size)
-    H5Pset_fill_value(dcpl, H5T_IEEE_F32LE, fill_value)
+    if H5Pset_layout(dcpl, H5D_CHUNKED) < 0:
+        print('ERROR in setting layout')
+    if H5Pset_chunk(dcpl, 2, chunk_size) < 0:
+        print('ERROR in setting chunks')
+    if H5Pset_fill_value(dcpl, H5T_IEEE_F32LE, fill_value) < 0:
+        print('ERROR in setting the fill vlaue')
     if H5Pset_deflate(dcpl, 5) < 0:
         print('ERROR in setting gzip filter')
 
     dset_id = H5Dcreate( # Using H5P_DEFAULT for lcpl_id, ..., dapl_id
         dest, dset_name.encode('UTF-8'), dtype, dspace,
-        H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
+        H5P_DEFAULT, dcpl, H5P_DEFAULT)
     if H5Dwrite(dset_id, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, buff) < 0:
         print('ERROR in writing HDF5 file')
     H5Dclose(dset_id)
     H5Pclose(dcpl)
-    H5Pclose(dxpl)
+    # H5Pclose(dxpl)
