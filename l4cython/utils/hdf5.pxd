@@ -3,6 +3,13 @@
 cdef extern from "stdio.h":
     int remove(char* filename)
 
+cdef extern from "unistd.h":
+    int F_OK
+    int access(char* pathname, int how)
+
+cdef extern from "src/spland.h":
+    int FILL_VALUE
+
 cdef extern from "src/hdf5.h":
     ctypedef long long int hid_t # int64
     ctypedef unsigned long long int hsize_t # uint6
@@ -25,7 +32,6 @@ cdef extern from "src/hdf5.h":
     int H5F_ACC_TRUNC # Flag to "truncate" the file, "if it already exists, erasing all data previously stored in the file"
     int H5F_ACC_EXCL # Flag to fail on creating a file that already exists
     int H5S_SIMPLE # An n-dimensional data space
-    int H5I_INVALID_HID # Is -1 for error return
     hid_t H5T_IEEE_F32LE
     hid_t H5T_NATIVE_UINT8
     hid_t H5T_STD_U8LE
@@ -41,22 +47,20 @@ cdef extern from "src/hdf5.h":
     herr_t H5Dread(hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id,
         hid_t file_space_id, hid_t plist_id, void* buf)
     herr_t H5Dclose(hid_t dset_id)
-    htri_t H5Fis_hdf5(char* filename) # Is it an HDF5 file?
 
-    # To close or delete an HDF5 file
+    # To close an HDF5 file
     herr_t H5Fclose(hid_t file_id)
 
-    # To write an HDF5 file
+    # To create an HDF5 file
     hid_t H5Fcreate(
         char* filename, unsigned char flags, hid_t fcpl_id, hid_t fapl_id)
-    herr_t H5Dset_extent(hid_t dset_id, hsize_t* size)
 
     # To create a "data space"
     hid_t H5Screate_simple(int rank, hsize_t dims[], hsize_t maxdims[])
 
-    # To create or open a group
+    # To create a group or check that a group exists
     hid_t H5Gcreate(hid_t loc_id, char* name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id)
-    hid_t H5Gopen1(hid_t loc_id, char* name)
+    htri_t H5Lexists(hid_t loc_id, char* name, hid_t lapl_id)
 
     # To create an HDF5 dataset
     hid_t H5Dcreate(
@@ -66,10 +70,13 @@ cdef extern from "src/hdf5.h":
     herr_t H5Dwrite(
         hid_t dset_id, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t dxpl_id, void* buff)
 
-    # For property lists and dataset compression
+    # For property lists and compression
     hid_t H5Pcreate(hid_t cls_id)
+    hid_t H5Pclose(hid_t plist_id)
     herr_t H5Pset_layout(hid_t plist_id, H5D_layout_t layout)
     herr_t H5Pset_chunk(hid_t plist_id, int ndims, hsize_t dim[])
+    herr_t H5Pset_fill_value(hid_t plist_id, hid_t type_id, void* value)
+    herr_t H5Pset_deflate(hid_t plist_id, unsigned char level)
 
 
 cdef inline hid_t create_1d_space(int nelem):
@@ -126,7 +133,8 @@ cdef inline void close_hdf5(hid_t fid):
 
 cdef inline hid_t open_hdf5(char* filename):
     '''
-    Will only fail if the file already exists; will not overwrite.
+    If the file already exists, it is deleted. It is up to external code
+    to remember the file ID of a file if you want to keep working with it.
 
     Parameters
     ----------
@@ -138,12 +146,12 @@ cdef inline hid_t open_hdf5(char* filename):
     hid_t
         The file ID
     '''
-    # NOTE: Turning off error printing here because we already know (and
-    #   handle appropriately) exceptions related to existing files
-    H5Eset_auto2(H5E_DEFAULT, <H5E_auto2_t>NULL, NULL)
-    if H5Fis_hdf5(filename) >= 0:
-        remove(filename) # Delete the file
-    # Using H5P_DEFAULT for args fcpl_id, fapl_id
+    # In both cases, using H5P_DEFAULT for args fcpl_id, fapl_id
+    if access(filename, F_OK) == 0:
+        # If file already exists, delete it; unfortunately, this is necessary
+        #   because H5F_ACC_RDWR is determined to be an invalid flag
+        remove(filename)
+
     return H5Fcreate(filename, H5F_ACC_EXCL, H5P_DEFAULT, H5P_DEFAULT)
 
 
@@ -177,9 +185,9 @@ cdef inline void read_hdf5(
 # Based (loosely) on frm_hdf5_WriteData()
 cdef inline void write_hdf5_dataset(
         hid_t fid, char* field, hid_t dtype, hid_t dspace, int res,
-        void* buff):
+        int deflate, void* buff):
     '''
-    Writes a dataset into an (already open) HDF5 file.
+    Writes a 2-dimensional array dataset into an (already open) HDF5 file.
 
     Parameters
     ----------
@@ -194,11 +202,15 @@ cdef inline void write_hdf5_dataset(
     res : int
         The resolution of the (EASE-Grid 2.0) dataset in meters, e.g., 9000
         for an "M09" (9-km) grid
+    deflate : int
+        The level of gzip/ "deflate" compression, an integer between 0 and 9
     buff : void*
         A pointer to an array buffer from which to read the data
     '''
     cdef hid_t dest, gid
     cdef hsize_t chunk_size[2]
+    cdef float fill_value[1]
+    fill_value[0] = <float>FILL_VALUE
 
     # Determine chunk size based on the resolution of the grid
     if res >= 3000:
@@ -208,29 +220,27 @@ cdef inline void write_hdf5_dataset(
         chunk_size[0] = 3000
         chunk_size[1] = 1000
 
-    # NOTE: Turning off error printing here because we already know (and
-    #   handle appropriately) exceptions related to existing groups
-    # H5Eset_auto2(H5E_DEFAULT, <H5E_auto2_t>NULL, NULL)
-
     # If there is no intermediate group, destination is the file
     dset_name = field.decode('UTF-8')
     dest = fid
     # In case of an intermediate group, i.e., "group/dataset_name"
     if '/' in dset_name:
         group, dset_name = field.decode('UTF-8').split('/')
-        gid = H5Gopen1(fid, group.encode('UTF-8'))
-        # If the group doesn't exist, we'll get an error return value (-1)
-        if gid < 0:
+        # NOTE: H5Lexists() return value of 0 may mean something different
+        #   in the future
+        if H5Lexists(fid, group.encode('UTF-8'), H5P_DEFAULT) <= 0:
             gid = H5Gcreate(
                 fid, group.encode('UTF-8'), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
         dest = gid
 
-    # Create the dataset property list, to allow for chunking
     dcpl = H5Pcreate(H5P_DATASET_CREATE)
     H5Pset_layout(dcpl, H5D_CHUNKED)
     H5Pset_chunk(dcpl, 2, chunk_size)
+    H5Pset_fill_value(dcpl, H5T_IEEE_F32LE, fill_value)
+    H5Pset_deflate(dcpl, deflate)
     dset_id = H5Dcreate( # Using H5P_DEFAULT for lcpl_id, ..., dapl_id
         dest, dset_name.encode('UTF-8'), dtype, dspace,
         H5P_DEFAULT, dcpl, H5P_DEFAULT)
     H5Dwrite(dset_id, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, buff)
     H5Dclose(dset_id)
+    H5Pclose(dcpl)

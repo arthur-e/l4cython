@@ -24,7 +24,7 @@ mkgrid = Extension(
     include_dirs = HDF4_DIRS,
     extra_compile_args = [
         '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
-        '-ldfalt', '-lmfhdfalt', '-lz', '-lsz', '-luuid', '-lm', '-lutil'
+        '-ldfalt', '-lmfhdfalt', '-lz', '-luuid', '-lm', '-lutil'
     ]
 )
 
@@ -36,9 +36,9 @@ hdf5 = Extension(
     include_dirs = HDF5_DIRS,
     extra_compile_args = [
         '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
-        '-ldfalt', '-lmfhdfalt', '-lhdf5', '-lz', '-lsz', '-luuid', '-lm', '-lutil'
+        '-ldfalt', '-lmfhdfalt', '-lhdf5', '-lz', '-luuid', '-lm', '-lutil'
     ],
-    extra_link_args = ['-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']
+    extra_link_args = ['-fopenmp', '-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']
 )
 
 io = Extension(

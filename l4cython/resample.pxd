@@ -53,6 +53,7 @@ cdef inline hid_t write_resampled(
     output_type = config['model']['output_type'].upper()
     output_dir = config['model']['output_dir']
     output_grid = config['model']['output_format']
+    output_gzip = config['model']['compression']['level']
     assert output_type in ('HDF5', 'BINARY')
     assert field.decode('UTF-8') != '' or output_type == 'BINARY'
     _suffix = suffix.decode('UTF-8')
@@ -114,7 +115,7 @@ cdef inline hid_t write_resampled(
         # Write the inflated data to a new HDF5 dataset
         write_hdf5_dataset(
             fid, _field.encode('UTF-8'), H5T_IEEE_F32LE, space_id,
-            grid_size, data_inflated)
+            grid_size, output_gzip, data_inflated)
     else:
         raise NotImplementedError(
             'No support for writing deflated arrays to HDF5')

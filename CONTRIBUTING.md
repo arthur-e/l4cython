@@ -247,3 +247,13 @@ Beginning numerical spin-up...
 --- Pixels counted: 0
 None
 ```
+
+
+Handling Exceptions
+-------------------
+
+If absolutely necessary, exceptions can be silenced using:
+
+```py
+H5Eset_auto2(H5E_DEFAULT, <H5E_auto2_t>NULL, NULL)
+```
