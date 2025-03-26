@@ -53,7 +53,6 @@ from tqdm import tqdm
 cdef:
     BPLUT PARAMS
     unsigned char* PFT
-    unsigned char* PFT_MASK
     float* SMRZ_MAX
     float* SMRZ_MIN
 PFT = <unsigned char*> PyMem_Malloc(sizeof(unsigned char) * SPARSE_M01_N)
@@ -195,32 +194,32 @@ def main(config = None, verbose = True):
         # We re-use a single NamedTemporaryFile(), overwriting its contents
         #   without creating a new instance; there should be little risk in
         #  this because each array is the same size
-        tmp = NamedTemporaryFile()
-        tmp_fname_bs = tmp.name.encode('UTF-8')
         # NOTE: Alternatively, try reading with read_hdf5, then copying the
         #   array (element-wise) into an unsigned char* buffer
         # fname_bs = (config['data']['drivers']['file'] % date_str).encode('UTF-8')
         # read_hdf5(fname_bs, 'QV2M_M09_AVG', H5T_IEEE_F32LE, qv2m)
-        with h5py.File(
-                config['data']['drivers']['file'] % date_str, 'r') as hdf:
-            # SWRAD
-            write_numpy_deflated(tmp.name, hdf['RADIATION_SHORTWAVE_DOWNWARD_FLUX'][:])
-            read_flat(tmp_fname_bs, SPARSE_M09_N, swrad)
-            # T2M_M09_MIN (tmin)
-            write_numpy_deflated(tmp.name, hdf['T2M_M09_MIN'][:])
-            read_flat(tmp_fname_bs, SPARSE_M09_N, tmin)
-            # T2M_M09_AVG (t2m)
-            write_numpy_deflated(tmp.name, hdf['T2M_M09_AVG'][:])
-            read_flat(tmp_fname_bs, SPARSE_M09_N, t2m)
-            # QV2M
-            write_numpy_deflated(tmp.name, hdf['QV2M_M09_AVG'][:])
-            read_flat(tmp_fname_bs, SPARSE_M09_N, qv2m)
-            # PS
-            write_numpy_deflated(tmp.name, hdf['SURFACE_PRESSURE'][:])
-            read_flat(tmp_fname_bs, SPARSE_M09_N, ps)
-            # SMRZ (before rescaling)
-            write_numpy_deflated(tmp.name, hdf['SM_ROOTZONE_WETNESS'][:])
-            read_flat(tmp_fname_bs, SPARSE_M09_N, smrz0)
+        with NamedTemporaryFile() as tmp:
+            tmp_fname_bs = tmp.name.encode('UTF-8')
+            with h5py.File(
+                    config['data']['drivers']['file'] % date_str, 'r') as hdf:
+                # SWRAD
+                write_numpy_deflated(tmp.name, hdf['RADIATION_SHORTWAVE_DOWNWARD_FLUX'][:])
+                read_flat(tmp_fname_bs, SPARSE_M09_N, swrad)
+                # T2M_M09_MIN (tmin)
+                write_numpy_deflated(tmp.name, hdf['T2M_M09_MIN'][:])
+                read_flat(tmp_fname_bs, SPARSE_M09_N, tmin)
+                # T2M_M09_AVG (t2m)
+                write_numpy_deflated(tmp.name, hdf['T2M_M09_AVG'][:])
+                read_flat(tmp_fname_bs, SPARSE_M09_N, t2m)
+                # QV2M
+                write_numpy_deflated(tmp.name, hdf['QV2M_M09_AVG'][:])
+                read_flat(tmp_fname_bs, SPARSE_M09_N, qv2m)
+                # PS
+                write_numpy_deflated(tmp.name, hdf['SURFACE_PRESSURE'][:])
+                read_flat(tmp_fname_bs, SPARSE_M09_N, ps)
+                # SMRZ (before rescaling)
+                write_numpy_deflated(tmp.name, hdf['SM_ROOTZONE_WETNESS'][:])
+                read_flat(tmp_fname_bs, SPARSE_M09_N, smrz0)
 
         fname_bs = (config['data']['drivers']['file'] % date_str).encode('UTF-8')
         # Read the FT state from the 3-km array; it is bit-packed
@@ -324,7 +323,8 @@ def main(config = None, verbose = True):
                 fid = write_resampled(config, f_smrz, suffix, 'f_SMRZ', inflated, fid)
             if 'F_FT' in output_fields:
                 fid = write_resampled(config, ft, suffix, 'f_FT', inflated, fid)
-            close_hdf5(fid)
+            if config['model']['output_type'].upper() == 'HDF5':
+                close_hdf5(fid)
         else:
             output_dir = config['model']['output_dir']
             out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
@@ -357,6 +357,9 @@ def main(config = None, verbose = True):
     PyMem_Free(fpar_qc)
     PyMem_Free(fpar_clim)
     PyMem_Free(ft_state)
+    PyMem_Free(PFT)
+    PyMem_Free(SMRZ_MAX)
+    PyMem_Free(SMRZ_MIN)
     free(h5_fpar0)
     free(h5_fpar_qc)
     free(h5_fpar_clim)

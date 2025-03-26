@@ -42,7 +42,7 @@ from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, SPARSE_M09_N, S
 from l4cython.core import load_parameters_table
 from l4cython.science cimport arrhenius, linear_constraint
 from l4cython.resample cimport write_resampled
-from l4cython.utils.hdf5 cimport H5T_STD_U8LE, hid_t, read_hdf5
+from l4cython.utils.hdf5 cimport H5T_STD_U8LE, hid_t, read_hdf5, close_hdf5
 from l4cython.utils.io cimport READ, open_fid, read_flat, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
@@ -237,6 +237,8 @@ def main(config = None, verbose = True):
                 fid = write_resampled(config, w_mult, suffix, 'Wmult', inflated, fid)
             if 'SOC' in config['model']['output_fields']:
                 fid = write_resampled(config, soc_total, suffix, 'SOC', inflated, fid)
+            if config['model']['output_type'].upper() == 'HDF5':
+                close_hdf5(fid)
         else:
             output_dir = config['model']['output_dir']
             out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)

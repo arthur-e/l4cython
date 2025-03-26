@@ -20,7 +20,7 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Free
 # NOTE: For some inexplicable reason, relative imports are needed here
 from tempfile import NamedTemporaryFile
 from utils.mkgrid import write_numpy_inflated
-from utils.hdf5 cimport hid_t, hsize_t, create_1d_space, create_2d_space, close_hdf5, open_hdf5, read_hdf5, write_hdf5_dataset, H5T_STD_U8LE, H5T_IEEE_F32LE
+from utils.hdf5 cimport hid_t, hsize_t, create_1d_space, create_2d_space, open_hdf5, read_hdf5, write_hdf5_dataset, H5T_STD_U8LE, H5T_IEEE_F32LE
 from utils.io cimport read_flat, to_numpy
 
 cdef extern from "utils/src/spland.h":
@@ -83,6 +83,7 @@ cdef inline hid_t write_fullres(
     else:
         _field = 'EC/%s_mean' % _field.lower() # e.g., "EC/emult_mean"
 
+    print('Allocating space for full-resolution dataset')
     if grid.decode('UTF-8') == 'M09':
         grid_size = 9000
         space_id = create_2d_space(NROW9KM, NCOL9KM)
@@ -99,8 +100,11 @@ cdef inline hid_t write_fullres(
             tmp.name, to_numpy(array_data, SPARSE_M09_N), grid = grid)
         read_flat(tmp.name.encode('UTF-8'), NCOL9KM * NROW9KM, data_inflated)
     else:
+        # NOTE: Segfault is here
+        print('Writing land data, inflated, to a temporary file')
         write_numpy_inflated(
             tmp.name, to_numpy(array_data, SPARSE_M01_N), grid = grid)
+        print('Reading data back at 1-km resolution')
         read_flat(tmp.name.encode('UTF-8'), NCOL1KM * NROW1KM, data_inflated)
     # Write the inflated data to a new HDF5 dataset
     write_hdf5_dataset(

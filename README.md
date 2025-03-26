@@ -14,6 +14,8 @@ operational product.
   current (Version 7) official L4CMDL GPP calculation is that the latter does
   not use the surface temperature from L4_SM but instead a field
   `FT_STATE_UM_M03` that depends on GMAO GEOS5.**
+- [ ] **Address potential memory leak in `inflate()` and `deflate()` functions,**
+  which allocate memory for a returned C array.
 - [TODO: Changing static links to dynamic links](https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html?highlight=packaging#distributing-cython-modules)
 
 

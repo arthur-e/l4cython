@@ -81,4 +81,4 @@ spinup = Extension(
     extra_link_args = ['-fopenmp']
 )
 
-setup(ext_modules = cythonize([core, resample, budget]))#gpp, reco, budget, spinup]))
+setup(ext_modules = cythonize([core, resample, budget, gpp, reco, budget, spinup]))
