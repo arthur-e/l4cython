@@ -255,9 +255,9 @@ def main(config = None, verbose = True):
             read_hdf5(
                 fpar_clim_filename_bs, clim_field.encode('utf-8'),
                 H5T_STD_U8LE, h5_fpar_clim)
-            fpar0 = deflate(h5_fpar0, DFNT_UINT8, 'M01'.encode('UTF-8'))
-            fpar_qc = deflate(h5_fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
-            fpar_clim = deflate(h5_fpar_clim, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            deflate(h5_fpar0, fpar0, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            deflate(h5_fpar_qc, fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            deflate(h5_fpar_clim, fpar_clim, DFNT_UINT8, 'M01'.encode('UTF-8'))
             free(h5_fpar0)
             free(h5_fpar_qc)
             free(h5_fpar_clim)

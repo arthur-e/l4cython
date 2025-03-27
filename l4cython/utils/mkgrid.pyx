@@ -75,6 +75,7 @@ def deflate_file(filename, grid = 'M09'):
         in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
         out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
     grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
 
     # Read in the inflated array
     fid = fopen(fname, 'rb')
@@ -86,7 +87,7 @@ def deflate_file(filename, grid = 'M09'):
     # Deflate the output array
     grid = grid.encode('UTF-8')
     cdef char* c_grid = grid
-    flat_array = deflate(grid_array, data_type, c_grid)
+    deflate(grid_array, flat_array, data_type, c_grid)
 
     output_filename = filename_byte_string\
         .decode('UTF-8')\
@@ -158,12 +159,13 @@ def inflate_file(filename, grid = 'M09'):
     in_bytes = size_in_bytes(data_type) * SPARSE_M09_N
     out_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
     if grid == 'M03':
-        in_bytes = size_in_bytes(data_type) * NCOL3KM * NROW3KM
-        out_bytes = size_in_bytes(data_type) * SPARSE_M03_N
+        in_bytes = size_in_bytes(data_type) * SPARSE_M03_N
+        out_bytes = size_in_bytes(data_type) * NCOL3KM * NROW3KM
     elif grid == 'M01':
-        in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
-        out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
+        in_bytes = size_in_bytes(data_type) * SPARSE_M01_N
+        out_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
     flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
+    grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
 
     # Read in the deflated array
     fid = fopen(fname, 'rb')
@@ -175,7 +177,7 @@ def inflate_file(filename, grid = 'M09'):
     # Inflate the output array
     grid = grid.encode('UTF-8')
     cdef char* c_grid = grid
-    grid_array = inflate(flat_array, data_type, c_grid)
+    inflate(flat_array, grid_array, data_type, c_grid)
 
     output_filename = filename_byte_string\
         .decode('UTF-8')\
@@ -243,7 +245,7 @@ def write_numpy_deflated(
     # Inflate to a 2D grid, then write to file
     if hasattr(grid, 'encode'):
         grid = grid.encode('UTF-8')
-    deflated_array = deflate(grid_array, data_type, grid)
+    deflate(grid_array, deflated_array, data_type, grid)
     fid = open_fid(output_filename.encode('UTF-8'), WRITE)
     fwrite(deflated_array, sizeof(unsigned char), <size_t>out_bytes, fid)
     fclose(fid)
@@ -283,11 +285,11 @@ def write_numpy_inflated(
     in_bytes = size_in_bytes(data_type) * SPARSE_M09_N
     out_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
     if grid == 'M03':
-        in_bytes = size_in_bytes(data_type) * NCOL3KM * NROW3KM
-        out_bytes = size_in_bytes(data_type) * SPARSE_M03_N
+        in_bytes = size_in_bytes(data_type) * SPARSE_M03_N
+        out_bytes = size_in_bytes(data_type) * NCOL3KM * NROW3KM
     elif grid == 'M01':
-        in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
-        out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
+        in_bytes = size_in_bytes(data_type) * SPARSE_M01_N
+        out_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
     flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
     inflated_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
 
@@ -305,7 +307,7 @@ def write_numpy_inflated(
     # Inflate to a 2D grid, then write to file
     if hasattr(grid, 'encode'):
         grid = grid.encode('UTF-8')
-    inflated_array = inflate(flat_array, data_type, grid)
+    inflate(flat_array, inflated_array, data_type, grid)
     fid = open_fid(output_filename.encode('UTF-8'), WRITE)
     fwrite(inflated_array, sizeof(unsigned char), <size_t>out_bytes, fid)
     fclose(fid)

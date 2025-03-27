@@ -8,7 +8,8 @@ take several seconds to load the state data.
 
 After the initial state data are loaded it takes about 15-30 seconds per
 data day when writing one or two fluxes out. Time increases considerably
-with more daily output variables.
+with more daily output variables. Memory use should be constant over time,
+consuming at most about 8.0 GB.
 
 Required daily driver data:
 
@@ -186,9 +187,9 @@ def main(config = None, verbose = True):
             read_hdf5(
                 fpar_clim_filename_bs, clim_field.encode('utf-8'),
                 H5T_STD_U8LE, h5_fpar_clim)
-            fpar0 = deflate(h5_fpar0, DFNT_UINT8, 'M01'.encode('UTF-8'))
-            fpar_qc = deflate(h5_fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
-            fpar_clim = deflate(h5_fpar_clim, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            deflate(h5_fpar0, fpar0, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            deflate(h5_fpar_qc, fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            deflate(h5_fpar_clim, fpar_clim, DFNT_UINT8, 'M01'.encode('UTF-8'))
 
         # Read in the remaining surface meteorlogical data
         # We re-use a single NamedTemporaryFile(), overwriting its contents
@@ -226,7 +227,7 @@ def main(config = None, verbose = True):
         #   but only two states matter: 53=Frozen, 52=Thawed
         #   by the least-significant bit: 1=Frozen, 0=Thaweds
         read_hdf5(fname_bs, 'FT_STATE_UM_M03', H5T_STD_U8LE, h5_ft_state)
-        ft_state = deflate(h5_ft_state, DFNT_UINT8, 'M03'.encode('UTF-8'))
+        deflate(h5_ft_state, ft_state, DFNT_UINT8, 'M03'.encode('UTF-8'))
 
         # Iterate over 9-km grid
         for i in prange(SPARSE_M09_N, nogil = True):

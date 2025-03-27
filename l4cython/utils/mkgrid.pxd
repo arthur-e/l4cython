@@ -29,41 +29,27 @@ cdef extern from "src/spland.h":
     void set_fillval_UUTA(void* vDest_p, const unsigned int dataType, const size_t atSlot)
 
 
-cdef inline unsigned char* deflate(
-        unsigned char* grid_array, unsigned short data_type, bytes grid):
+cdef inline void deflate(
+        unsigned char* grid_array, unsigned char* flat_array,
+        unsigned short data_type, bytes grid):
     '''
     Parameters
     ----------
     grid_array : unsigned char*
         The inflated (2D) array
+    flat_array : unsigned char*
+        The deflated (1D) array
     data_type : unsigned short
         The numeric code representing the data type
     grid : bytes
         The pixel size of the gridded data, e.g., "M09" for 9-km data or
         "M01" for 1-km data
-
-    Returns
-    -------
-    unsigned char*
-        The deflated array
     '''
     # NOTE: The flat_array and grid_array are handled as uint8 regardless of
     #   what the actual data type is; it just works this way in spland.c
     cdef:
         spland_ref_struct lookup
-        unsigned char* flat_array
 
-    # Assume 9-km grid, this also helps avoid warnings when compiling
-    in_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
-    out_bytes = size_in_bytes(data_type) * SPARSE_M09_N
-    if grid.decode('UTF-8') == 'M03':
-        in_bytes = size_in_bytes(data_type) * NCOL3KM * NROW3KM
-        out_bytes = size_in_bytes(data_type) * SPARSE_M03_N
-    elif grid.decode('UTF-8') == 'M01':
-        in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
-        out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
-
-    flat_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
     # NOTE: Using 9-km row/col for both 9-km and 1-km nested grids
     lookup.row = <unsigned short*>calloc(sizeof(unsigned short), SPARSE_M09_N)
     lookup.col = <unsigned short*>calloc(sizeof(unsigned short), SPARSE_M09_N)
@@ -81,11 +67,11 @@ cdef inline unsigned char* deflate(
 
     free(lookup.row)
     free(lookup.col)
-    return flat_array
 
 
-cdef inline unsigned char* inflate(
-        unsigned char* flat_array, unsigned short data_type, bytes grid):
+cdef inline void inflate(
+        unsigned char* flat_array, unsigned char* grid_array,
+        unsigned short data_type, bytes grid):
     '''
     The inflated array can be written to an output file using, e.g.:
 
@@ -96,34 +82,19 @@ cdef inline unsigned char* inflate(
     ----------
     flat_array : unsigned char*
         The flattened (1D or "sparse land") array
+    grid_array : unsigned char*
+        The inflated (2D) array
     data_type : unsigned short
         The numeric code representing the data type
     grid : bytes
         The pixel size of the gridded data, e.g., "M09" for 9-km data or
         "M01" for 1-km data
-
-    Returns
-    -------
-    unsigned char*
-        The inflated array
     '''
     # NOTE: The flat_array and grid_array are handled as uint8 regardless of
     #   what the actual data type is; it just works this way in spland.c
     cdef:
         spland_ref_struct lookup
-        unsigned char* grid_array
 
-    # Assume 9-km grid, this also helps avoid warnings when compiling
-    in_bytes = size_in_bytes(data_type) * SPARSE_M09_N
-    out_bytes = size_in_bytes(data_type) * NCOL9KM * NROW9KM
-    if grid.decode('UTF-8') == 'M03':
-        in_bytes = size_in_bytes(data_type) * NCOL3KM * NROW3KM
-        out_bytes = size_in_bytes(data_type) * SPARSE_M03_N
-    elif grid.decode('UTF-8') == 'M01':
-        in_bytes = size_in_bytes(data_type) * NCOL1KM * NROW1KM
-        out_bytes = size_in_bytes(data_type) * SPARSE_M01_N
-
-    grid_array = <unsigned char*>calloc(sizeof(unsigned char), <size_t>out_bytes)
     # NOTE: Using 9-km row/col for both 9-km and 1-km nested grids
     lookup.row = <unsigned short*>calloc(sizeof(unsigned short), SPARSE_M09_N)
     lookup.col = <unsigned short*>calloc(sizeof(unsigned short), SPARSE_M09_N)
@@ -144,4 +115,3 @@ cdef inline unsigned char* inflate(
 
     free(lookup.row)
     free(lookup.col)
-    return grid_array
