@@ -78,7 +78,7 @@ cdef inline hid_t write_fullres(
         fid = open_hdf5(output_filename)
 
     # Determine the output field name
-    if _field in ('GPP', 'NPP'):
+    if _field in ('GPP', 'NPP', 'RH', 'NEE', 'SOC'):
         _field = '%s/%s_mean' % (_field, _field.lower()) # e.g., 'GPP/gpp_mean'
     else:
         _field = 'EC/%s_mean' % _field.lower() # e.g., "EC/emult_mean"
@@ -125,10 +125,10 @@ cdef inline hid_t write_resampled(
     ----------
     config : dict
     array_data : float*
+    suffix : char*
     field : char*
         Well-known name of the dataset to be written; optional for BINARY
         output
-    suffix : char*
     inflated : int
         1 if the output array should be inflated to a 2D global EASE-Grid 2.0
     file_id : hid_t
@@ -199,7 +199,7 @@ cdef inline hid_t write_resampled(
         fid = open_hdf5(output_filename)
 
     # Determine the output field name
-    if _field in ('GPP', 'NPP'):
+    if _field in ('GPP', 'NPP', 'RH', 'NEE', 'SOC'):
         _field = '%s/%s_mean' % (_field, _field.lower()) # e.g., 'GPP/gpp_mean'
     else:
         _field = 'EC/%s_mean' % _field.lower() # e.g., "EC/emult_mean"

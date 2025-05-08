@@ -151,15 +151,14 @@ def main(config = None, verbose = True):
         #   without creating a new instance; there should be little risk in
         #  this because each array is the same size
         tmp = NamedTemporaryFile()
-        tmp_fname_bs = tmp.name.encode('UTF-8')
         with h5py.File(
                 config['data']['drivers']['file'] % date_str, 'r') as hdf:
             # SMSF
-            write_numpy_deflated(tmp_fname_bs, hdf['SM_SURFACE_WETNESS'][:])
-            read_flat(tmp_fname_bs, SPARSE_M09_N, smsf)
+            write_numpy_deflated(tmp.name, hdf['SM_SURFACE_WETNESS'][:])
+            read_flat(tmp.name.encode('UTF-8'), SPARSE_M09_N, smsf)
             # Tsoil
-            write_numpy_deflated(tmp_fname_bs, hdf['SOIL_TEMP_LAYER1'][:])
-            read_flat(tmp_fname_bs, SPARSE_M09_N, tsoil)
+            write_numpy_deflated(tmp.name, hdf['SOIL_TEMP_LAYER1'][:])
+            read_flat(tmp.name.encode('UTF-8'), SPARSE_M09_N, tsoil)
 
         # Read in the GPP data
         fname_bs = (config['data']['drivers']['GPP'] % date_str).encode('UTF-8')
@@ -227,30 +226,30 @@ def main(config = None, verbose = True):
         if fmt in ('M09', 'M09land'):
             fid = 0
             inflated = 1 if fmt == 'M09' else 0
-            if 'RH' in config['model']['output_fields']:
+            if 'RH' in output_fields:
                 fid = write_resampled(config, rh_total, suffix, 'RH', inflated, fid)
-            if 'NEE' in config['model']['output_fields']:
+            if 'NEE' in output_fields:
                 fid = write_resampled(config, nee, suffix, 'NEE', inflated, fid)
-            if 'Tmult' in config['model']['output_fields']:
+            if 'TMULT' in output_fields:
                 fid = write_resampled(config, t_mult, suffix, 'Tmult', inflated, fid)
-            if 'Wmult' in config['model']['output_fields']:
+            if 'WMULT' in output_fields:
                 fid = write_resampled(config, w_mult, suffix, 'Wmult', inflated, fid)
-            if 'SOC' in config['model']['output_fields']:
+            if 'SOC' in output_fields:
                 fid = write_resampled(config, soc_total, suffix, 'SOC', inflated, fid)
             if config['model']['output_type'].upper() == 'HDF5':
                 close_hdf5(fid)
         else:
             output_dir = config['model']['output_dir']
             out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
-            if 'RH' in config['model']['output_fields']:
+            if 'RH' in output_fields:
                 to_numpy(rh_total, SPARSE_M01_N).tofile(out_fname_tpl % 'RH')
-            if 'NEE' in config['model']['output_fields']:
+            if 'NEE' in output_fields:
                 to_numpy(nee, SPARSE_M01_N).tofile(out_fname_tpl % 'NEE')
-            if 'Tmult' in config['model']['output_fields']:
+            if 'TMULT' in output_fields:
                 to_numpy(t_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Tmult')
-            if 'Wmult' in config['model']['output_fields']:
+            if 'WMULT' in output_fields:
                 to_numpy(w_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Wmult')
-            if 'SOC' in config['model']['output_fields']:
+            if 'SOC' in output_fields:
                 to_numpy(soc_total, SPARSE_M01_N).tofile(out_fname_tpl % 'SOC')
 
     PyMem_Free(PFT)
@@ -294,22 +293,21 @@ def load_state(config):
     #   without creating a new instance; there should be little risk in
     #  this because each array is the same size
     tmp = NamedTemporaryFile()
-    tmp_fname_bs = tmp.name.encode('UTF-8')
     with h5py.File(restart_file_bs, 'r') as hdf:
         write_numpy_deflated(
-            tmp_fname_bs, hdf[soc_fields[0]][:], grid = 'M01')
-        read_flat(tmp_fname_bs, SPARSE_M01_N, SOC0)
+            tmp.name, hdf[soc_fields[0]][:], grid = 'M01')
+        read_flat(tmp.name.encode('UTF-8'), SPARSE_M01_N, SOC0)
         write_numpy_deflated(
-            tmp_fname_bs, hdf[soc_fields[1]][:], grid = 'M01')
-        read_flat(tmp_fname_bs, SPARSE_M01_N, SOC1)
+            tmp.name, hdf[soc_fields[1]][:], grid = 'M01')
+        read_flat(tmp.name.encode('UTF-8'), SPARSE_M01_N, SOC1)
         write_numpy_deflated(
-            tmp_fname_bs, hdf[soc_fields[2]][:], grid = 'M01')
-        read_flat(tmp_fname_bs, SPARSE_M01_N, SOC2)
+            tmp.name, hdf[soc_fields[2]][:], grid = 'M01')
+        read_flat(tmp.name.encode('UTF-8'), SPARSE_M01_N, SOC2)
         # Now, for litterfall (annual sum of NPP)
         npp_field = config['data']['restart']['NPP']
         write_numpy_deflated(
-            tmp_fname_bs, hdf[npp_field][:], grid = 'M01')
-        read_flat(tmp_fname_bs, SPARSE_M01_N, LITTERFALL)
+            tmp.name, hdf[npp_field][:], grid = 'M01')
+        read_flat(tmp.name.encode('UTF-8'), SPARSE_M01_N, LITTERFALL)
 
     # NOTE: Calculating litterfall as average daily NPP (constant fraction of
     #   the annual NPP sum)

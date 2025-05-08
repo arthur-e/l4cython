@@ -38,8 +38,7 @@ def main(cython_granule, mdl_granule, field = None, grid = 'M09'):
 
     # Determine the HDF5 field name
     if field in ('Tmult', 'Wmult', 'Emult') or field.lower().startswith('f_'):
-        field_name = f'EC/{field.lower()}_mean'
-        field_name_official = 'EC/emult_mean'
+        field_name_official = f'EC/{field.lower()}_mean'
     else:
         field_name = f'{field}/{field.lower()}_mean'
         field_name_official = field_name
@@ -47,7 +46,7 @@ def main(cython_granule, mdl_granule, field = None, grid = 'M09'):
     # Open the recent file
     if 'h5' in cython_granule:
         with h5py.File(cython_granule, 'r') as hdf:
-            recent = hdf[field_name][:]
+            recent = hdf[field_name_official][:]
     else:
         recent = np.fromfile(
             cython_granule, dtype = dtype).reshape((1624, 3856))
@@ -82,7 +81,7 @@ def main(cython_granule, mdl_granule, field = None, grid = 'M09'):
         diff, interpolation = 'nearest', cmap = 'PRGn',
         vmin = -vlimit, vmax = vlimit)
     pyplot.colorbar()
-    pyplot.title('Reference minus Prediction')
+    pyplot.title(f'L4CMDL "{field_name_official}" minus L4Cython "{field}"')
     pyplot.show()
 
 

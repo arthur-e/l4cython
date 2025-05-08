@@ -29,9 +29,9 @@ data:
     # fPAR (unsigned 8-bit integer, 0-100%)
     fpar: /anx_lagr4/SMAP/L4C_drivers/Version8/L4C_MOD/L4_C_mod_%sT000000_Vv8020_001.h5 # Canopy fPAR
 model:
-  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250320
+  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250508
   output_format: M09 # "M09land" for flat (1D) output
-  output_type: 'HDF5'
+  output_type: HDF5 # "HDF5" or "binary"
   compression:
     type: 'gzip' # Currently the only option
     level: 5 # Suggest something between 3 and 5; 0 being "no compression"
@@ -40,7 +40,3 @@ model:
   - GPP
   - NPP
   - Emult
-  - f_FT
-  - f_VPD
-  - f_SMRZ
-  - f_Tmin

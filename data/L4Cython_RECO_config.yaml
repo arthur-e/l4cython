@@ -26,19 +26,20 @@ data:
     #   SOIL_TEMP_LAYER1 in deg K units
     file: /anx_lagr4/SMAP/L4C_drivers/Version8/L4C_MET/L4_C_met_%sT000000_Vv8020_001.h5
     # GPP [g C m-2 day-1], only used to calculate NEE; a flat file in M09land format
-    GPP: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250224/L4Cython_GPP_%s_M09land.flt32
+    GPP: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250508/L4Cython_GPP_%s_M09land.flt32
 model:
   litterfall:
-    scheduled: false
+    scheduled: true
     interval_days: 8 # Number of days represented by litterfall rate
-  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250224
+  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250508
   output_format: M09 # "M09land" for flat (1D) output
-  output_type: 'HDF5'
+  output_type: HDF5 # "HDF5" or "binary"
   compression:
     type: 'gzip' # Currently the only option
     level: 5 # Suggest something between 3 and 5; 0 being "no compression"
-  output_fields: # Valid output fields include: "RH", "NEE"
+  output_fields: # Valid output fields include: "RH", "NEE", "SOC", "Tmult", "Wmult"
   - NEE
   - RH
+  - SOC
   - Tmult
   - Wmult
