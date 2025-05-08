@@ -96,7 +96,6 @@ def main(config = None, verbose = True):
     tmin  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     qv2m  = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     ps    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
-    tsurf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     vpd   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     par   = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     ft    = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
@@ -225,7 +224,7 @@ def main(config = None, verbose = True):
         fname_bs = (config['data']['drivers']['file'] % date_str).encode('UTF-8')
         # Read the FT state from the 3-km array; it is bit-packed
         #   but only two states matter: 53=Frozen, 52=Thawed
-        #   by the least-significant bit: 1=Frozen, 0=Thaweds
+        # Check the least-significant bit: 1=Frozen, 0=Thawed
         read_hdf5(fname_bs, 'FT_STATE_UM_M03', H5T_STD_U8LE, h5_ft_state)
         deflate(h5_ft_state, ft_state, DFNT_UINT8, 'M03'.encode('UTF-8'))
 
@@ -344,7 +343,6 @@ def main(config = None, verbose = True):
     PyMem_Free(tmin)
     PyMem_Free(qv2m)
     PyMem_Free(ps)
-    PyMem_Free(tsurf)
     PyMem_Free(vpd)
     PyMem_Free(par)
     PyMem_Free(ft)
