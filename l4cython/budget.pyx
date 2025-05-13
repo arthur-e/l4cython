@@ -21,14 +21,6 @@ Developer notes:
 - Large datasets (1-km resolution) that are read-in from disk by one function,
     `load_state()`, and read-in from memory by another, `main()`, MUST be
     assigned to global variables because they must use heap allocation.
-
-Possible improvements:
-
-- [ ] fPAR climatology filling could be done outside of the main 1-km
-    loop, in a separate nested 1-km loop, so that the QC and climatology
-    arrays can be freed from memory.
-- [ ] 1-km global grid files will always be ~500 MB in size, without
-    compression; try writing the array to an HDF5 file instead.
 '''
 
 import cython
@@ -40,7 +32,7 @@ from libc.stdlib cimport calloc, free
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 from libc.math cimport fmax
 from cython.parallel import prange
-from cpython.mem cimport PyMem_Malloc, PyMem_Realloc, PyMem_Free
+from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from tempfile import NamedTemporaryFile
 from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, SPARSE_M09_N, SPARSE_M01_N, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, DFNT_UINT8, DFNT_FLOAT32
 from l4cython.core import load_parameters_table

@@ -12,6 +12,7 @@ HDF5_DIRS = [
     '/usr/include/hdf5/openmpi/', # Also required for hdf5.pxd
     '/usr/lib/x86_64-linux-gnu/openmpi/include/' # Also required for hdf5.pxd
 ]
+HDF5_LINKS = ['-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']
 
 # NOTE: Because libgdal-dev and libhdf4-dev conflict on Ubuntu,
 #   it is necesary to install libhdf4-alt-dev if libgdal-dev is desired;
@@ -38,7 +39,7 @@ hdf5 = Extension(
         '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
         '-ldfalt', '-lmfhdfalt', '-lhdf5', '-lz', '-luuid', '-lm', '-lutil'
     ],
-    extra_link_args = ['-fopenmp', '-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']
+    extra_link_args = ['-fopenmp', *HDF5_LINKS]
 )
 
 io = Extension(
