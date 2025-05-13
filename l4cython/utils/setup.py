@@ -10,6 +10,7 @@ HDF4_DIRS = ['/usr/include', '/usr/include/hdf']
 HDF5_DIRS = [
     *HDF4_DIRS,
     '/usr/include/hdf5/openmpi/', # Also required for hdf5.pxd
+    '/usr/include/hdf5/serial/',
     '/usr/lib/x86_64-linux-gnu/openmpi/include/' # Also required for hdf5.pxd
 ]
 HDF5_LINKS = ['-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']

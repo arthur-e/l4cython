@@ -1,7 +1,7 @@
 # cython: language_level=3
 
 # NOTE: Removed these link args, seemed extraneous, but if OpenMP stops linking:
-#   extra_link_args = ['-fopenmp', 
+#   extra_link_args = ['-fopenmp',
 
 from distutils.core import setup, Extension
 from Cython.Build import cythonize
@@ -17,6 +17,7 @@ HDF4_ARGS = [
 HDF5_DIRS = [
     *HDF4_DIRS,
     '/usr/include/hdf5/openmpi/', # Also required for hdf5.pxd
+    '/usr/include/hdf5/serial/',
     '/usr/lib/x86_64-linux-gnu/openmpi/include/' # Also required for hdf5.pxd
 ]
 HDF5_LINKS = ['-L/usr/lib/x86_64-linux-gnu/hdf5/openmpi/']
