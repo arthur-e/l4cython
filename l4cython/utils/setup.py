@@ -23,7 +23,7 @@ mkgrid = Extension(
     sources = ['mkgrid.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'mfhdfalt'],
-    include_dirs = HDF4_DIRS,
+    include_dirs = ['.', *HDF4_DIRS],
     extra_compile_args = [
         '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
         '-ldfalt', '-lmfhdfalt', '-lz', '-luuid', '-lm', '-lutil'
@@ -35,7 +35,7 @@ hdf5 = Extension(
     sources = ['hdf5.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'mfhdfalt', 'hdf5'],
-    include_dirs = HDF5_DIRS,
+    include_dirs = ['.', *HDF5_DIRS],
     extra_compile_args = [
         '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
         '-ldfalt', '-lmfhdfalt', '-lhdf5', '-lz', '-luuid', '-lm', '-lutil'
@@ -46,13 +46,18 @@ hdf5 = Extension(
 io = Extension(
     name = 'io',
     sources = ['io.pyx'],
-    define_macros = MACROS
+    define_macros = MACROS,
+    include_dirs = ['.'],
 )
 
 dec2bin = Extension(
     name = 'dec2bin',
     sources = ['dec2bin.pyx'],
-    define_macros = MACROS
+    define_macros = MACROS,
+    include_dirs = ['.'],
 )
 
-setup(ext_modules = cythonize([hdf5, io, mkgrid, dec2bin]))
+setup(
+    name = 'l4cython.utils',
+    packages = ['l4cython.utils'],
+    ext_modules = cythonize([hdf5, io, mkgrid, dec2bin]))

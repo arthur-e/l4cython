@@ -1,8 +1,9 @@
 # cython: language_level=3
 
 # NOTE: Removed these link args, seemed extraneous, but if OpenMP stops linking:
-#   extra_link_args = ['-fopenmp',
+#   extra_link_args = ['-fopenmp', ...]
 
+import sys, os
 from distutils.core import setup, Extension
 from Cython.Build import cythonize
 
@@ -29,7 +30,7 @@ budget = Extension(
     sources = ['budget.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
-    include_dirs = ['./utils', *HDF5_DIRS],
+    include_dirs = ['.', './utils', *HDF5_DIRS],
     extra_compile_args = ['-Wno-maybe-uninitialized'],
     extra_link_args = [*HDF5_LINKS]
 )
@@ -39,7 +40,7 @@ core = Extension(
     sources = ['core.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'mfhdfalt'],
-    include_dirs = HDF4_DIRS,
+    include_dirs = ['.', *HDF4_DIRS],
     extra_compile_args = HDF4_ARGS
 )
 
@@ -48,7 +49,7 @@ gpp = Extension(
     sources = ['gpp.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
-    include_dirs = ['./utils', *HDF5_DIRS],
+    include_dirs = ['.', './utils', *HDF5_DIRS],
     extra_compile_args = ['-Wno-maybe-uninitialized'],
     extra_link_args = [*HDF5_LINKS]
 )
@@ -58,7 +59,7 @@ reco = Extension(
     sources = ['reco.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
-    include_dirs = ['./utils', *HDF5_DIRS],
+    include_dirs = ['.', './utils', *HDF5_DIRS],
     extra_compile_args = ['-Wno-maybe-uninitialized'],
     extra_link_args = [*HDF5_LINKS]
 )
@@ -68,7 +69,7 @@ resample = Extension(
     sources = ['resample.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
-    include_dirs = ['./utils', *HDF5_DIRS],
+    include_dirs = ['.', './utils', *HDF5_DIRS],
     extra_compile_args = [
         '-DHAVE_HDF4', '-ldfalt', '-lhdf5', '-Wno-maybe-uninitialized', '-lz'
     ],
@@ -80,8 +81,11 @@ spinup = Extension(
     sources = ['spinup_9km.pyx'],
     define_macros = MACROS,
     libraries = ['dfalt', 'mfhdfalt'],
-    include_dirs = ['./utils', *HDF4_DIRS],
+    include_dirs = ['.', './utils', *HDF4_DIRS],
     extra_compile_args = HDF4_ARGS
 )
 
-setup(ext_modules = cythonize([core, resample, budget, gpp, reco, budget, spinup]))
+setup(
+    name = 'l4cython',
+    packages = ['l4cython', 'l4cython.utils'],
+    ext_modules = cythonize([core, resample, budget, gpp, reco, budget, spinup]))
