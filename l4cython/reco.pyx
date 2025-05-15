@@ -6,9 +6,9 @@ SMAP Level 4 Carbon (L4C) heterotrophic respiration (RH) and NEE calculation
 at 1-km spatial resolution. The `main()` routine is optimized for model
 execution but it may take several seconds to load the state data.
 
-After the initial state data are loaded it takes about 15-30 seconds per
+After the initial state data are loaded it takes about 10-30 seconds per
 data day when writing one or two fluxes out. Time increases considerably
-with more daily output variables.
+with more daily output variables and if output variables need to be inflated.
 
 Required daily driver data:
 
@@ -24,8 +24,8 @@ Developer notes:
 
 Possible improvements:
 
-- [ ] 1-km global grid files will always be ~500 MB in size, without
-    compression; try writing the array to an HDF5 file instead.
+- Currently, the `main()` routine can only be run once in a single Python
+    session; subsequent calls to `main()` will produce a segmentation fault.
 '''
 
 import cython
@@ -85,6 +85,7 @@ def main(config = None, verbose = True):
         Py_ssize_t doy # Day of year, on [1,365]
         hid_t fid # For open HDF5 files
         int n_litter_days
+        int gpp_avail
         float litter # Amount of litterfall entering SOC pools
         float reco # Ecosystem respiration
         float k_mult
@@ -127,7 +128,7 @@ def main(config = None, verbose = True):
     #   schedule is used, an equal daily fraction of available NPP allocated
     if config['model']['litterfall']['scheduled']:
         n_litter_days = config['model']['litterfall']['interval_days']
-        n_litter_periods = np.ceil(365 / n_litter_days)
+        n_litter_periods = int(np.ceil(365 / n_litter_days))
         periods = np.array([
             [i] * n_litter_days for i in range(1, n_litter_periods + 1)
         ]).ravel()
@@ -137,6 +138,11 @@ def main(config = None, verbose = True):
         n_litter_days = 365
         for i in range(0, SPARSE_M01_N):
             litter_rate[i] = 1
+
+    # Check if GPP data are available
+    gpp_avail = 0
+    if config['data']['drivers']['GPP'] is not None:
+        gpp_avail = 1
 
     load_state(config) # Load global state variables
     # Begin forward time stepping
@@ -160,9 +166,11 @@ def main(config = None, verbose = True):
             write_numpy_deflated(tmp.name, hdf['SOIL_TEMP_LAYER1'][:])
             read_flat(tmp.name.encode('UTF-8'), SPARSE_M09_N, tsoil)
 
-        # Read in the GPP data
-        fname_bs = (config['data']['drivers']['GPP'] % date_str).encode('UTF-8')
-        read_flat(fname_bs, SPARSE_M09_N, gpp)
+        # Read in the GPP data, if it was provided (otherwise, NEE will not
+        #   be calculated)
+        if gpp_avail == 1:
+            fname_bs = (config['data']['drivers']['GPP'] % date_str).encode('UTF-8')
+            read_flat(fname_bs, SPARSE_M09_N, gpp)
 
         # Option to schedule the rate at which litterfall enters SOC pools
         if config['model']['litterfall']['scheduled']:
@@ -212,9 +220,10 @@ def main(config = None, verbose = True):
                 SOC1[k] = fmax(SOC1[k], 0)
                 SOC2[k] = fmax(SOC2[k], 0)
                 soc_total[k] = SOC0[k] + SOC1[k] + SOC2[k]
-                # Compute NEE
-                reco = rh_total[k] + (gpp[i] * (1 - PARAMS.cue[pft]))
-                nee[k] = reco - gpp[i]
+                if gpp_avail == 1:
+                    # Compute NEE
+                    reco = rh_total[k] + (gpp[i] * (1 - PARAMS.cue[pft]))
+                    nee[k] = reco - gpp[i]
 
         # If averaging from 1-km to 9-km resolution is requested...
         fmt = config['model']['output_format']
@@ -228,14 +237,14 @@ def main(config = None, verbose = True):
             inflated = 1 if fmt == 'M09' else 0
             if 'RH' in output_fields:
                 fid = write_resampled(config, rh_total, suffix, 'RH', inflated, fid)
-            if 'NEE' in output_fields:
-                fid = write_resampled(config, nee, suffix, 'NEE', inflated, fid)
             if 'TMULT' in output_fields:
                 fid = write_resampled(config, t_mult, suffix, 'Tmult', inflated, fid)
             if 'WMULT' in output_fields:
                 fid = write_resampled(config, w_mult, suffix, 'Wmult', inflated, fid)
             if 'SOC' in output_fields:
                 fid = write_resampled(config, soc_total, suffix, 'SOC', inflated, fid)
+            if gpp_avail == 1 and 'NEE' in output_fields:
+                fid = write_resampled(config, nee, suffix, 'NEE', inflated, fid)
             if config['model']['output_type'].upper() == 'HDF5':
                 close_hdf5(fid)
         else:
@@ -243,14 +252,14 @@ def main(config = None, verbose = True):
             out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
             if 'RH' in output_fields:
                 to_numpy(rh_total, SPARSE_M01_N).tofile(out_fname_tpl % 'RH')
-            if 'NEE' in output_fields:
-                to_numpy(nee, SPARSE_M01_N).tofile(out_fname_tpl % 'NEE')
             if 'TMULT' in output_fields:
                 to_numpy(t_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Tmult')
             if 'WMULT' in output_fields:
                 to_numpy(w_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Wmult')
             if 'SOC' in output_fields:
                 to_numpy(soc_total, SPARSE_M01_N).tofile(out_fname_tpl % 'SOC')
+            if gpp_avail == 1 and 'NEE' in output_fields:
+                to_numpy(nee, SPARSE_M01_N).tofile(out_fname_tpl % 'NEE')
 
     PyMem_Free(PFT)
     PyMem_Free(LITTERFALL)

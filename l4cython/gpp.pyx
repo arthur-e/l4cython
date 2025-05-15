@@ -6,7 +6,7 @@ SMAP Level 4 Carbon (L4C) gross primary production (GPP) at 1-km spatial
 resolution. The `main()` routine is optimized for model execution but it may
 take several seconds to load the state data.
 
-After the initial state data are loaded it takes about 15-30 seconds per
+After the initial state data are loaded it takes about 15-60 seconds per
 data day when writing one or two fluxes out. Time increases considerably
 with more daily output variables. Memory use should be constant over time,
 consuming at most about 8.0 GB.

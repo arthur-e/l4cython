@@ -31,7 +31,7 @@ def main(cython_granule, mdl_granule, field = None, grid = 'M09'):
     dtype = np.float32 if cython_granule.split('.')[-1] == 'flt32' else np.float64
     if f'{grid}land' in cython_granule and 'h5' not in cython_granule:
         inflate_file(cython_granule, grid)
-        filename = cython_granule.replace(f'{grid}land', f'{grid}')
+        cython_granule = cython_granule.replace(f'{grid}land', f'{grid}')
         field, date = FILE_RX.match(os.path.basename(cython_granule)).groups()
     elif 'h5' in cython_granule:
         date = HDF5_RX.match(os.path.basename(cython_granule)).groups()

@@ -266,7 +266,7 @@ def write_numpy_inflated(
     NOTE: `output_filename` is expected as bytes, not a string; if starting
     with a string, use:
 
-        write_inflated(filename.encode('UTF-8'), ...)
+        write_numpy_inflated(filename.encode('UTF-8'), ...)
 
     Parameters
     ----------
