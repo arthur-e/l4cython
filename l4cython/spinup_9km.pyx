@@ -31,10 +31,12 @@ Required data:
 - Soil temperature, in degrees K
 '''
 
+import os
 import cython
 import datetime
 import yaml
 import numpy as np
+import l4cython
 from libc.math cimport isnan, fabs, fmax
 from libc.stdio cimport FILE, fread, fclose
 from cython.parallel import prange
@@ -85,7 +87,8 @@ def main(config = None, verbose = True):
     soc2 = <double*> PyMem_Malloc(sizeof(double) * SPARSE_N)
     # Read in configuration file, then load state data
     if config is None:
-        config = '../data/L4Cython_spin-up_M09_config.yaml'
+        config = os.path.join(
+            os.path.dirname(l4cython.__file__), '../data/L4Cython_spin-up_M09_config.yaml')
     if isinstance(config, str):
         with open(config, 'r') as file:
             config = yaml.safe_load(file)

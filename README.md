@@ -10,38 +10,30 @@ floating-point precision. L4Cython achieves the closest results with version
 7.4.1 of the SMAP L4C operational code and Version 7 (Vv7040/Vv7042) of the
 operational product.
 
-- [ ] **The remaining difference between L4Cython GPP calculation and the
-  current (Version 7) official L4CMDL GPP calculation is that the latter does
-  not use the surface temperature from L4_SM but instead a field
-  `FT_STATE_UM_M03` that depends on GMAO GEOS5.**
-- [ ] **Address potential memory leak in `inflate()` and `deflate()` functions,**
-  which allocate memory for a returned C array.
-- [TODO: Changing static links to dynamic links](https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html?highlight=packaging#distributing-cython-modules)
+For example, the GPP calculation in the `l4cython.gpp` module follows the
+current (Version 7) official L4CMDL GPP calculation, where the 3-km field
+`FT_STATE_UM_M03` from the NASA GMAO GEOS5 re-analysis is used to determine the
+surface freeze-thaw state. However, in `l4cython.budget`, this field is not
+used and the surface skin temperature is instead compared to the freezing point
+of water.
 
 
 Building and Testing
 ----------------------------
 
-1. Install Cython and other Python dependencies.
-2. Build the `utils` module.
-3. Build the top-level `l4cython` modules.
+There are two steps involved:
+
+1. Install Cython and other Python dependencies, e.g., with `pip`
+2. Build and install `l4cython`
 
 **To install Cython and other Python dependencies,** from the project root directory:
 ```
 pip install -e .
 ```
 
-**Then, build the `utils` module:**
+**Then, build the `l4cython` module:**
 ```sh
 # From the project root
-cd l4cython/utils
-make
-```
-
-**Finally, build the top-level `l4cython` modules:**
-```sh
-# From the project root
-cd l4cython
 make
 ```
 

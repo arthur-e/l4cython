@@ -1,6 +1,6 @@
 # cython: language_level=3
-# distutils: sources = ["src/spland.c", "src/uuta.c"]
-# distutils: include_dirs = ["src/"]
+# distutils: sources = ["l4cython/utils/src/spland.c", "l4cython/utils/src/uuta.c"]
+# distutils: include_dirs = ["l4cython/utils/src/"]
 
 '''
 Tools for manipulating grid_array or flat_array EASE-Grid 2.0 array data.
@@ -19,6 +19,7 @@ import numpy as np
 from libc.stdlib cimport free, calloc
 from libc.stdio cimport fopen, fread, fclose, fwrite
 from l4cython.utils.io cimport READ, WRITE, open_fid
+from l4cython.utils.mkgrid cimport DFNT_FLOAT32, DFNT_FLOAT64, DFNT_INT8, DFNT_INT16, DFNT_INT32, DFNT_INT64, DFNT_UINT8, DFNT_UINT16, NROW9KM, NCOL9KM, NROW3KM, NCOL3KM, NROW1KM, NCOL1KM, SPARSE_M09_N, SPARSE_M03_N, SPARSE_M01_N, size_in_bytes, inflate, deflate
 # Implicit importing of inflate(), deflate(), and spland_*() functions from mkgrid.pxd
 
 @cython.boundscheck(False)

@@ -1,5 +1,5 @@
 # cython: language_level=3
-# distutils: sources = ["utils/src/spland.c", "utils/src/uuta.c"]
+# distutils: sources = ["l4cython/utils/src/spland.c", "l4cython/utils/src/uuta.c"]
 
 '''
 SMAP Level 4 Carbon (L4C) heterotrophic respiration (RH) and NEE calculation
@@ -28,11 +28,13 @@ Possible improvements:
     session; subsequent calls to `main()` will produce a segmentation fault.
 '''
 
+import os
 import cython
 import datetime
 import yaml
 import numpy as np
 import h5py
+import l4cython
 from libc.stdlib cimport calloc, free
 from libc.math cimport fmax
 from cython.parallel import prange
@@ -105,7 +107,8 @@ def main(config = None, verbose = True):
 
     # Read in configuration file, then load state data
     if config is None:
-        config = '../data/L4Cython_RECO_config.yaml'
+        config = os.path.join(
+            os.path.dirname(l4cython.__file__), '../data/L4Cython_RECO_config.yaml')
     if isinstance(config, str) and verbose:
         print(f'Using config file: {config}')
     if isinstance(config, str):
