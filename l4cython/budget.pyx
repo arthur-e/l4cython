@@ -96,6 +96,7 @@ def main(config = None, verbose = True):
         Py_ssize_t doy # Day of year, on [1,365]
         hid_t fid # For open HDF5 files
         int DEBUG, n_litter_days
+        int check_fpar_qc # =1 if fPAR QC should be checked
         float fpar # Current fPAR value
         float litter # Amount of litterfall entering SOC pools
         float reco # Ecosystem respiration
@@ -226,6 +227,7 @@ def main(config = None, verbose = True):
         # Only read-in the fPAR data (and deflate it) once, for every
         #   8-day period
         if date_fpar_ongoing is None or date_fpar_ongoing != date_fpar:
+            check_fpar_qc = 1 # Assume we're checking fPAR QC flags
             # These have to be allocated differently for use with low-level functions
             in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
             h5_fpar0     = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
@@ -234,12 +236,11 @@ def main(config = None, verbose = True):
             # Load the corresponding fPAR data (as a NumPy array)
             fpar_filename = config['data']['drivers']['fpar'] % (
                 str(date.year) + date_fpar.strftime('%m%d'))
+            # Byte-string versions of fPAR filenames
             fpar_filename_bs = fpar_filename.encode('UTF-8')
-            # Load and deflate the fPAR climatology
             fpar_clim_filename_bs = config['data']['fpar_clim'].encode('UTF-8')
-            # Read and deflate the fPAR data and QC flags
-            read_hdf5(fpar_filename_bs, 'fpar_M01', H5T_STD_U8LE, h5_fpar0)
-            read_hdf5(fpar_filename_bs, 'fpar_qc_M01', H5T_STD_U8LE, h5_fpar_qc)
+
+            # Load and deflate the fPAR climatology...
             # The climatology field names are difficult; first, we need to get
             #   the ordinal of this 8-day period, counting starting from 1
             period = list(PERIODS).index(int(date_fpar.strftime("%j"))) + 1
@@ -250,9 +251,21 @@ def main(config = None, verbose = True):
             read_hdf5(
                 fpar_clim_filename_bs, clim_field.encode('utf-8'),
                 H5T_STD_U8LE, h5_fpar_clim)
-            deflate(h5_fpar0, fpar0, DFNT_UINT8, 'M01'.encode('UTF-8'))
-            deflate(h5_fpar_qc, fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
             deflate(h5_fpar_clim, fpar_clim, DFNT_UINT8, 'M01'.encode('UTF-8'))
+
+            # Read and deflate the fPAR data and QC flags
+            if os.path.exists(fpar_filename):
+                read_hdf5(fpar_filename_bs, 'fpar_M01', H5T_STD_U8LE, h5_fpar0)
+                read_hdf5(fpar_filename_bs, 'fpar_qc_M01', H5T_STD_U8LE, h5_fpar_qc)
+                deflate(h5_fpar0, fpar0, DFNT_UINT8, 'M01'.encode('UTF-8'))
+                deflate(h5_fpar_qc, fpar_qc, DFNT_UINT8, 'M01'.encode('UTF-8'))
+            # If the fPAR data are not available for a given date (e.g., prior
+            #   to Feburary 2000), use the climatology only
+            else:
+                print(f'No fPAR file for date {date_fpar.strftime('%m%d')} -- Using fPAR climatology')
+                check_fpar_qc = 0
+                fpar0 = fpar_clim
+
             free(h5_fpar0)
             free(h5_fpar_qc)
             free(h5_fpar_clim)
@@ -313,13 +326,13 @@ def main(config = None, verbose = True):
                 # Determine the value of fPAR based on QC flag;
                 #   bad pixels have either:
                 #   1 in the left-most bit (SCF_QC bit = "Pixel not produced at all")
-                if bits_from_uint32(7, 7, fpar_qc[k]) == 1:
-                    fpar = <float>fpar_clim[k]
-                #   Or, anything other than 00 ("Clear") in bits 3-4
-                elif bits_from_uint32(3, 4, fpar_qc[k]) > 0:
-                    fpar = <float>fpar_clim[k]
-                else:
-                    fpar = <float>fpar0[k] # Otherwise, we're good
+                fpar = <float>fpar0[k] # Otherwise, we're good
+                if check_fpar_qc == 1:
+                    if bits_from_uint32(7, 7, fpar_qc[k]) == 1:
+                        fpar = <float>fpar_clim[k]
+                    #   Or, anything other than 00 ("Clear") in bits 3-4
+                    elif bits_from_uint32(3, 4, fpar_qc[k]) > 0:
+                        fpar = <float>fpar_clim[k]
                 # Then, check that we're not out of range
                 if fpar0[k] > 100 and fpar_clim[k] <= 100:
                     fpar = <float>fpar_clim[k]
