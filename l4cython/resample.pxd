@@ -32,7 +32,7 @@ cdef extern from "utils/src/spland.h":
 
 cdef inline hid_t write_fullres(
         dict config, float* array_data, char* suffix, char* field,
-        char* grid, hid_t file_id):
+        int inflated, hid_t file_id):
     '''
     Inflates and writes a full-resolution dataset to an HDF5 file. It is
     always an HDF5 file because full-resolution "land" files are not
@@ -45,7 +45,9 @@ cdef inline hid_t write_fullres(
     field : char*
         Well-known name of the dataset to be written
     suffix : char*
-    grid : char*
+    inflated : int
+        Has no meaning here, but included for compatibility with the
+        `write_resampled()` interface
     file_id : hid_t
         For HDF5 output, 0 if a new HDF5 file should be created; otherwise,
         pass the <hid_t> for an open HDF5 file
@@ -83,7 +85,7 @@ cdef inline hid_t write_fullres(
         _field = 'EC/%s_mean' % _field.lower() # e.g., "EC/emult_mean"
 
     print('Allocating space for full-resolution dataset')
-    if grid.decode('UTF-8') == 'M09':
+    if output_grid == 'M09':
         grid_size = 9000
         space_id = create_2d_space(NROW9KM, NCOL9KM)
         data_inflated = <float*> PyMem_Malloc(sizeof(float) * NCOL9KM * NROW9KM)
@@ -94,9 +96,9 @@ cdef inline hid_t write_fullres(
 
     # For HDF5 output, we'll first write the data to a temporary file
     tmp = NamedTemporaryFile()
-    if grid.decode('UTF-8') == 'M09':
+    if output_grid == 'M09':
         write_numpy_inflated(
-            tmp.name, to_numpy(array_data, SPARSE_M09_N), grid = grid)
+            tmp.name, to_numpy(array_data, SPARSE_M09_N), grid = output_grid)
         read_flat(tmp.name.encode('UTF-8'), NCOL9KM * NROW9KM, data_inflated)
     else:
         tmp2 = NamedTemporaryFile()

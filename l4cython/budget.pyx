@@ -400,39 +400,7 @@ def main(config = None, verbose = True):
         output_dir = config['model']['output_dir']
         output_type = config['model']['output_type'].upper()
         fid = 0
-        if fmt in ('M09', 'M09land'):
-            inflated = 1 if fmt == 'M09' else 0
-            if 'GPP' in output_fields:
-                fid = write_resampled(config, gpp, suffix, 'GPP', inflated, fid)
-            if 'NPP' in output_fields:
-                fid = write_resampled(config, npp, suffix, 'NPP', inflated, fid)
-            if 'EMULT' in output_fields:
-                fid = write_resampled(config, e_mult, suffix, 'Emult', inflated, fid)
-            if 'RH' in output_fields:
-                fid = write_resampled(config, rh_total, suffix, 'RH', inflated, fid)
-            if 'NEE' in output_fields:
-                fid = write_resampled(config, nee, suffix, 'NEE', inflated, fid)
-            if 'TMULT' in output_fields:
-                fid = write_resampled(config, t_mult, suffix, 'Tmult', inflated, fid)
-            if 'WMULT' in output_fields:
-                fid = write_resampled(config, w_mult, suffix, 'Wmult', inflated, fid)
-        elif output_type == 'HDF5':
-            grid = 'M01'.encode('UTF-8')
-            if 'GPP' in output_fields:
-                fid = write_fullres(config, gpp, suffix, 'GPP', grid, fid)
-            if 'NPP' in output_fields:
-                fid = write_fullres(config, npp, suffix, 'NPP', grid, fid)
-            if 'EMULT' in output_fields:
-                fid = write_fullres(config, e_mult, suffix, 'Emult', grid, fid)
-            if 'RH' in output_fields:
-                fid = write_fullres(config, rh_total, suffix, 'RH', grid, fid)
-            if 'NEE' in output_fields:
-                fid = write_fullres(config, nee, suffix, 'NEE', grid, fid)
-            if 'TMULT' in output_fields:
-                fid = write_fullres(config, t_mult, suffix, 'Tmult', grid, fid)
-            if 'WMULT' in output_fields:
-                fid = write_fullres(config, w_mult, suffix, 'Wmult', grid, fid)
-        else:
+        if fmt == 'M01land':
             out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
             if 'GPP' in output_fields:
                 to_numpy(gpp, SPARSE_M01_N).tofile(out_fname_tpl % 'GPP')
@@ -448,6 +416,28 @@ def main(config = None, verbose = True):
                 to_numpy(t_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Tmult')
             if 'WMULT' in output_fields:
                 to_numpy(w_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Wmult')
+        elif fmt in ('M09', 'M09land'):
+            inflated = 1 if fmt == 'M09' else 0
+            output_func = write_resampled
+        elif output_type == 'HDF5':
+            inflated = 1
+            output_func = write_fullres
+
+        if 'GPP' in output_fields:
+            fid = output_func(config, gpp, suffix, 'GPP', inflated, fid)
+        if 'NPP' in output_fields:
+            fid = output_func(config, npp, suffix, 'NPP', inflated, fid)
+        if 'EMULT' in output_fields:
+            fid = output_func(config, e_mult, suffix, 'Emult', inflated, fid)
+        if 'RH' in output_fields:
+            fid = output_func(config, rh_total, suffix, 'RH', inflated, fid)
+        if 'NEE' in output_fields:
+            fid = output_func(config, nee, suffix, 'NEE', inflated, fid)
+        if 'TMULT' in output_fields:
+            fid = output_func(config, t_mult, suffix, 'Tmult', inflated, fid)
+        if 'WMULT' in output_fields:
+            fid = output_func(config, w_mult, suffix, 'Wmult', inflated, fid)
+
     PyMem_Free(PFT)
     PyMem_Free(LITTERFALL)
     PyMem_Free(SOC0)
