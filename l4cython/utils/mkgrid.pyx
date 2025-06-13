@@ -109,7 +109,7 @@ def deflate_file(filename, grid = 'M09'):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def inflate_file(filename, grid = 'M09'):
+def inflate_file(filename, output_filename = None, grid = 'M09'):
     '''
     Converts a flat (1D or "land" format), binary file to an inflated (2D)
     representation of the global EASE-Grid 2.0. The output file is written to
@@ -180,11 +180,12 @@ def inflate_file(filename, grid = 'M09'):
     cdef char* c_grid = grid
     inflate(flat_array, grid_array, data_type, c_grid)
 
-    output_filename = filename_byte_string\
-        .decode('UTF-8')\
-        .replace('M01land', 'M01')\
-        .replace('M09land', 'M09')\
-        .encode('UTF-8')
+    if output_filename is None:
+        output_filename = filename_byte_string\
+            .decode('UTF-8')\
+            .replace('M01land', 'M01')\
+            .replace('M09land', 'M09')
+    output_filename = output_filename.encode('UTF-8')
     cdef char* ofname = output_filename
 
     # Write the output file

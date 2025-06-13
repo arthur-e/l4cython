@@ -150,3 +150,21 @@ cdef inline to_numpy_double(double *ptr, int n):
     for i in range(n):
         arr[i] = ptr[i]
     return arr
+
+
+cdef inline void write_flat(char* filename, int n_elem, float* arr):
+    '''
+    Writes floating-point data to a flat file (*.flt32).
+
+    Parameters
+    ----------
+    filename : char*
+        The filename to read
+    n_elem : int
+        The number of array elements
+    arr : float*
+        The array buffer containing the data to write to file
+    '''
+    fid = open_fid(filename, WRITE)
+    fwrite(arr, sizeof(float), <size_t>sizeof(float)*n_elem, fid)
+    fclose(fid)

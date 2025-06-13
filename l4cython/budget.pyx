@@ -43,7 +43,7 @@ from l4cython.resample cimport write_resampled, write_fullres
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, hid_t, read_hdf5
 from l4cython.utils.io cimport READ, open_fid, read_flat, read_flat_short, to_numpy
-from l4cython.utils.mkgrid import write_numpy_inflated
+from l4cython.utils.mkgrid import inflate_file, write_numpy_inflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from tqdm import tqdm
 
@@ -180,7 +180,7 @@ def main(config = None, verbose = True):
     #   schedule is used, an equal daily fraction of available NPP allocated
     if config['model']['litterfall']['scheduled']:
         n_litter_days = config['model']['litterfall']['interval_days']
-        n_litter_periods = np.ceil(365 / n_litter_days)
+        n_litter_periods = int(np.ceil(365 / n_litter_days))
         periods = np.array([
             [i] * n_litter_days for i in range(1, n_litter_periods + 1)
         ]).ravel()
@@ -262,7 +262,7 @@ def main(config = None, verbose = True):
             # If the fPAR data are not available for a given date (e.g., prior
             #   to Feburary 2000), use the climatology only
             else:
-                print(f'No fPAR file for date {date_fpar.strftime('%m%d')} -- Using fPAR climatology')
+                print(f'No fPAR file for date {date_fpar.strftime("%j")} -- Using fPAR climatology')
                 check_fpar_qc = 0
                 fpar0 = fpar_clim
 

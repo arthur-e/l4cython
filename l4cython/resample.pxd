@@ -17,11 +17,10 @@ sufficient to avoid a `NameError` at runtime.
 
 import numpy as np
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
-# NOTE: For some inexplicable reason, relative imports are needed here
 from tempfile import NamedTemporaryFile
-from l4cython.utils.mkgrid import write_numpy_inflated
+from l4cython.utils.mkgrid import inflate_file, write_numpy_inflated
 from l4cython.utils.hdf5 cimport hid_t, hsize_t, create_1d_space, create_2d_space, open_hdf5, read_hdf5, write_hdf5_dataset, H5T_STD_U8LE, H5T_IEEE_F32LE
-from l4cython.utils.io cimport read_flat, to_numpy
+from l4cython.utils.io cimport read_flat, to_numpy, write_flat
 
 cdef extern from "utils/src/spland.h":
     int M01_NESTED_IN_M09
@@ -100,12 +99,17 @@ cdef inline hid_t write_fullres(
             tmp.name, to_numpy(array_data, SPARSE_M09_N), grid = grid)
         read_flat(tmp.name.encode('UTF-8'), NCOL9KM * NROW9KM, data_inflated)
     else:
-        # NOTE: Segfault is here
+        tmp2 = NamedTemporaryFile()
+        # NOTE: Segfault is here; TODO I suspect this can be fixed by writing
+        #   the C array to file, calling inflate_file(), then reading the
+        #   inflated file
+        # write_numpy_inflated(
+        #     tmp.name, to_numpy(array_data, SPARSE_M01_N), grid = grid)
         print('Writing land data, inflated, to a temporary file')
-        write_numpy_inflated(
-            tmp.name, to_numpy(array_data, SPARSE_M01_N), grid = grid)
+        write_flat(tmp.name.encode('UTF-8'), SPARSE_M01_N, array_data)
+        inflate_file(tmp.name, tmp2.name, grid = 'M01')
         print('Reading data back at 1-km resolution')
-        read_flat(tmp.name.encode('UTF-8'), NCOL1KM * NROW1KM, data_inflated)
+        read_flat(tmp2.name.encode('UTF-8'), NCOL1KM * NROW1KM, data_inflated)
     # Write the inflated data to a new HDF5 dataset
     write_hdf5_dataset(
         fid, _field.encode('UTF-8'), H5T_IEEE_F32LE, space_id,

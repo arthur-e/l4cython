@@ -134,5 +134,5 @@ setup(
     packages = ['l4cython', 'l4cython.utils'],
     ext_modules = cythonize([
         hdf5, io, mkgrid, dec2bin, # l4cython/utils
-        core, resample, budget, gpp, reco, budget, spinup # l4cython/utils
+        core, resample, budget, gpp, reco, spinup # l4cython/utils
     ]))
