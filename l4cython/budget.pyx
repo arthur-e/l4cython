@@ -385,8 +385,8 @@ def main(config = None, verbose = True):
 
         output_dir = config['model']['output_dir']
         output_type = config['model']['output_type'].upper()
+        fid = 0
         if fmt in ('M09', 'M09land'):
-            fid = 0
             inflated = 1 if fmt == 'M09' else 0
             if 'GPP' in output_fields:
                 fid = write_resampled(config, gpp, suffix, 'GPP', inflated, fid)
@@ -406,6 +406,18 @@ def main(config = None, verbose = True):
             grid = 'M01'.encode('UTF-8')
             if 'GPP' in output_fields:
                 fid = write_fullres(config, gpp, suffix, 'GPP', grid, fid)
+            if 'NPP' in output_fields:
+                fid = write_fullres(config, npp, suffix, 'NPP', grid, fid)
+            if 'EMULT' in output_fields:
+                fid = write_fullres(config, e_mult, suffix, 'Emult', grid, fid)
+            if 'RH' in output_fields:
+                fid = write_fullres(config, rh_total, suffix, 'RH', grid, fid)
+            if 'NEE' in output_fields:
+                fid = write_fullres(config, nee, suffix, 'NEE', grid, fid)
+            if 'TMULT' in output_fields:
+                fid = write_fullres(config, t_mult, suffix, 'Tmult', grid, fid)
+            if 'WMULT' in output_fields:
+                fid = write_fullres(config, w_mult, suffix, 'Wmult', grid, fid)
         else:
             out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
             if 'GPP' in output_fields:
