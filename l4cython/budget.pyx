@@ -227,6 +227,7 @@ def main(config = None, verbose = True):
         # Only read-in the fPAR data (and deflate it) once, for every
         #   8-day period
         if date_fpar_ongoing is None or date_fpar_ongoing != date_fpar:
+            date_fpar_ongoing = date_fpar # The currently used fPAR data date
             check_fpar_qc = 1 # Assume we're checking fPAR QC flags
             # These have to be allocated differently for use with low-level functions
             in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM

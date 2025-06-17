@@ -170,6 +170,7 @@ def main(config = None, verbose = True):
         # Only read-in the fPAR data (and deflate it) once, for every
         #   8-day period
         if date_fpar_ongoing is None or date_fpar_ongoing != date_fpar:
+            date_fpar_ongoing = date_fpar # The currently used fPAR data date
             # Load the corresponding fPAR data (as a NumPy array)
             fpar_filename = config['data']['drivers']['fpar'] % (
                 str(date.year) + date_fpar.strftime('%m%d'))
