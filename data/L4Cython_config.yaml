@@ -41,6 +41,9 @@ model:
   litterfall:
     scheduled: true
     interval_days: 8 # Number of days represented by litterfall rate
+  restart:
+    create_file: false # true to generate an SOC restart file each year
+    output_file: '/Stout1/SMAP/L4_C/Version8/NRv11-4/L4Cython_SOC_restart_%s_C%d_M01land.flt32'
   output_dir: /Stout1/SMAP/L4_C/Version8/NRv11-4/all_granules
   output_format: M01 # "M09land" for flat (1D) output
   output_type: 'HDF5' # "HDF5" or "BINARY"

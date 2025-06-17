@@ -31,7 +31,7 @@ import numpy as np
 import l4cython
 from bisect import bisect_right
 from libc.stdlib cimport calloc, free
-from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
+from libc.stdio cimport FILE, fopen, fread, fclose
 from libc.math cimport fmax
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
@@ -42,7 +42,7 @@ from l4cython.science cimport arrhenius, linear_constraint, rescale_smrz, vapor_
 from l4cython.resample cimport write_resampled, write_fullres
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, hid_t, read_hdf5
-from l4cython.utils.io cimport READ, open_fid, read_flat, read_flat_short, to_numpy
+from l4cython.utils.io cimport READ, open_fid, write_flat, read_flat, read_flat_short, to_numpy
 from l4cython.utils.mkgrid import inflate_file, write_numpy_inflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from tqdm import tqdm
@@ -375,6 +375,20 @@ def main(config = None, verbose = True):
                 # Compute NEE
                 reco = rh_total[k] + (gpp[k] * (1 - PARAMS.cue[pft]))
                 nee[k] = reco - gpp[k]
+
+        # Optionally create restart files for each C pool, at the beginning
+        #   of a new year
+        if config['model']['restart']['create_file']:
+            if date.month == 1 and date.day == 1:
+                filename = (config['model']['restart']['output_file']\
+                    % (date_str, 0)).encode('UTF-8')
+                write_flat(filename, SPARSE_M01_N, SOC0)
+                filename = (config['model']['restart']['output_file']\
+                    % (date_str, 1)).encode('UTF-8')
+                write_flat(filename, SPARSE_M01_N, SOC1)
+                filename = (config['model']['restart']['output_file']\
+                    % (date_str, 2)).encode('UTF-8')
+                write_flat(filename, SPARSE_M01_N, SOC2)
 
         # If averaging from 1-km to 9-km resolution is requested...
         fmt = config['model']['output_format']

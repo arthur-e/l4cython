@@ -166,5 +166,5 @@ cdef inline void write_flat(char* filename, int n_elem, float* arr):
         The array buffer containing the data to write to file
     '''
     fid = open_fid(filename, WRITE)
-    fwrite(arr, sizeof(float), <size_t>sizeof(float)*n_elem, fid)
+    fwrite(arr, sizeof(unsigned char), <size_t>sizeof(float)*n_elem, fid)
     fclose(fid)
