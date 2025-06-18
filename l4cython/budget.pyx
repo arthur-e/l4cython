@@ -41,7 +41,7 @@ from l4cython.core import load_parameters_table
 from l4cython.science cimport arrhenius, linear_constraint, rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
 from l4cython.resample cimport write_resampled, write_fullres
 from l4cython.utils.dec2bin cimport bits_from_uint32
-from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, hid_t, read_hdf5
+from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, hid_t, read_hdf5, close_hdf5
 from l4cython.utils.io cimport READ, open_fid, write_flat, read_flat, read_flat_short, to_numpy
 from l4cython.utils.mkgrid import inflate_file, write_numpy_inflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
@@ -442,6 +442,9 @@ def main(config = None, verbose = True):
             fid = output_func(config, w_mult, suffix, 'Wmult', inflated, fid)
         if 'SOC' in output_fields:
             fid = output_func(config, soc_total, suffix, 'SOC', inflated, fid)
+
+        if output_type == 'HDF5':
+            close_hdf5(fid)
 
     PyMem_Free(PFT)
     PyMem_Free(LITTERFALL)
