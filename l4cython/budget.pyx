@@ -417,6 +417,8 @@ def main(config = None, verbose = True):
                 to_numpy(t_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Tmult')
             if 'WMULT' in output_fields:
                 to_numpy(w_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Wmult')
+            if 'SOC' in output_fields:
+                to_numpy(soc_total, SPARSE_M01_N).tofile(out_fname_tpl % 'SOC')
         elif fmt in ('M09', 'M09land'):
             inflated = 1 if fmt == 'M09' else 0
             output_func = write_resampled
@@ -438,6 +440,8 @@ def main(config = None, verbose = True):
             fid = output_func(config, t_mult, suffix, 'Tmult', inflated, fid)
         if 'WMULT' in output_fields:
             fid = output_func(config, w_mult, suffix, 'Wmult', inflated, fid)
+        if 'SOC' in output_fields:
+            fid = output_func(config, soc_total, suffix, 'SOC', inflated, fid)
 
     PyMem_Free(PFT)
     PyMem_Free(LITTERFALL)
