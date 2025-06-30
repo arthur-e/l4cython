@@ -380,7 +380,7 @@ def main(config = None, verbose = True):
         # Optionally create restart files for each C pool, at the beginning
         #   of a new year
         if config['model']['restart']['create_file']:
-            if date.month == 1 and date.day == 1:
+            if date.month == 12 and date.day == 31:
                 filename = (config['model']['restart']['output_file']\
                     % (date_str, 0)).encode('UTF-8')
                 write_flat(filename, SPARSE_M01_N, SOC0)
@@ -444,7 +444,8 @@ def main(config = None, verbose = True):
             fid = output_func(config, soc_total, suffix, 'SOC', inflated, fid)
 
         if output_type == 'HDF5':
-            close_hdf5(fid)
+            status = close_hdf5(fid)
+            print('HDF5 file status:', status)
 
     PyMem_Free(PFT)
     PyMem_Free(LITTERFALL)
