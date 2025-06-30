@@ -2,9 +2,9 @@
 # distutils: sources = ["l4cython/utils/src/spland.c", "l4cython/utils/src/uuta.c"]
 
 '''
-SMAP Level 4 Carbon (L4C) heterotrophic respiration (RH) and NEE calculation
-at 1-km spatial resolution. The `main()` routine is optimized for model
-execution but it may take several seconds to load the state data.
+SMAP Level 4 Carbon (L4C) full daily carbon budget, at 1-km spatial resolution.
+The `main()` routine is optimized for model execution but it may take several
+seconds to load the state data.
 
 After the initial state data are loaded it takes about 15-30 seconds per
 data day when writing one or two fluxes out. Time increases considerably
@@ -12,8 +12,16 @@ with more daily output variables.
 
 Required daily driver data:
 
-- Surface soil wetness ("SMSF"), in percentage units [0,100]
-- Soil temperature, in degrees K
+- Canopy fPAR, from official L4CMOD pre-processor
+- Root-zone soil wetness (unscaled), in ppt [0,1000]
+- Surface soil wetness ("SMSF"), in ppt [0,1000]
+- Soil temperature, in degrees K [deg K]
+- Minimum temperature [deg k]
+- Surface skin temperature [deg K]
+- Specific humidity (at 2-meter height, "QV2M")
+- Air temperature (at 2-meter height) [deg K]
+- Surface pressure (Pa)
+- Downwelling short-wave radiation [W m-2]
 
 Developer notes:
 
@@ -41,7 +49,7 @@ from l4cython.core import load_parameters_table
 from l4cython.science cimport arrhenius, linear_constraint, rescale_smrz, vapor_pressure_deficit, photosynth_active_radiation
 from l4cython.resample cimport write_resampled, write_fullres
 from l4cython.utils.dec2bin cimport bits_from_uint32
-from l4cython.utils.hdf5 cimport H5T_STD_U8LE, H5T_IEEE_F32LE, hid_t, read_hdf5, close_hdf5
+from l4cython.utils.hdf5 cimport H5T_STD_U8LE, hid_t, read_hdf5, close_hdf5
 from l4cython.utils.io cimport READ, open_fid, write_flat, read_flat, read_flat_short, to_numpy
 from l4cython.utils.mkgrid import inflate_file, write_numpy_inflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
@@ -174,7 +182,6 @@ def main(config = None, verbose = True):
         PARAMS.tmin1[p] = params['tmin1'][0][p]
         PARAMS.ft0[p] = params['ft0'][0][p]
         PARAMS.ft1[p] = params['ft1'][0][p]
-        PARAMS.cue[p] = params['CUE'][0][p]
 
     # Option to schedule the rate at which litterfall enters SOC pools; if no
     #   schedule is used, an equal daily fraction of available NPP allocated
@@ -395,8 +402,11 @@ def main(config = None, verbose = True):
         fmt = config['model']['output_format']
         suffix = '%s_%s' % (date_str, fmt) # e.g., "*_YYYYMMDD_M09land_*"
         suffix = suffix.encode('UTF-8')
-        output_fields = list(map(
-            lambda x: x.upper(), config['model']['output_fields']))
+        if config['model']['output_fields'] is None:
+            output_fields = []
+        else:
+            output_fields = list(map(
+                lambda x: x.upper(), config['model']['output_fields']))
 
         output_dir = config['model']['output_dir']
         output_type = config['model']['output_type'].upper()

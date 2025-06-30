@@ -120,6 +120,16 @@ resample = Extension(
     extra_link_args = [*HDF5_LINKS]
 )
 
+restart = Extension(
+    name = 'l4cython.restart',
+    sources = ['l4cython/restart.pyx'],
+    define_macros = MACROS,
+    libraries = ['dfalt', 'hdf5'],
+    include_dirs = ['.', './l4cython', './l4cython/utils', *HDF5_DIRS],
+    extra_compile_args = ['-Wno-maybe-uninitialized'],
+    extra_link_args = [*HDF5_LINKS]
+)
+
 spinup = Extension(
     name = 'l4cython.spinup',
     sources = ['l4cython/spinup_9km.pyx'],
@@ -134,5 +144,5 @@ setup(
     packages = ['l4cython', 'l4cython.utils'],
     ext_modules = cythonize([
         hdf5, io, mkgrid, dec2bin, # l4cython/utils
-        core, resample, budget, gpp, reco, spinup 
+        core, resample, restart, budget, gpp, reco, spinup
     ]))
