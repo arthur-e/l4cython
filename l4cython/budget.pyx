@@ -445,7 +445,6 @@ def main(config = None, verbose = True):
 
         if output_type == 'HDF5':
             status = close_hdf5(fid)
-            print('HDF5 file status:', status)
 
     PyMem_Free(PFT)
     PyMem_Free(LITTERFALL)

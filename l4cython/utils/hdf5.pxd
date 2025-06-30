@@ -60,6 +60,7 @@ cdef extern from "src/hdf5.h":
 
     # To create a group or check that a group exists
     hid_t H5Gcreate(hid_t loc_id, char* name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id)
+    herr_t H5Gclose(hid_t group_id)
     htri_t H5Lexists(hid_t loc_id, char* name, hid_t lapl_id)
 
     # To create an HDF5 dataset
@@ -119,16 +120,16 @@ cdef inline hid_t create_2d_space(int nrow, int ncol):
     return H5Screate_simple(2, dims, max_dims)
 
 
-cdef inline void close_hdf5(hid_t fid):
+cdef inline herr_t close_hdf5(hid_t fid):
     '''
-    Will only fail if the file already exists; will not overwrite.
+    Close the HDF5 file; returns a negative value if not successful.
 
     Parameters
     ----------
     fid : hid_t
         The file ID
     '''
-    H5Fclose(fid)
+    return H5Fclose(fid)
 
 
 cdef inline hid_t open_hdf5(char* filename):
@@ -211,6 +212,7 @@ cdef inline void write_hdf5_dataset(
     cdef hsize_t chunk_size[2]
     cdef float fill_value[1]
     fill_value[0] = <float>FILL_VALUE
+    gid = -1
 
     # Determine chunk size based on the resolution of the grid
     if res >= 3000:
@@ -243,4 +245,6 @@ cdef inline void write_hdf5_dataset(
         H5P_DEFAULT, dcpl, H5P_DEFAULT)
     H5Dwrite(dset_id, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, buff)
     H5Dclose(dset_id)
+    if gid > 0:
+        H5Gclose(gid)
     H5Pclose(dcpl)
