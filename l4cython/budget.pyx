@@ -50,7 +50,7 @@ from l4cython.science cimport arrhenius, linear_constraint, rescale_smrz, vapor_
 from l4cython.resample cimport write_resampled, write_fullres
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from l4cython.utils.hdf5 cimport H5T_STD_U8LE, hid_t, read_hdf5, close_hdf5
-from l4cython.utils.io cimport READ, open_fid, write_flat, read_flat, read_flat_short, to_numpy
+from l4cython.utils.io cimport READ, open_fid, write_flat, read_flat, read_flat_short, to_numpy, to_numpy_char
 from l4cython.utils.mkgrid import inflate_file, write_numpy_inflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from tqdm import tqdm
@@ -160,6 +160,7 @@ def main(config = None, verbose = True):
     num_steps = int(config['daily_steps'])
     DEBUG = 1 if config['debug'] else 0
     if DEBUG == 1:
+        print('WARNING: Operating in DEBUG mode')
         fpar_final = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
 
     params = load_parameters_table(config['BPLUT'].encode('UTF-8'))
@@ -233,9 +234,9 @@ def main(config = None, verbose = True):
 
         # Only read-in the fPAR data (and deflate it) once, for every
         #   8-day period
+        check_fpar_qc = 1 # Assume we're checking fPAR QC flags
         if date_fpar_ongoing is None or date_fpar_ongoing != date_fpar:
             date_fpar_ongoing = date_fpar # The currently used fPAR data date
-            check_fpar_qc = 1 # Assume we're checking fPAR QC flags
             # These have to be allocated differently for use with low-level functions
             in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
             h5_fpar0     = <unsigned char*>calloc(sizeof(unsigned char), <size_t>in_bytes)
@@ -456,6 +457,12 @@ def main(config = None, verbose = True):
         if output_type == 'HDF5':
             status = close_hdf5(fid)
 
+        if DEBUG == 1:
+            to_numpy(fpar_final, SPARSE_M01_N)\
+                .tofile(os.path.join(output_dir, f'DEBUG_fPAR_M01land_{date_str}.flt32'))
+            to_numpy_char(fpar_clim, SPARSE_M01_N)\
+                .tofile(os.path.join(output_dir, f'DEBUG_fPAR-clim_M01land_{date_str}.uint8'))
+
     PyMem_Free(PFT)
     PyMem_Free(LITTERFALL)
     PyMem_Free(SOC0)
@@ -560,6 +567,6 @@ cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
         valid = 0
     elif tsoil <= 0:
         valid = 0
-    elif litter <= 0:
+    elif litter < 0:
         valid = 0
     return valid
