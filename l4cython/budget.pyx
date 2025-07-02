@@ -234,8 +234,8 @@ def main(config = None, verbose = True):
 
         # Only read-in the fPAR data (and deflate it) once, for every
         #   8-day period
-        check_fpar_qc = 1 # Assume we're checking fPAR QC flags
         if date_fpar_ongoing is None or date_fpar_ongoing != date_fpar:
+            check_fpar_qc = 1 # Assume we're checking fPAR QC flags
             date_fpar_ongoing = date_fpar # The currently used fPAR data date
             # These have to be allocated differently for use with low-level functions
             in_bytes = size_in_bytes(DFNT_UINT8) * NCOL1KM * NROW1KM
@@ -273,7 +273,6 @@ def main(config = None, verbose = True):
             else:
                 print(f'No fPAR file for date {date_fpar.strftime("%j")} -- Using fPAR climatology')
                 check_fpar_qc = 0
-                fpar0 = fpar_clim
 
             free(h5_fpar0)
             free(h5_fpar_qc)
@@ -335,18 +334,17 @@ def main(config = None, verbose = True):
                 # Determine the value of fPAR based on QC flag;
                 #   bad pixels have either:
                 #   1 in the left-most bit (SCF_QC bit = "Pixel not produced at all")
-                fpar = <float>fpar0[k] # Otherwise, we're good
-                if check_fpar_qc == 1:
-                    if bits_from_uint32(7, 7, fpar_qc[k]) == 1:
-                        fpar = <float>fpar_clim[k]
-                    #   Or, anything other than 00 ("Clear") in bits 3-4
-                    elif bits_from_uint32(3, 4, fpar_qc[k]) > 0:
-                        fpar = <float>fpar_clim[k]
-                # Then, check that we're not out of range
-                if fpar0[k] > 100 and fpar_clim[k] <= 100:
-                    fpar = <float>fpar_clim[k]
-                elif fpar0[k] > 100:
-                    continue # Skip this pixel
+                fpar = <float>fpar_clim[k]
+                if check_fpar_qc == 1 and fpar0[k] < 254:
+                    fpar = <float>fpar0[k] # Otherwise, we're good
+                    # Need to consider that fPAR QC data might be unavailable if
+                    #   there are missing tiles
+                    if fpar_qc[k] < 254:
+                        if bits_from_uint32(7, 7, fpar_qc[k]) == 1:
+                            fpar = <float>fpar_clim[k]
+                        #   Or, anything other than 00 ("Clear") in bits 3-4
+                        elif bits_from_uint32(3, 4, fpar_qc[k]) > 0:
+                            fpar = <float>fpar_clim[k]
                 fpar = fpar / 100.0 # Convert from [0,100] to [0,1]
                 if DEBUG == 1:
                     fpar_final[k] = fpar
@@ -460,8 +458,12 @@ def main(config = None, verbose = True):
         if DEBUG == 1:
             to_numpy(fpar_final, SPARSE_M01_N)\
                 .tofile(os.path.join(output_dir, f'DEBUG_fPAR_M01land_{date_str}.flt32'))
+            to_numpy_char(fpar0, SPARSE_M01_N)\
+                .tofile(os.path.join(output_dir, f'DEBUG_fPAR-raw_M01land_{date_str}.uint8'))
             to_numpy_char(fpar_clim, SPARSE_M01_N)\
                 .tofile(os.path.join(output_dir, f'DEBUG_fPAR-clim_M01land_{date_str}.uint8'))
+            to_numpy_char(fpar_qc, SPARSE_M01_N)\
+                .tofile(os.path.join(output_dir, f'DEBUG_fPAR-QC_M01land_{date_str}.uint8'))
 
     PyMem_Free(PFT)
     PyMem_Free(LITTERFALL)
