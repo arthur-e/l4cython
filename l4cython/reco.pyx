@@ -45,13 +45,11 @@ from l4cython.core import load_parameters_table
 from l4cython.science cimport arrhenius, linear_constraint
 from l4cython.resample cimport write_resampled
 from l4cython.utils.hdf5 cimport H5T_STD_U8LE, hid_t, read_hdf5, close_hdf5
-from l4cython.utils.io cimport READ, open_fid, read_flat, to_numpy
+from l4cython.utils.io cimport READ, open_fid, read_flat, write_flat, to_numpy
 from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from tqdm import tqdm
 
-# EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
-#   can't be Python numbers)
 cdef:
     BPLUT PARAMS
     # Additional Tsoil parameter (fixed for all PFTs)
@@ -227,6 +225,20 @@ def main(config = None, verbose = True):
                     # Compute NEE
                     reco = rh_total[k] + (gpp[i] * (1 - PARAMS.cue[pft]))
                     nee[k] = reco - gpp[i]
+
+        # Optionally create restart files for each C pool, at the beginning
+        #   of a new year
+        if config['model']['restart']['create_file']:
+            if date.month == 12 and date.day == 31:
+                filename = (config['model']['restart']['output_file']\
+                    % (date_str, 0)).encode('UTF-8')
+                write_flat(filename, SPARSE_M01_N, SOC0)
+                filename = (config['model']['restart']['output_file']\
+                    % (date_str, 1)).encode('UTF-8')
+                write_flat(filename, SPARSE_M01_N, SOC1)
+                filename = (config['model']['restart']['output_file']\
+                    % (date_str, 2)).encode('UTF-8')
+                write_flat(filename, SPARSE_M01_N, SOC2)
 
         # If averaging from 1-km to 9-km resolution is requested...
         fmt = config['model']['output_format']

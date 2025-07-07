@@ -51,8 +51,6 @@ from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from l4cython.utils.dec2bin cimport bits_from_uint32
 from tqdm import tqdm
 
-# EASE-Grid 2.0 params are repeated here to facilitate multiprocessing (they
-#   can't be Python numbers)
 cdef:
     BPLUT PARAMS
     unsigned char* PFT

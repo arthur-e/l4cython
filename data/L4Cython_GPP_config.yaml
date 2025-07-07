@@ -11,7 +11,7 @@ data:
   # SOC restart file (includes NPP and global SMRZ_min, SMRZ_max);
   #   SMRZ_min and SMRZ_max are in wetness units on [0,1] (proportion)
   restart:
-    file: /anx_lagr3/arthur.endsley/SMAP_L4C/calibration/v8_Y2023/delivery/SMAP_L4_C_SOC_YD089_V8.h5
+    file: /anx_lagr3/arthur.endsley/SMAP_L4C/calibration/v8_Y2023/delivery/L4_C_rst_20250331T000000_Vv8021.h5
     smrz_max: OL8000_daily_smrz_max_M09 # Name of the SMRZ_max field
     smrz_min: OL8000_daily_smrz_min_M09
   # fPAR climatology (unsigned 8-bit integer, 0-100%)
@@ -25,18 +25,16 @@ data:
     #   QV2M_M09_AVG [dim.]
     #   SURFACE_PRESSURE [Pa]
     #   TS_M09_DEGC_AVG [deg C]
-    file: /anx_lagr4/SMAP/L4C_drivers/Version8/L4C_MET/L4_C_met_%sT000000_Vv8020_001.h5
+    file: /Stout1/SMAP/L4_C/Version8/L4CMET/L4_C_met_%sT000000_Vv8020_001.h5
     # fPAR (unsigned 8-bit integer, 0-100%)
-    fpar: /anx_lagr4/SMAP/L4C_drivers/Version8/L4C_MOD/L4_C_mod_%sT000000_Vv8020_001.h5 # Canopy fPAR
+    fpar: /Stout1/SMAP/L4_C/Version8/L4CMOD/L4_C_mod_%sT000000_Vv8040_001.h5 # Canopy fPAR
 model:
-  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250508
-  output_format: M09 # "M09land" for flat (1D) output
-  output_type: HDF5 # "HDF5" or "binary"
+  output_dir: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250707
+  output_format: M09land # "M09land" for flat (1D) output
+  output_type: binary # "HDF5" or "binary"
   compression:
     type: 'gzip' # Currently the only option
     level: 5 # Suggest something between 3 and 5; 0 being "no compression"
   # Valid output fields include: "GPP", "NPP", "Emult", "f_Tmin", "f_VPD", "f_SMRZ", "f_FT"
   output_fields:
   - GPP
-  - NPP
-  - Emult
