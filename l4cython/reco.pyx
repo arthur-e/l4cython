@@ -244,8 +244,11 @@ def main(config = None, verbose = True):
         fmt = config['model']['output_format']
         suffix = '%s_%s' % (date_str, fmt) # e.g., "*_YYYYMMDD_M09land_*"
         suffix = suffix.encode('UTF-8')
-        output_fields = list(map(
-            lambda x: x.upper(), config['model']['output_fields']))
+        if config['model']['output_fields'] is None:
+            output_fields = []
+        else:
+            output_fields = list(map(
+                lambda x: x.upper(), config['model']['output_fields']))
 
         if fmt in ('M09', 'M09land'):
             fid = 0

@@ -6,7 +6,7 @@ SMAP Level 4 Carbon (L4C) gross primary production (GPP) at 1-km spatial
 resolution. The `main()` routine is optimized for model execution but it may
 take several seconds to load the state data.
 
-After the initial state data are loaded it takes about 15-60 seconds per
+After the initial state data are loaded it takes about 20-60 seconds per
 data day when writing one or two fluxes out. Time increases considerably
 with more daily output variables. Memory use should be constant over time,
 consuming at most about 8.0 GB.
@@ -305,8 +305,11 @@ def main(config = None, verbose = True):
         fmt = config['model']['output_format']
         suffix = '%s_%s' % (date_str, fmt) # e.g., "*_YYYYMMDD_M09land_*"
         suffix = suffix.encode('UTF-8')
-        output_fields = list(map(
-            lambda x: x.upper(), config['model']['output_fields']))
+        if config['model']['output_fields'] is None:
+            output_fields = []
+        else:
+            output_fields = list(map(
+                lambda x: x.upper(), config['model']['output_fields']))
 
         if fmt in ('M09', 'M09land'):
             fid = 0
