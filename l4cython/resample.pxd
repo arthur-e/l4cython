@@ -84,7 +84,7 @@ cdef inline hid_t write_fullres(
     else:
         _field = 'EC/%s_mean' % _field.lower() # e.g., "EC/emult_mean"
 
-    print('Allocating space for full-resolution dataset')
+    # Allocating space for full-resolution dataset
     if output_grid == 'M09':
         grid_size = 9000
         space_id = create_2d_space(NROW9KM, NCOL9KM)
@@ -107,10 +107,10 @@ cdef inline hid_t write_fullres(
         #   inflated file
         # write_numpy_inflated(
         #     tmp.name, to_numpy(array_data, SPARSE_M01_N), grid = grid)
-        print('Writing land data, inflated, to a temporary file')
+        # Writing land data, inflated, to a temporary file
         write_flat(tmp.name.encode('UTF-8'), SPARSE_M01_N, array_data)
         inflate_file(tmp.name, tmp2.name, grid = 'M01')
-        print('Reading data back at 1-km resolution')
+        # Reading data back at 1-km resolution
         read_flat(tmp2.name.encode('UTF-8'), NCOL1KM * NROW1KM, data_inflated)
     # Write the inflated data to a new HDF5 dataset
     write_hdf5_dataset(

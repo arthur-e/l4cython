@@ -43,10 +43,10 @@ from tempfile import NamedTemporaryFile
 from l4cython.core cimport BPLUT, FILL_VALUE, M01_NESTED_IN_M09, SPARSE_M09_N, SPARSE_M01_N, NCOL1KM, NROW1KM, NCOL9KM, NROW9KM, N_PFT, DFNT_FLOAT32
 from l4cython.core import load_parameters_table
 from l4cython.science cimport arrhenius, linear_constraint
-from l4cython.resample cimport write_resampled
+from l4cython.resample cimport write_resampled, write_fullres
 from l4cython.utils.hdf5 cimport H5T_STD_U8LE, hid_t, read_hdf5, close_hdf5
 from l4cython.utils.io cimport READ, open_fid, read_flat, write_flat, to_numpy
-from l4cython.utils.mkgrid import write_numpy_inflated, write_numpy_deflated
+from l4cython.utils.mkgrid import inflate_file, write_numpy_inflated, write_numpy_deflated # NOTE: inflate_file() required for the resample module
 from l4cython.utils.mkgrid cimport deflate, size_in_bytes
 from tqdm import tqdm
 
@@ -250,34 +250,41 @@ def main(config = None, verbose = True):
             output_fields = list(map(
                 lambda x: x.upper(), config['model']['output_fields']))
 
-        if fmt in ('M09', 'M09land'):
-            fid = 0
-            inflated = 1 if fmt == 'M09' else 0
-            if 'RH' in output_fields:
-                fid = write_resampled(config, rh_total, suffix, 'RH', inflated, fid)
-            if 'TMULT' in output_fields:
-                fid = write_resampled(config, t_mult, suffix, 'Tmult', inflated, fid)
-            if 'WMULT' in output_fields:
-                fid = write_resampled(config, w_mult, suffix, 'Wmult', inflated, fid)
-            if 'SOC' in output_fields:
-                fid = write_resampled(config, soc_total, suffix, 'SOC', inflated, fid)
-            if gpp_avail == 1 and 'NEE' in output_fields:
-                fid = write_resampled(config, nee, suffix, 'NEE', inflated, fid)
-            if config['model']['output_type'].upper() == 'HDF5':
-                close_hdf5(fid)
-        else:
-            output_dir = config['model']['output_dir']
+        output_dir = config['model']['output_dir']
+        output_type = config['model']['output_type'].upper()
+        fid = 0
+        if fmt == 'M01land':
             out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
             if 'RH' in output_fields:
                 to_numpy(rh_total, SPARSE_M01_N).tofile(out_fname_tpl % 'RH')
+            if 'NEE' in output_fields:
+                to_numpy(nee, SPARSE_M01_N).tofile(out_fname_tpl % 'NEE')
             if 'TMULT' in output_fields:
                 to_numpy(t_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Tmult')
             if 'WMULT' in output_fields:
                 to_numpy(w_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Wmult')
             if 'SOC' in output_fields:
                 to_numpy(soc_total, SPARSE_M01_N).tofile(out_fname_tpl % 'SOC')
-            if gpp_avail == 1 and 'NEE' in output_fields:
-                to_numpy(nee, SPARSE_M01_N).tofile(out_fname_tpl % 'NEE')
+        elif fmt in ('M09', 'M09land'):
+            inflated = 1 if fmt == 'M09' else 0
+            output_func = write_resampled
+        elif output_type == 'HDF5':
+            inflated = 1
+            output_func = write_fullres
+
+        if 'RH' in output_fields:
+            fid = output_func(config, rh_total, suffix, 'RH', inflated, fid)
+        if 'NEE' in output_fields:
+            fid = output_func(config, nee, suffix, 'NEE', inflated, fid)
+        if 'TMULT' in output_fields:
+            fid = output_func(config, t_mult, suffix, 'Tmult', inflated, fid)
+        if 'WMULT' in output_fields:
+            fid = output_func(config, w_mult, suffix, 'Wmult', inflated, fid)
+        if 'SOC' in output_fields:
+            fid = output_func(config, soc_total, suffix, 'SOC', inflated, fid)
+
+        if output_type == 'HDF5':
+            status = close_hdf5(fid)
 
     PyMem_Free(PFT)
     PyMem_Free(LITTERFALL)
