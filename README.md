@@ -1,3 +1,6 @@
+[![DOI](https://zenodo.org/badge/1100770121.svg)](https://doi.org/10.5281/zenodo.17664242)
+
+
 L4Cython (L4C in Cython)
 ========================
 
@@ -8,7 +11,7 @@ SMAP L4C product (Jones et al. 2017; Endsley et al. 2020), but there will be
 some differences due to the different implementations, usually on the order of
 floating-point precision. L4Cython achieves the closest results with version
 7.4.1 of the SMAP L4C operational code and Version 7 (Vv7040/Vv7042) of the
-operational product.
+operational product. L4Cython is used to produce the SMAP L4C Nature Run.
 
 For example, the GPP calculation in the `l4cython.gpp` module follows the
 current (Version 7) official L4CMDL GPP calculation, where the 3-km field
