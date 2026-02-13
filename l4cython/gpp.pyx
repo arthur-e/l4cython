@@ -332,7 +332,7 @@ def main(config = None, verbose = True):
                 close_hdf5(fid)
         else:
             output_dir = config['model']['output_dir']
-            out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date, fmt)
+            out_fname_tpl = '%s/L4Cython_%%s_%s_%s.flt32' % (output_dir, date_str, fmt)
             if 'GPP' in output_fields:
                 to_numpy(gpp, SPARSE_M01_N).tofile(out_fname_tpl % 'GPP')
             if 'NPP' in output_fields:
