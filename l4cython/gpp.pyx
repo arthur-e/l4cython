@@ -87,6 +87,7 @@ def main(config = None, verbose = True):
         Py_ssize_t i, j, k, j3, k3, pft
         hid_t fid # For open HDF5 files
         int DEBUG
+        int override_f_smrz
         float fpar
 
     smrz0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
@@ -134,6 +135,12 @@ def main(config = None, verbose = True):
     DEBUG = 1 if config['debug'] else 0
     if DEBUG == 1:
         fpar_final = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
+
+    # Check for factorial experiments
+    override_f_smrz = 0
+    if 'overrides' in config['model'].keys():
+        if 'no_soil_moisture_limit' in config['model']['overrides']:
+            override_f_smrz = 1
 
     # Read in the model parameters (Biome Properties Lookup Table, BPLUT)
     params = load_parameters_table(config['BPLUT'].encode('UTF-8'))
@@ -272,8 +279,11 @@ def main(config = None, verbose = True):
                         tmin[i], PARAMS.tmin0[pft], PARAMS.tmin1[pft], 0)
                     f_vpd[k] = linear_constraint(
                         vpd[i], PARAMS.vpd0[pft], PARAMS.vpd1[pft], 1)
-                    f_smrz[k] = linear_constraint(
-                        smrz[i], PARAMS.smrz0[pft], PARAMS.smrz1[pft], 0)
+                    if override_f_smrz == 1:
+                        f_smrz[k] = 1
+                    else:
+                        f_smrz[k] = linear_constraint(
+                            smrz[i], PARAMS.smrz0[pft], PARAMS.smrz1[pft], 0)
                     e_mult[k] = ft[k] * f_tmin[k] * f_vpd[k] * f_smrz[k]
 
                     # Determine the value of fPAR based on QC flag;
