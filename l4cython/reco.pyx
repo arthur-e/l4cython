@@ -86,13 +86,14 @@ def main(config = None, verbose = True):
         hid_t fid # For open HDF5 files
         int n_litter_days
         int gpp_avail
+        int override_w_mult
         float litter # Amount of litterfall entering SOC pools
         float reco # Ecosystem respiration
         float k_mult
     # Note that some datasets are only available at 9-km (M09) resolution
-    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     smsf = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
     tsoil = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M09_N)
+    gpp = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     litter_rate = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh0 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
     rh1 = <float*> PyMem_Malloc(sizeof(float) * SPARSE_M01_N)
@@ -112,6 +113,12 @@ def main(config = None, verbose = True):
     if isinstance(config, str):
         with open(config, 'r') as file:
             config = yaml.safe_load(file)
+
+    # Check for factorial experiments
+    override_w_mult = 0
+    if 'overrides' in config['model'].keys():
+        if 'no_soil_moisture_limit' in config['model']['overrides']:
+            override_w_mult = 1
 
     params = load_parameters_table(config['BPLUT'].encode('UTF-8'))
     for p in range(1, N_PFT + 1):
@@ -171,7 +178,7 @@ def main(config = None, verbose = True):
         #   be calculated)
         if gpp_avail == 1:
             fname_bs = (config['data']['drivers']['GPP'] % date_str).encode('UTF-8')
-            read_flat(fname_bs, SPARSE_M09_N, gpp)
+            read_flat(fname_bs, SPARSE_M01_N, gpp)
 
         # Option to schedule the rate at which litterfall enters SOC pools
         if config['model']['litterfall']['scheduled']:
@@ -200,8 +207,11 @@ def main(config = None, verbose = True):
                 litter = LITTERFALL[k] * (fmax(0, litter_rate[k]) / n_litter_days)
                 # Compute daily RH based on moisture, temperature constraints;
                 #   convert SMSF to % wetness
-                w_mult[k] = linear_constraint(
-                    smsf[i] * 100.0, PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
+                if override_w_mult == 1:
+                    w_mult[k] = 1
+                else:
+                    w_mult[k] = linear_constraint(
+                        smsf[i] * 100.0, PARAMS.smsf0[pft], PARAMS.smsf1[pft], 0)
                 t_mult[k] = arrhenius(tsoil[i], PARAMS.tsoil[pft], TSOIL1, TSOIL2)
                 k_mult = w_mult[k] * t_mult[k]
                 rh0[k] = k_mult * SOC0[k] * PARAMS.decay_rate[0][pft]
@@ -223,8 +233,8 @@ def main(config = None, verbose = True):
                 soc_total[k] = SOC0[k] + SOC1[k] + SOC2[k]
                 if gpp_avail == 1:
                     # Compute NEE
-                    reco = rh_total[k] + (gpp[i] * (1 - PARAMS.cue[pft]))
-                    nee[k] = reco - gpp[i]
+                    reco = rh_total[k] + (gpp[k] * (1 - PARAMS.cue[pft]))
+                    nee[k] = reco - gpp[k]
 
         # Optionally create restart files for each C pool, at the beginning
         #   of a new year
