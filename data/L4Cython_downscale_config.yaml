@@ -1,0 +1,15 @@
+description: "Configuration file for downscaling SMAP L4CMDL granules"
+output_dir: "/Stout1/Arthur/SMAP-Rangelands/SMAP_L4C_granules/downscaled"
+# The target land-cover map; not necessarily the SMAP PFT map, but must be in
+#   a flat (M01land) 1-km global EASE-Grid 2.0 projection, in binary format,
+#   with a (signed) 16-bit integer format ("short int" in C)
+land_cover_map: "/Stout1/Arthur/SMAP-Rangelands/data/global_grazing_lands_4326_84_v5_epsg6933_M01land.int16"
+classes:
+  # PFT classes in the SMAP L4_C scheme that should be downscaled; note:
+  #   1=ENF, 2=EBF, 3=DNF, 4:DBF, 5:SHB, 6:GRS, 7:CCR, 8:BCR
+  l4c_allowed: [5,6]
+  # Land-cover classes in the target land-cover map that should be used to
+  #   receive downscaled values
+  target_allowed: [1,2,3,4,5,6]
+# SMAP L4_C fields to down-scale
+fields: ["GPP"]

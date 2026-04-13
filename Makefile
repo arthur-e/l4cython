@@ -18,3 +18,6 @@ test-gpp:
 
 test-spinup:
 	python3 -c "from l4cython.spinup import main;print(main('../tests/data/L4Cython_spin-up_test_config.yaml'))"
+
+test-downscale:
+	python3 -c "from l4cython.resample import downscale;print(downscale('data/L4Cython_downscale_config.yaml', '/Stout1/SMAP/L4_C/Version8/Vv8040/all_granules/SMAP_L4_C_mdl_20150331T000000_Vv8040_001.h5'))"

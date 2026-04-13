@@ -202,7 +202,7 @@ def main(config = None, verbose = True):
         # Read in the remaining surface meteorlogical data
         # We re-use a single NamedTemporaryFile(), overwriting its contents
         #   without creating a new instance; there should be little risk in
-        #  this because each array is the same size
+        #   this because each array is the same size
         # NOTE: Alternatively, try reading with read_hdf5, then copying the
         #   array (element-wise) into an unsigned char* buffer
         # fname_bs = (config['data']['drivers']['file'] % date_str).encode('UTF-8')
