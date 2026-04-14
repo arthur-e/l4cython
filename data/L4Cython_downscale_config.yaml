@@ -1,5 +1,11 @@
 description: "Configuration file for downscaling SMAP L4CMDL granules"
-output_dir: "/Stout1/Arthur/SMAP-Rangelands/SMAP_L4C_granules/downscaled"
+model:
+  output_dir: "/Stout1/Arthur/SMAP-Rangelands/SMAP_L4C_granules/downscaled"
+  output_format: M01 # Should only be M01
+  output_type: HDF5 # "HDF5" or "binary"
+  compression:
+    type: 'gzip' # Currently the only option
+    level: 5 # Suggest something between 3 and 5; 0 being "no compression"
 # The target land-cover map; not necessarily the SMAP PFT map, but must be in
 #   a flat (M01land) 1-km global EASE-Grid 2.0 projection, in binary format,
 #   with a (signed) 16-bit integer format ("short int" in C)
@@ -12,6 +18,4 @@ classes:
   #   receive downscaled values
   target_allowed: [1,2,3,4,5,6]
 # SMAP L4_C fields to down-scale
-fields: ["GPP"]
-# Value to scale output (flux) values by, in order to store 16-bit integer output
-scale: 1000
+fields: ["GPP", "RH", "NEE", "SOC"]
