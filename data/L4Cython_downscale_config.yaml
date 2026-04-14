@@ -13,3 +13,5 @@ classes:
   target_allowed: [1,2,3,4,5,6]
 # SMAP L4_C fields to down-scale
 fields: ["GPP"]
+# Value to scale output (flux) values by, in order to store 16-bit integer output
+scale: 1000

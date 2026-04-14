@@ -3,15 +3,16 @@
 import os
 import cython
 import yaml
+import numpy as np
 import h5py
 from tempfile import NamedTemporaryFile
 from cython.parallel import prange
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from l4cython.core cimport FILL_VALUE, SPARSE_M01_N, SPARSE_M09_N, M01_NESTED_IN_M09
-from l4cython.utils.io cimport read_flat_short
+from l4cython.utils.io cimport read_flat_short, to_numpy
 from l4cython.utils.mkgrid import write_numpy_deflated
 
-PFT_VALID = (1,2,3,4,5,6,7,8)
+PFT_VALID = (1,2,3,4,5,6,7,8) # Valid L4_C PFT classes
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -44,11 +45,13 @@ def downscale(config, *granules, verbose = True):
     # Downscale each granule
     all_fields = config['fields']
     for each_granule in granules:
+        base_name = os.path.basename(each_granule).strip('.h5')
         if verbose:
             print(f'Working on "{os.path.basename(each_granule)}"...')
         with NamedTemporaryFile() as tmp:
             tmp_fname_bs = tmp.name.encode('UTF-8')
             for field in all_fields:
+                out_fname = f"{config['output_dir']}/{base_name}_M01land_{field}.flt32"
                 with h5py.File(each_granule, 'r') as hdf:
                     # Only consider certain PFT classes in SMAP's model
                     for pft in config['classes']['l4c_allowed']:
@@ -72,6 +75,19 @@ def downscale(config, *granules, verbose = True):
                                     out_1km[k] = FILL_VALUE
                                     continue
 
+                                # Skip invalid pixels from the input 9-km data;
+                                #   i.e., no relevant data for this class
+                                if in_9km[i] == FILL_VALUE:
+                                    continue
+
+                                # Otherwise, assign this (PFT mean) value to this
+                                #   compatible 1-km pixel
+                                out_1km[k] = in_9km[i]
+
+                # For a given field
+                if verbose:
+                    print(f'Writing out file: "{out_fname}"')
+                to_numpy(out_1km, SPARSE_M01_N).tofile(out_fname)
 
 
     PyMem_Free(in_9km)
