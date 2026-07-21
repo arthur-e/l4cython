@@ -1,9 +1,56 @@
 [build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
-]
+requires = ["setuptools>=61.0.0", "wheel", "Cython>=0.29.0"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "l4cython"
+version = "0.2.0"
+authors = [
+    {name = "K. Arthur Endsley", email = "arthur.endsley@ntsg.umt.edu"}
+]
+description = "Cython version of L4C Science"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: GIS"
+]
+dependencies = [
+    "Cython>=0.29.0",
+    "numpy>=1.21.0,<2.0",
+    "scipy>=1.7.0",
+    "h5py>=3.0.0",
+    "PyYAML>=6.0.0",
+    "tqdm>=4.66.0",
+    "fire>=0.5.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.3.0",
+    "build>=0.10.0",
+    "twine>=4.0.0",
+    "cython-lint>=0.15.0"
+]
+
+[tool.setuptools]
+packages = ["l4cython", "l4cython.utils"]
+py-modules = [
+    "l4cython.core",
+    "l4cython.reco",
+    "l4cython.gpp",
+    "l4cython.budget",
+    "l4cython.resample",
+    "l4cython.science",
+    "l4cython.spinup_9km"
+]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"*" = ["*.c", "*.h", "*.uint16"]
 
 [tool.cython-lint]
 max-line-length = 88
