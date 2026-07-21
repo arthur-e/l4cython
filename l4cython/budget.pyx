@@ -436,21 +436,21 @@ def main(config = None, verbose = True):
             output_func = write_fullres
 
         if 'GPP' in output_fields:
-            fid = output_func(config, gpp, suffix, 'GPP', inflated, fid)
+            fid = output_func(config, gpp, suffix, 'GPP', inflated, 0, fid)
         if 'NPP' in output_fields:
-            fid = output_func(config, npp, suffix, 'NPP', inflated, fid)
+            fid = output_func(config, npp, suffix, 'NPP', inflated, 0, fid)
         if 'EMULT' in output_fields:
-            fid = output_func(config, e_mult, suffix, 'Emult', inflated, fid)
+            fid = output_func(config, e_mult, suffix, 'Emult', inflated, 0, fid)
         if 'RH' in output_fields:
-            fid = output_func(config, rh_total, suffix, 'RH', inflated, fid)
+            fid = output_func(config, rh_total, suffix, 'RH', inflated, 0, fid)
         if 'NEE' in output_fields:
-            fid = output_func(config, nee, suffix, 'NEE', inflated, fid)
+            fid = output_func(config, nee, suffix, 'NEE', inflated, 0, fid)
         if 'TMULT' in output_fields:
-            fid = output_func(config, t_mult, suffix, 'Tmult', inflated, fid)
+            fid = output_func(config, t_mult, suffix, 'Tmult', inflated, 0, fid)
         if 'WMULT' in output_fields:
-            fid = output_func(config, w_mult, suffix, 'Wmult', inflated, fid)
+            fid = output_func(config, w_mult, suffix, 'Wmult', inflated, 0, fid)
         if 'SOC' in output_fields:
-            fid = output_func(config, soc_total, suffix, 'SOC', inflated, fid)
+            fid = output_func(config, soc_total, suffix, 'SOC', inflated, 0, fid)
 
         if output_type == 'HDF5':
             status = close_hdf5(fid)

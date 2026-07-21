@@ -325,19 +325,19 @@ def main(config = None, verbose = True):
             fid = 0
             inflated = 1 if fmt == 'M09' else 0
             if 'GPP' in output_fields:
-                fid = write_resampled(config, gpp, suffix, 'GPP', inflated, fid)
+                fid = write_resampled(config, gpp, suffix, 'GPP', inflated, 0, fid)
             if 'NPP' in output_fields:
-                fid = write_resampled(config, npp, suffix, 'NPP', inflated, fid)
+                fid = write_resampled(config, npp, suffix, 'NPP', inflated, 0, fid)
             if 'EMULT' in output_fields:
-                fid = write_resampled(config, e_mult, suffix, 'Emult', inflated, fid)
+                fid = write_resampled(config, e_mult, suffix, 'Emult', inflated, 0, fid)
             if 'F_TMIN' in output_fields:
-                fid = write_resampled(config, f_tmin, suffix, 'f_Tmin', inflated, fid)
+                fid = write_resampled(config, f_tmin, suffix, 'f_Tmin', inflated, 0, fid)
             if 'F_VPD' in output_fields:
-                fid = write_resampled(config, f_vpd, suffix, 'f_VPD', inflated, fid)
+                fid = write_resampled(config, f_vpd, suffix, 'f_VPD', inflated, 0, fid)
             if 'F_SMRZ' in output_fields:
-                fid = write_resampled(config, f_smrz, suffix, 'f_SMRZ', inflated, fid)
+                fid = write_resampled(config, f_smrz, suffix, 'f_SMRZ', inflated, 0, fid)
             if 'F_FT' in output_fields:
-                fid = write_resampled(config, ft, suffix, 'f_FT', inflated, fid)
+                fid = write_resampled(config, ft, suffix, 'f_FT', inflated, 0, fid)
             if config['model']['output_type'].upper() == 'HDF5':
                 close_hdf5(fid)
         else:
@@ -349,7 +349,6 @@ def main(config = None, verbose = True):
                 to_numpy(npp, SPARSE_M01_N).tofile(out_fname_tpl % 'NPP')
             if 'EMULT' in output_fields:
                 to_numpy(e_mult, SPARSE_M01_N).tofile(out_fname_tpl % 'Emult')
-
 
     PyMem_Free(smrz0)
     PyMem_Free(smrz)

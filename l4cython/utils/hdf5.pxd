@@ -60,6 +60,7 @@ cdef extern from "src/hdf5.h":
 
     # To create a group or check that a group exists
     hid_t H5Gcreate(hid_t loc_id, char* name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id)
+    hid_t H5Gopen2(hid_t loc_id, char*  name, hid_t gapl_id)
     herr_t H5Gclose(hid_t group_id)
     htri_t H5Lexists(hid_t loc_id, char* name, hid_t lapl_id)
 
@@ -186,7 +187,7 @@ cdef inline void read_hdf5(
 # Based (loosely) on frm_hdf5_WriteData()
 cdef inline void write_hdf5_dataset(
         hid_t fid, char* field, hid_t dtype, hid_t dspace, int res,
-        int deflate, void* buff):
+        int deflate, int persist, void* buff):
     '''
     Writes a 2-dimensional array dataset into an (already open) HDF5 file.
 
@@ -205,6 +206,9 @@ cdef inline void write_hdf5_dataset(
         for an "M09" (9-km) grid
     deflate : int
         The level of gzip/ "deflate" compression, an integer between 0 and 9
+    persist : int
+        If a group is created and it should be closed, pass 0 (assumed default),
+        otherwise 1 to keep the group open
     buff : void*
         A pointer to an array buffer from which to read the data
     '''
@@ -229,10 +233,12 @@ cdef inline void write_hdf5_dataset(
     if '/' in dset_name:
         group, dset_name = field.decode('UTF-8').split('/')
         # NOTE: H5Lexists() return value of 0 may mean something different
-        #   in the future
-        if H5Lexists(fid, group.encode('UTF-8'), H5P_DEFAULT) <= 0:
+        #   in the future; ==1 means the group already exists
+        if H5Lexists(fid, group.encode('UTF-8'), H5P_DEFAULT) == 0:
             gid = H5Gcreate(
                 fid, group.encode('UTF-8'), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)
+        elif H5Lexists(fid, group.encode('UTF-8'), H5P_DEFAULT) == 1:
+            gid = H5Gopen2(fid, group.encode('UTF-8'), H5P_DEFAULT)
         dest = gid
 
     dcpl = H5Pcreate(H5P_DATASET_CREATE)
@@ -245,6 +251,6 @@ cdef inline void write_hdf5_dataset(
         H5P_DEFAULT, dcpl, H5P_DEFAULT)
     H5Dwrite(dset_id, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, buff)
     H5Dclose(dset_id)
-    if gid > 0:
+    if gid > 0 and persist == 0:
         H5Gclose(gid)
     H5Pclose(dcpl)

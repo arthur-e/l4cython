@@ -32,7 +32,7 @@ cdef extern from "utils/src/spland.h":
 
 cdef inline hid_t write_fullres(
         dict config, float* array_data, char* suffix, char* field,
-        int inflated, hid_t file_id):
+        int inflated, int persist, hid_t file_id):
     '''
     Inflates and writes a full-resolution dataset to an HDF5 file. It is
     always an HDF5 file because full-resolution "land" files are not
@@ -46,6 +46,9 @@ cdef inline hid_t write_fullres(
         Well-known name of the dataset to be written
     suffix : char*
     inflated : int
+        Has no meaning here, but included for compatibility with the
+        `write_resampled()` interface
+    persist : int
         Has no meaning here, but included for compatibility with the
         `write_resampled()` interface
     file_id : hid_t
@@ -115,7 +118,7 @@ cdef inline hid_t write_fullres(
     # Write the inflated data to a new HDF5 dataset
     write_hdf5_dataset(
         fid, _field.encode('UTF-8'), H5T_IEEE_F32LE, space_id,
-        grid_size, output_gzip, data_inflated)
+        grid_size, output_gzip, persist, data_inflated)
 
     PyMem_Free(data_inflated)
     return fid
@@ -123,7 +126,7 @@ cdef inline hid_t write_fullres(
 
 cdef inline hid_t write_resampled(
         dict config, float* array_data, char* suffix, char* field,
-        int inflated, hid_t file_id):
+        int inflated, int persist, hid_t file_id):
     '''
     Resamples a 1-km array to 9-km, then writes the output to a file.
 
@@ -137,6 +140,9 @@ cdef inline hid_t write_resampled(
         output
     inflated : int
         1 if the output array should be inflated to a 2D global EASE-Grid 2.0
+    persist : int
+        Interpreted differently depending on the `output_type`; see
+        `write_hdf5_dataset()`
     file_id : hid_t
         For HDF5 output, 0 if a new HDF5 file should be created; otherwise,
         pass the <hid_t> for an open HDF5 file
@@ -220,7 +226,7 @@ cdef inline hid_t write_resampled(
         # Write the inflated data to a new HDF5 dataset
         write_hdf5_dataset(
             fid, _field.encode('UTF-8'), H5T_IEEE_F32LE, space_id,
-            grid_size, output_gzip, data_inflated)
+            grid_size, output_gzip, persist, data_inflated)
     else:
         raise NotImplementedError(
             'No support for writing deflated arrays to HDF5')
