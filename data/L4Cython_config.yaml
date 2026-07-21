@@ -9,9 +9,9 @@ data:
   PFT_map: >- # Map of plant functional types (PFT)
     /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4C_PFT_map_M01land.uint8
   SOC: # List of three (3) soil organic carbon (SOC) pools
-    - /Stout1/SMAP/L4_C/Version8/Vv8020/restart/tcf_Tv8040_C0_M01land_0002089.flt32
-    - /Stout1/SMAP/L4_C/Version8/Vv8020/restart/tcf_Tv8040_C1_M01land_0002089.flt32
-    - /Stout1/SMAP/L4_C/Version8/Vv8020/restart/tcf_Tv8040_C2_M01land_0002089.flt32
+    - /Stout1/SMAP/L4_C/Version8/Vv8040/restart/tcf_Tv8040_C0_M01land_0002089.flt32
+    - /Stout1/SMAP/L4_C/Version8/Vv8040/restart/tcf_Tv8040_C1_M01land_0002089.flt32
+    - /Stout1/SMAP/L4_C/Version8/Vv8040/restart/tcf_Tv8040_C2_M01land_0002089.flt32
   NPP_annual_sum: >- # Map of annual NPP sum [g C m-2 year-1] for each pixel
     /anx_lagr4/SMAP/L4C_code/tcf/output/OL8000/tcf_OL8000_npp_sum_M01land.flt32
   # Litterfall allocation files must have a %s string formatting character

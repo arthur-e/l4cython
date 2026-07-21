@@ -19,8 +19,8 @@
 #define   MAIN_NAME    "MKGRID"
 #define   VERS_TAG     "v0.0-2014-02-21T18:33:00-07:00, laj"
 
-#define   LAND_R_FILE  "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/MCD12Q1_M09land_row.uint16"
-#define   LAND_C_FILE  "/anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/MCD12Q1_M09land_col.uint16"
+#define   LAND_R_FILE  "../../data/MCD12Q1_M09land_row.uint16"
+#define   LAND_C_FILE  "../../data/MCD12Q1_M09land_col.uint16"
 
 #define   LLAND9KM           1664040ul // Total grid cells in sparse 9km land domain
 
