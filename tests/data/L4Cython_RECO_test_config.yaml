@@ -3,24 +3,45 @@ origin_date: '2015-03-31'
 daily_steps: 1
 debug: false
 data:
-  PFT_map: >- # Map of plant functional types (PFT)
-    driver_land-cover_map_M09land.uint8
-  SOC: # List of three (3) soil organic carbon (SOC) pools
-    - state_SOC_C0_M09land_DOY089.flt32
-    - state_SOC_C1_M09land_DOY089.flt32
-    - state_SOC_C2_M09land_DOY089.flt32
+  # Official SMAP L4_C ancillary file
+  ancillary:
+    file: /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4_C_Ancillary_v7.4.1.h5
+    PFT_map: MCD12Q1_M01land_lc_dom_uint8 # Name of the map of plant functional types (PFT) field
+  # SOC restart file (includes NPP and global SMRZ_min, SMRZ_max);
+  #   SMRZ_min and SMRZ_max are in wetness units on [0,1] (proportion)
+  restart:
+    file: /anx_lagr3/arthur.endsley/SMAP_L4C/calibration/v8_Y2023/delivery/L4_C_rst_20250331T000000_Vv8021.h5
+    smrz_max: OL8000_daily_smrz_max_M09 # Name of the SMRZ_max field
+    smrz_min: OL8000_daily_smrz_min_M09
+    NPP: SOC/tcf_OL8000_npp_sum_M01 # Map of annual NPP sum [g C m-2 year-1] for each pixel
+    SOC: # List of three (3) soil organic carbon (SOC) pools [g C m-2]
+      - SOC/SOC_OL8000_C0
+      - SOC/SOC_OL8000_C1
+      - SOC/SOC_OL8000_C2
+  litterfall_schedule: >- # [N] array specifying parts-per-thousand of litterfall allocated every 8 days
+    /anx_lagr4/SMAP/L4C_drivers/VIIRS_LAI/litterfall/L4C_litterfall_allocation_clim_2012-2021_M01land_P%s.flt32
   NPP_annual_sum: >- # Map of annual NPP sum [g C m-2 year-1] for each pixel
     driver_annual_NPP_sum_M09land.flt32
   drivers:
-    smsf: driver_climate_SMSF_M09land_%s.flt32 # Surface soil wetness (%) on [0,100]
-    tsoil: driver_climate_Tsoil_M09land_%s.flt32 # Soil temperature [deg K]
-    GPP: L4_C_mdl_V7_GPP_%s_M09land.flt32
+    # All others (from re-analysis data)
+    #   SM_SURFACE_WETNESS in wetness units on [0,1] (proportion)
+    #   SOIL_TEMP_LAYER1 in deg K units
+    file: /Stout1/SMAP/L4_C/Version8/L4CMET/L4_C_met_%sT000000_Vv8020_001.h5
+    # GPP [g C m-2 day-1], a flat file in M01land format; it is only used to
+    #   calculate NEE and can be set to null if NEE is not desired
+    # GPP: /anx_lagr3/arthur.endsley/SMAP_L4C/L4C_Science/Cython/v20250508/L4Cython_GPP_%s_M01land.flt32
+    GPP: null
 model:
+  restart:
+    create_file: false # true to generate an SOC restart file each year
   litterfall:
     scheduled: false
     interval_days: 8
   output_dir: .
+  output_format: M09land # "M09land" for flat (1D) output
+  output_type: binary # "HDF5" or "binary"
+  compression:
+    type: 'gzip' # Currently the only option
+    level: 5 # Suggest something between 3 and 5; 0 being "no compression"
   output_fields: # Valid output fields include: "RH", "NEE"
     - RH
-    - NEE
-  output_format: M09land # "M09land" for flat (1D) output

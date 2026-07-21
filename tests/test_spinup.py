@@ -7,7 +7,6 @@ import yaml
 import numpy as np
 import l4cython
 from pathlib import Path
-from l4cython.utils.fixtures import NROW9KM, NCOL9KM, SPARSE_M09_N
 from l4cython.spinup import main
 
 PROJECT_ROOT = Path(l4cython.__path__[0]).parent
