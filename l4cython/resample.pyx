@@ -102,9 +102,9 @@ def downscale(config, *granules, verbose = True):
                 # For a given field
                 base_name_bs = base_name.encode('UTF-8')
                 field_bs = field.encode('UTF-8')
-                # 1, 0 are included for compatibility with write_resampled()
+                # 1 is included for compatibility with write_resampled()
                 fid = write_fullres(
-                    config, out_1km, base_name_bs, field_bs, 1, 0, fid)
+                    config, out_1km, base_name_bs, field_bs, 1, fid)
                 reset_array(out_1km)
 
         # Close the HDF5 file

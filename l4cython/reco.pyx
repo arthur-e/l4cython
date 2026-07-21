@@ -260,25 +260,19 @@ def main(config = None, verbose = True):
             output_fields = list(map(
                 lambda x: x.upper(), config['model']['output_fields']))
 
-        persist = 0 # Whether or not to keep groups open
-        # If two fields need to be written to the same group, keep the group open
-        if 'TMULT' and 'WMULT' in output_fields:
-            persist = 1
         if fmt in ('M09', 'M09land'):
             fid = 0
             inflated = 1 if fmt == 'M09' else 0
             if 'RH' in output_fields:
-                fid = write_resampled(config, rh_total, suffix, 'RH', inflated, 0, fid)
+                fid = write_resampled(config, rh_total, suffix, 'RH', inflated, fid)
             if 'NEE' in output_fields:
-                fid = write_resampled(config, nee, suffix, 'NEE', inflated, 0, fid)
+                fid = write_resampled(config, nee, suffix, 'NEE', inflated, fid)
             if 'TMULT' in output_fields:
-                fid = write_resampled(
-                    config, t_mult, suffix, 'Tmult', inflated, persist, fid)
+                fid = write_resampled(config, t_mult, suffix, 'Tmult', inflated, fid)
             if 'WMULT' in output_fields:
-                fid = write_resampled(
-                    config, w_mult, suffix, 'Wmult', inflated, persist, fid)
+                fid = write_resampled(config, w_mult, suffix, 'Wmult', inflated, fid)
             if 'SOC' in output_fields:
-                fid = write_resampled(config, soc_total, suffix, 'SOC', inflated, 0, fid)
+                fid = write_resampled(config, soc_total, suffix, 'SOC', inflated, fid)
             if config['model']['output_type'].upper() == 'HDF5':
                 close_hdf5(fid)
         else:

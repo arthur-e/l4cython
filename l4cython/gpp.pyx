@@ -325,19 +325,19 @@ def main(config = None, verbose = True):
             fid = 0
             inflated = 1 if fmt == 'M09' else 0
             if 'GPP' in output_fields:
-                fid = write_resampled(config, gpp, suffix, 'GPP', inflated, 0, fid)
+                fid = write_resampled(config, gpp, suffix, 'GPP', inflated, fid)
             if 'NPP' in output_fields:
-                fid = write_resampled(config, npp, suffix, 'NPP', inflated, 0, fid)
+                fid = write_resampled(config, npp, suffix, 'NPP', inflated, fid)
             if 'EMULT' in output_fields:
-                fid = write_resampled(config, e_mult, suffix, 'Emult', inflated, 0, fid)
+                fid = write_resampled(config, e_mult, suffix, 'Emult', inflated, fid)
             if 'F_TMIN' in output_fields:
-                fid = write_resampled(config, f_tmin, suffix, 'f_Tmin', inflated, 0, fid)
+                fid = write_resampled(config, f_tmin, suffix, 'f_Tmin', inflated, fid)
             if 'F_VPD' in output_fields:
-                fid = write_resampled(config, f_vpd, suffix, 'f_VPD', inflated, 0, fid)
+                fid = write_resampled(config, f_vpd, suffix, 'f_VPD', inflated, fid)
             if 'F_SMRZ' in output_fields:
-                fid = write_resampled(config, f_smrz, suffix, 'f_SMRZ', inflated, 0, fid)
+                fid = write_resampled(config, f_smrz, suffix, 'f_SMRZ', inflated, fid)
             if 'F_FT' in output_fields:
-                fid = write_resampled(config, ft, suffix, 'f_FT', inflated, 0, fid)
+                fid = write_resampled(config, ft, suffix, 'f_FT', inflated, fid)
             if config['model']['output_type'].upper() == 'HDF5':
                 close_hdf5(fid)
         else:

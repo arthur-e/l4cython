@@ -187,7 +187,7 @@ cdef inline void read_hdf5(
 # Based (loosely) on frm_hdf5_WriteData()
 cdef inline void write_hdf5_dataset(
         hid_t fid, char* field, hid_t dtype, hid_t dspace, int res,
-        int deflate, int persist, void* buff):
+        int deflate, void* buff):
     '''
     Writes a 2-dimensional array dataset into an (already open) HDF5 file.
 
@@ -206,9 +206,6 @@ cdef inline void write_hdf5_dataset(
         for an "M09" (9-km) grid
     deflate : int
         The level of gzip/ "deflate" compression, an integer between 0 and 9
-    persist : int
-        If a group is created and it should be closed, pass 0 (assumed default),
-        otherwise 1 to keep the group open
     buff : void*
         A pointer to an array buffer from which to read the data
     '''
@@ -251,6 +248,6 @@ cdef inline void write_hdf5_dataset(
         H5P_DEFAULT, dcpl, H5P_DEFAULT)
     H5Dwrite(dset_id, dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, buff)
     H5Dclose(dset_id)
-    if gid > 0 and persist == 0:
+    if gid > 0:
         H5Gclose(gid)
     H5Pclose(dcpl)
