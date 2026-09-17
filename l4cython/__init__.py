@@ -1,3 +1,1 @@
-from importlib.metadata import version
-
-__version__ = version("l4cython")
+__version__ = "0.2.0"

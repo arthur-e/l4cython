@@ -31,13 +31,19 @@ There are two steps involved:
 
 **To install Cython and other Python dependencies,** from the project root directory:
 ```
-pip install -e .
+pip install cython setuptools
 ```
 
 **Then, build the `l4cython` module:**
 ```sh
 # From the project root
 make
+```
+
+**Finally, install `l4cython` from the repository root:**
+
+```sh
+pip install -e .
 ```
 
 **If you have C dependency issues at compile time, note that some shared libraries have name variants on Ubuntu GNU/Linux and possibly other systems.** Symbolic linking is a simple fix, though the details will vary across systems. Here's an example from Ubuntu Linux 22.04.
