@@ -9,8 +9,8 @@ NOTE: If the following files don't exist, `inflate_file()` and
 `deflate_file()` will silently fail. A file may be written but it will be
 incorrect.
 
-    /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/MCD12Q1_M09land_col.uint16
     /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/MCD12Q1_M09land_row.uint16
+    /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/MCD12Q1_M09land_col.uint16
 '''
 
 import cython
@@ -43,6 +43,7 @@ def deflate_file(filename, grid = 'M09'):
     #   what the actual data type is; it just works this way in spland.c
     cdef:
         unsigned char* grid_array
+        unsigned char* flat_array
 
     # Convert the unicode filename to a C string
     filename_byte_string = filename.encode('UTF-8')
@@ -133,6 +134,7 @@ def inflate_file(filename, output_filename = None, grid = 'M09'):
     #   what the actual data type is; it just works this way in spland.c
     cdef:
         unsigned char* flat_array
+        unsigned char* grid_array
 
     # Convert the unicode filename to a C string
     filename_byte_string = filename.encode('UTF-8')

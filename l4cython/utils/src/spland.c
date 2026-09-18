@@ -179,17 +179,21 @@ int spland_load_9km_rc(spland_ref_struct *SPLAND) {
   fid = fopen(LAND_R_FILE, "rb");
 
   if (fid != NULL) {
-
     fread(SPLAND->row, sizeof(unsigned short), LLAND9KM, fid);
     fclose(fid);
+  } else {
+    printf("LAND_R_FILE not found: %s\n", LAND_R_FILE);
+    return (1);
   }
 
   fid = fopen(LAND_C_FILE, "rb");
 
   if (fid != NULL) {
-
     fread(SPLAND->col, sizeof(unsigned short), LLAND9KM, fid);
     fclose(fid);
+  } else {
+    printf("LAND_C_FILE not found: %s\n", LAND_C_FILE);
+    return (1);
   }
 
   return (0);
