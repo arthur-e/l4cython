@@ -7,7 +7,7 @@ L4Cython (L4C in Cython)
 A Cython implementation of the Terrestrial Carbon Flux (TCF) model, which is
 the basis for the Soil Moisture Active Passive (SMAP) Level 4 Carbon (L4C)
 model. L4Cython is designed to reproduce the results of the operational NASA
-SMAP L4C product (Jones et al. 2017; Endsley et al. 2020), but there will be
+SMAP L4C product (Jones et al. 2017; Endsley et al. 2020, 2026), but there will be
 some differences due to the different implementations, usually on the order of
 floating-point precision. L4Cython achieves the closest results with version
 7.4.1 of the SMAP L4C operational code and Version 7 (Vv7040/Vv7042) of the
@@ -24,26 +24,36 @@ of water.
 Building and Testing
 ----------------------------
 
-There are two steps involved:
+There are four steps involved:
 
 1. Install Cython and other Python dependencies, e.g., with `pip`
 2. Build and install `l4cython`
+3. Install the `l4cython` Python module.
+4. Update the file paths in `spland.h`.
 
 **To install Cython and other Python dependencies,** from the project root directory:
 ```
 pip install cython setuptools
 ```
 
-**Then, build the `l4cython` module:**
+**Build the `l4cython` module:**
 ```sh
 # From the project root
 make
 ```
 
-**Finally, install `l4cython` from the repository root:**
+**Then, install `l4cython` from the repository root:**
 
 ```sh
 pip install -e .
+```
+
+**Finally, it is necessary to update the file `l4cython/utils/spland.h` to provide an absolute path to sparse land index files.** These files are located in the repository's `data` folder, but the file path will almost certainly be different on your file system so you need to update `spland.h` accordingly:
+
+```c
+/* spland.h */
+#define   LAND_R_FILE  "/absolute/path/to/MCD12Q1_M09land_row.uint16"
+#define   LAND_C_FILE  "/absolute/path/to/MCD12Q1_M09land_col.uint16"
 ```
 
 **If you have C dependency issues at compile time, note that some shared libraries have name variants on Ubuntu GNU/Linux and possibly other systems.** Symbolic linking is a simple fix, though the details will vary across systems. Here's an example from Ubuntu Linux 22.04.
@@ -102,3 +112,10 @@ Try calling `ld` in `--verbose` mode, e.g., to debug an issue with the `ldf` com
 ```sh
 $ ld -ldf --verbose
 ```
+
+
+References
+----------------------------
+
+- Endsley, K.A., J.S. Kimball, R.H. Reichle, J.V. Ardizzone, T. Kundig, T. Colligan, J. Heinke, E. Kato, J. Knauer, L. Ma, T. Nützel, Q. Sun, W. Yuan. 2026. ["A global, daily carbon budget for terrestrial ecosystems constrained by satellite observations of soil moisture: The SMAP Level 4 Carbon product at ten years."](https://doi.org/10.1029/2025JG009588) *Journal of Geophysical Research: Biogeosciences* 131(6).
+- Endsley, K.A., J.S. Kimball, R.H. Reichle, J.D. Watts. 2020. ["Satellite monitoring of global surface soil organic carbon dynamics using the SMAP Level 4 Carbon product."](https://agupubs.onlinelibrary.wiley.com/doi/abs/10.1029/2020JG006100) *Journal of Geophysical Research: Biogeosciences* 125(12).

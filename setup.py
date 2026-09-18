@@ -6,6 +6,8 @@ from Cython.Build import cythonize
 MACROS = [ # Avoids warning "Using deprecated NumPy API"
     ('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')
 ] # https://stackoverflow.com/questions/52749662/using-deprecated-numpy-api
+# Compiler flags to be used in (almost) every build
+FLAGS = ['-Wno-unused-result', '-Wno-maybe-uninitialized']
 HDF4_DIRS = ['/usr/include', '/usr/include/hdf']
 HDF4_ARGS = [
     '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
@@ -34,7 +36,7 @@ mkgrid = Extension(
     libraries = ['dfalt', 'mfhdfalt'],
     include_dirs = ['.', *HDF4_DIRS],
     extra_compile_args = [
-        '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
+        *FLAGS, '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
         '-ldfalt', '-lmfhdfalt', '-lz', '-luuid', '-lm', '-lutil'
     ]
 )
@@ -46,7 +48,7 @@ hdf5 = Extension(
     libraries = ['dfalt', 'mfhdfalt', 'hdf5'],
     include_dirs = ['.', *HDF5_DIRS],
     extra_compile_args = [
-        '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
+        *FLAGS, '-g1', '-Wall', '-fPIC', '-D_GNU_SOURCE', '-DHAVE_UUID', '-DHAVE_HDF4',
         '-ldfalt', '-lmfhdfalt', '-lhdf5', '-lz', '-luuid', '-lm', '-lutil'
     ],
     extra_link_args = ['-fopenmp', *HDF5_LINKS]
@@ -75,7 +77,7 @@ budget = Extension(
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
     include_dirs = ['.', './l4cython', './l4cython/utils', *HDF5_DIRS],
-    extra_compile_args = ['-Wno-maybe-uninitialized'],
+    extra_compile_args = FLAGS,
     extra_link_args = [*HDF5_LINKS]
 )
 
@@ -94,7 +96,7 @@ gpp = Extension(
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
     include_dirs = ['.', './l4cython', './l4cython/utils', *HDF5_DIRS],
-    extra_compile_args = ['-Wno-maybe-uninitialized'],
+    extra_compile_args = FLAGS,
     extra_link_args = [*HDF5_LINKS]
 )
 
@@ -104,7 +106,7 @@ reco = Extension(
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
     include_dirs = ['.', './l4cython', './l4cython/utils', *HDF5_DIRS],
-    extra_compile_args = ['-Wno-maybe-uninitialized'],
+    extra_compile_args = FLAGS,
     extra_link_args = [*HDF5_LINKS]
 )
 
@@ -115,7 +117,7 @@ resample = Extension(
     libraries = ['dfalt', 'hdf5'],
     include_dirs = ['.', './l4cython', './l4cython/utils', *HDF5_DIRS],
     extra_compile_args = [
-        '-DHAVE_HDF4', '-ldfalt', '-lhdf5', '-Wno-maybe-uninitialized', '-lz'
+        *FLAGS, '-DHAVE_HDF4', '-ldfalt', '-lhdf5', '-lz'
     ],
     extra_link_args = [*HDF5_LINKS]
 )
@@ -126,7 +128,7 @@ restart = Extension(
     define_macros = MACROS,
     libraries = ['dfalt', 'hdf5'],
     include_dirs = ['.', './l4cython', './l4cython/utils', *HDF5_DIRS],
-    extra_compile_args = ['-Wno-maybe-uninitialized'],
+    extra_compile_args = FLAGS,
     extra_link_args = [*HDF5_LINKS]
 )
 
@@ -136,7 +138,7 @@ spinup = Extension(
     define_macros = MACROS,
     libraries = ['dfalt', 'mfhdfalt'],
     include_dirs = ['.', './l4cython', './l4cython/utils', *HDF4_DIRS],
-    extra_compile_args = HDF4_ARGS
+    extra_compile_args = [*FLAGS, *HDF4_ARGS],
 )
 
 setup(
