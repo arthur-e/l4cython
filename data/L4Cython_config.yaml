@@ -8,7 +8,7 @@ data:
     /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4_SM_lmc_00000000T000000_OL8000_001.h5
   PFT_map: >- # Map of plant functional types (PFT)
     /anx_lagr3/arthur.endsley/SMAP_L4C/ancillary_data/SMAP_L4C_PFT_map_M01land.uint8
-  SOC: # List of three (3) soil organic carbon (SOC) pools
+  SOC: # List of three (3) soil organic carbon (SOC) pools, in M01land format
     - /Stout1/SMAP/L4_C/Version8/Vv8040/restart/tcf_Tv8040_C0_M01land_0002089.flt32
     - /Stout1/SMAP/L4_C/Version8/Vv8040/restart/tcf_Tv8040_C1_M01land_0002089.flt32
     - /Stout1/SMAP/L4_C/Version8/Vv8040/restart/tcf_Tv8040_C2_M01land_0002089.flt32
@@ -30,9 +30,10 @@ data:
     smrz0: /Stout1/SMAP/L4_SM/NRv11-4/L4_SM_gph_NRv11-4_smrz0_M09land_%s.int16 # Root-zone soil wetness (ppt) on [0,1000]
     smsf: /Stout1/SMAP/L4_SM/NRv11-4/L4_SM_gph_NRv11-4_smsf_M09land_%s.int16 # Surface soil wetness (ppt) on [0,1000]
     tsoil: /Stout1/SMAP/L4_SM/NRv11-4/L4_SM_gph_NRv11-4_tsoil_M09land_%s.flt32 # Soil temperature [deg K]
-    # MERRA-2 daily variables, in their original units
+    # MERRA-2 daily variables, in their original units; all file paths below must
+    #   be in a subdirectory with the year, as a %s formatting string
     tmin: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_Tmin_%s_M09land.flt32
-    tsurf: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_TS_%s_M09land.flt32 # Surface skin temp. [deg C]?
+    tsurf: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_TS_%s_M09land.flt32 # Surface skin temp. [deg K]
     qv2m: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_QV2M_%s_M09land.flt32
     t2m: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_T2M_%s_M09land.flt32
     ps: /Stout1/Arthur/L4Cython/inputs_1d/MERRA-2/Y%s/MERRA-2_PS_%s_M09land.flt32

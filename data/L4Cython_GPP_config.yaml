@@ -24,7 +24,7 @@ data:
     #   T2M_M09_AVG [deg K]
     #   QV2M_M09_AVG [dim.]
     #   SURFACE_PRESSURE [Pa]
-    #   TS_M09_DEGC_AVG [deg C]
+    #   TS_M09_DEGC_AVG [deg C]; NOTE this is different than in budget.pyx
     file: /Stout1/SMAP/L4_C/Version8/L4CMET/L4_C_met_%sT000000_Vv8020_001.h5
     # fPAR (unsigned 8-bit integer, 0-100%)
     fpar: /Stout1/SMAP/L4_C/Version8/L4CMOD/L4_C_mod_%sT000000_Vv8040_001.h5 # Canopy fPAR

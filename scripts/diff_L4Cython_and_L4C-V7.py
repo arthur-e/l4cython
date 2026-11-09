@@ -9,7 +9,6 @@ import h5py
 import numpy as np
 import re
 from l4cython.utils.mkgrid import inflate_file
-from l4cython.utils.fixtures import NROW9KM, NCOL9KM, NROW1KM, NCOL1KM
 from matplotlib import pyplot
 
 L4C_FILE_TPL = '/media/arthur.endsley/Mimisbrunnr/SMAP/L4_C/Vv7042/SMAP_L4_C_mdl_{date}T000000_Vv7042_001.h5'

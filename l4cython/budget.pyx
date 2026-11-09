@@ -451,11 +451,21 @@ def main(config = None, verbose = True):
             fid = output_func(config, w_mult, suffix, 'Wmult', inflated, fid)
         if 'SOC' in output_fields:
             fid = output_func(config, soc_total, suffix, 'SOC', inflated, fid)
+        if 'F_TMIN' in output_fields:
+            fid = output_func(config, f_tmin, suffix, 'f_Tmin', inflated, fid)
+        if 'F_VPD' in output_fields:
+            fid = output_func(config, f_vpd, suffix, 'f_VPD', inflated, fid)
+        if 'F_SMRZ' in output_fields:
+            fid = output_func(config, f_smrz, suffix, 'f_SMRZ', inflated, fid)
+        if 'F_FT' in output_fields:
+            fid = output_func(config, ft, suffix, 'f_FT', inflated, fid)
 
         if output_type == 'HDF5':
             status = close_hdf5(fid)
 
         if DEBUG == 1:
+            to_numpy(smrz, SPARSE_M09_N)\
+                .tofile(os.path.join(output_dir, f'DEBUG_SMRZ_M09land_{date_str}.flt32'))
             to_numpy(fpar_final, SPARSE_M01_N)\
                 .tofile(os.path.join(output_dir, f'DEBUG_fPAR_M01land_{date_str}.flt32'))
             to_numpy_char(fpar0, SPARSE_M01_N)\
