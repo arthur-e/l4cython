@@ -15,7 +15,7 @@ L4C_FILE_TPL = '/anx_lagr5/SMAP/L4_C/Version8/Vv8040/all_granules/SMAP_L4_C_mdl_
 FILE_RX_BINARY = re.compile(r'L4Cython\_(?P<field>.*)\_(?P<date>\d{8})\_.*\.flt32')
 FILE_RX_HDF5 = re.compile(r'L4Cython\_(?P<date>\d{8})\_.*\.h5')
 
-def main(filename, grid = 'M09', field = None):
+def main(filename, grid = 'M09', plot = 'map', field = None, **plot_args):
     '''
     Parameters
     ----------
@@ -24,6 +24,12 @@ def main(filename, grid = 'M09', field = None):
         `%s` stands in for the carbon pool number (0, 1, or 2)
     grid : str
         Either "M09" (default) or "M01"
+    plot : str
+        Either "map" (default) or "hist"
+    field : str
+        The field from the HDF5 granule to plot (optional)
+    **plot_args
+        Additional arguments to `matplotlib.pyplot()`
     '''
     dtype = np.float32 if '.flt32' in filename else np.float64
     if f'{grid}land' in filename:
@@ -63,14 +69,32 @@ def main(filename, grid = 'M09', field = None):
     else:
         print(f'Global abs. maximum (mean) difference: {np.nanmax(np.abs(diff)).round(3)} ({np.nanmean(np.abs(diff)).round(3)})')
 
-    vlimit = max(np.nanmax(diff), np.nanmin(diff))
-    pyplot.imshow(
-        diff, interpolation = 'nearest', cmap = 'PRGn',
-        vmin = -vlimit, vmax = vlimit)
-    pyplot.colorbar()
-    pyplot.title('Reference minus Prediction')
-    pyplot.show()
-
+    if plot == 'map':
+        vlimit = max(np.nanmax(diff), np.nanmin(diff))
+        if 'vmin' not in plot_args.keys() and 'vmax' not in plot_args.keys():
+            pyplot.imshow(
+                diff, interpolation = 'nearest', cmap = 'PRGn',
+                vmin = -vlimit, vmax = vlimit)
+        else:
+            pyplot.imshow(
+                diff, interpolation = 'nearest', cmap = 'PRGn',
+                **plot_args)
+        pyplot.colorbar()
+        pyplot.title('Reference minus Prediction')
+        pyplot.show()
+    elif plot == 'hist':
+        idx = np.arange(0, official.size)
+        idx = idx[~np.isnan(official.ravel())]
+        idx = np.random.choice(idx, size = int(1e5))
+        pyplot.hist(official.ravel()[idx], **plot_args)
+        pyplot.title(f'Official V8 {field} on {date}')
+        pyplot.show()
+        pyplot.hist(official.ravel()[idx], **plot_args)
+        pyplot.title(f'L4Cython {field} on {date}')
+        pyplot.show()
+        pyplot.ecdf(np.abs(diff.ravel()[idx]))
+        pyplot.title(f'Difference: Official V8 minus L4Cython {field} on {date}')
+        pyplot.show()
 
 if __name__ == '__main__':
     fire.Fire(main)
