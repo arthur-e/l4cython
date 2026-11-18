@@ -1,5 +1,6 @@
 # cython: language_level=3
 
+import time
 import numpy as np
 from libc.stdio cimport FILE, fopen, fread, fclose, fwrite
 
@@ -44,8 +45,15 @@ cdef inline void read_flat(char* filename, int n_elem, float* arr):
     arr : float*
         The destination array buffer
     '''
+    cdef size_t freturn
+    freturn = 0
+    tries = 5
     fid = open_fid(filename, READ)
-    fread(arr, sizeof(float), <size_t>sizeof(float)*n_elem, fid)
+    while freturn >= 0 and tries > 0:
+         freturn = fread(arr, sizeof(float), <size_t>sizeof(float)*n_elem, fid)
+         if freturn >= 0:
+             tries += -1
+             time.sleep(1) # Wait 1 second
     fclose(fid)
 
 

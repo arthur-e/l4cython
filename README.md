@@ -81,6 +81,41 @@ pytest tests/test_spinup.py
 ```
 
 
+Program Modes
+----------------------------
+
+**Daily carbon budget:** `budget.pyx`
+
+- Entry point: `from l4cython.budget import main`
+- Reference configuration file: `data/L4Cython_config.yaml`
+- Output variables: Any option from both `gpp.pyx` and `reco.pyx`
+- Runs both GPP and RECO calculations, computing full daily carbon budget including SOC change and diagnostic variables
+- Requires binary, sparse land (`M09land` or `M01land`) input files for individual drivers
+- Can optionally generate output restart files, but see also `restart.pyx`
+
+**SOC restart:** `restart.pyx`
+
+- Entry point: `from l4cython.restart import main`
+- Reference configuration file: Same as for `budget.pyx`
+- Can be used to generate annual restart files (on December 31) of each previous year, speeding up a forward-run simulation
+
+**Gross primary productivity (GPP):** `gpp.pyx`
+
+- Entry point: `from l4cython.gpp import main`
+- Reference configuration file: `data/L4Cython_GPP_config.yaml`
+- Output variables: `GPP`, `NPP`, `Emult`, `f_Tmin`, `f_VPD`, `f_SMRZ`, `f_FT`
+- Requires an input L4CMET HDF5 file
+- Uses 3-km `FT_STATE_UM_M03` in L4CMET instead of surface skin temperature to determine FT state
+
+**Ecosystem respiration (RECO):** `reco.pyx`
+
+- Entry point: `from l4cython.reco import main`
+- Reference configuration file: `data/L4Cython_RECO_config.yaml`
+- Output variables: `NEE`, `RH`, `SOC`, `Tmult`, `Wmult`
+- Requires an input L4CMET HDF5 file
+- Requires an input SOC HDF5 restart file
+
+
 Output Data
 ----------------------------
 
