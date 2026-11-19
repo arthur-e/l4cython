@@ -135,12 +135,16 @@ cdef inline float rescale_smrz(
         Site-level long-term maximum SMRZ (percent saturation)
     '''
     cdef float smrz_norm
+    cdef float divisor
     # Clip input SMRZ to the lower, upper bounds
     if smrz0 < smrz_min:
         smrz0 = smrz_min
     elif smrz0 > smrz_max:
         smrz0 = smrz_max
-    smrz_norm = 100 * ((smrz0 - smrz_min) / (smrz_max - smrz_min)) + 1
+    divisor = (smrz_max - smrz_min)
+    if divisor == 0.0:
+        return -1 # This may not be the FILL_VALUE but we can't use that here
+    smrz_norm = 100 * ((smrz0 - smrz_min) / divisor) + 1
     # Log-transform normalized data and rescale to range between
     #   5.0 and 100% saturation)
     return 95 * (log(smrz_norm) / log(101)) + 5

@@ -313,7 +313,7 @@ def main(config = None, verbose = True):
                 nee[k] = FILL_VALUE
                 gpp[k] = FILL_VALUE
                 npp[k] = FILL_VALUE
-                if is_valid(pft, tsoil[i], LITTERFALL[k]) == 0:
+                if is_valid(pft, tsoil[i], smrz[i], LITTERFALL[k]) == 0:
                     continue # Skip invalid PFTs
 
                 # If surface soil temp. is above freezing, mark Thawed (=1),
@@ -555,7 +555,7 @@ def load_state(config):
     read_flat(config['data']['smrz_max'].encode('UTF-8'), SPARSE_M09_N, SMRZ_MAX)
 
 
-cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
+cdef inline char is_valid(char pft, float tsoil, float smrz, float litter) nogil:
     '''
     Checks to see if a given pixel is valid, based on the PFT but also on
     select input data values. Modeled after `tcfModUtil_isInCell()` in the
@@ -567,6 +567,7 @@ cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
         The Plant Functional Type (PFT)
     tsoil : float
         The daily mean soil temperature in the surface layer (deg K)
+    smrz : float
     litter : float
         The daily litterfall input
 
@@ -581,5 +582,7 @@ cdef inline char is_valid(char pft, float tsoil, float litter) nogil:
     elif tsoil <= 0:
         valid = 0
     elif litter < 0:
+        valid = 0
+    elif smrz < 0:
         valid = 0
     return valid
