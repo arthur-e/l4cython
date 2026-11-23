@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "l4cython"
-version = "1.1.0"
+version = "1.2.0"
 authors = [
     {name = "K. Arthur Endsley", email = "arthur.endsley@ntsg.umt.edu"}
 ]
@@ -20,7 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "Cython>=0.29.0",
-    "numpy>=1.21.0,<2.0",
+    "numpy>=1.21.0",
     "scipy>=1.7.0",
     "h5py>=3.0.0",
     "PyYAML>=6.0.0",
